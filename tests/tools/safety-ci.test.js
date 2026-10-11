@@ -246,3 +246,83 @@ test("auction, trade and targeting actions count as protected automation", async
   const result = scan([dir]);
   assert.equal(result.findings.filter((item) => item.rule === "LUA-PROTECTED-AUTOMATION").length, 2);
 });
+
+// Backlog 68: quest, gossip, trainer, taxi and talent actions are the player's to click.
+const questAutomationPlain = [
+  "AcceptQuest", "ConfirmAcceptQuest", "CompleteQuest", "GetQuestReward",
+  "AcceptGossipQuest", "SelectGossipOption", "SelectGossipActiveQuest",
+  "SelectGossipAvailableQuest", "SelectActiveQuest", "SelectAvailableQuest",
+  "QuestFrameAcceptButton_OnClick", "QuestFrameCompleteButton_OnClick",
+  "QuestFrameCompleteQuestButton_OnClick", "AbandonQuest", "SetAbandonQuest",
+  "ConfirmBinder", "TakeTaxiNode", "BuyTrainerService", "LearnTalent",
+  "BuyMerchantItem", "PickupMerchantItem", "DeleteCursorItem",
+];
+const questAutomationQualified = [
+  "C_GossipInfo.SelectOption", "C_GossipInfo.SelectOptionByIndex",
+  "C_GossipInfo.SelectAvailableQuest", "C_GossipInfo.SelectActiveQuest",
+  "C_QuestLog.AbandonQuest", "C_QuestLog.SetAbandonQuest",
+];
+
+for (const name of [...questAutomationPlain, ...questAutomationQualified]) {
+  test(`repo mode rejects the call ${name}`, async (t) => {
+    const dir = await fixture(t);
+    await fs.writeFile(path.join(dir, "bad.lua"), `${name}(1)\n`);
+    const result = scan([dir]);
+    assert.equal(result.ok, false);
+    assert.ok(
+      result.findings.some((item) => item.rule === "LUA-PROTECTED-AUTOMATION"),
+      JSON.stringify(result.findings),
+    );
+  });
+
+  test(`untrusted mode rejects ${name} called, aliased and read`, async (t) => {
+    for (const source of [`${name}(1)`, `local f = ${name}; f(1)`, `local f = ${name}`]) {
+      const result = await untrusted(t, { "Bad.lua": source });
+      assert.equal(result.ok, false, source);
+      assert.ok(result.findings.some((item) => item.rule === "LUA-RESTRICTED"), source);
+    }
+  });
+}
+
+for (const name of questAutomationPlain.filter((n) => !n.includes("."))) {
+  test(`untrusted mode rejects _G["${name}"] and the method form for ${name}`, async (t) => {
+    for (const source of [`_G["${name}"](1)`, `obj:${name}(1)`, `obj.${name}(1)`]) {
+      const result = await untrusted(t, { "Bad.lua": source });
+      assert.equal(result.ok, false, source);
+      assert.ok(result.findings.some((item) => item.rule === "LUA-RESTRICTED"), source);
+    }
+  });
+}
+
+test("repo mode rejects the bracket form of a banned C_GossipInfo member", async (t) => {
+  const dir = await fixture(t);
+  await fs.writeFile(path.join(dir, "bad.lua"), 'C_GossipInfo["SelectOption"](1)\n');
+  const result = scan([dir]);
+  assert.ok(result.findings.some((item) => item.rule === "LUA-PROTECTED-AUTOMATION"));
+});
+
+test("read-only quest and gossip APIs stay allowed", async (t) => {
+  const dir = await fixture(t);
+  await fs.writeFile(path.join(dir, "ok.lua"), [
+    "local title = GetQuestLogTitle(1)",
+    "local objectives = C_QuestLog.GetQuestObjectives(1)",
+    "local done = IsQuestFlaggedCompleted(1)",
+    "local link = GetQuestLink(1)",
+    "local n = GetNumQuestLogEntries()",
+    "local info = C_QuestLog.GetInfo(1)",
+    "local options = C_GossipInfo.GetOptions()",
+    "local choices = GetNumQuestChoices()",
+    "local item = GetQuestItemLink('choice', 1)",
+    "local reward = GetQuestRewardInfo(1)",
+    "",
+  ].join("\n"));
+  const result = scan([dir]);
+  assert.equal(result.ok, true, JSON.stringify(result.findings, null, 2));
+});
+
+test("untrusted mode still allows the listed read-only quest APIs", async (t) => {
+  const result = await untrusted(t, {
+    "Ok.lua": "local a = C_QuestLog.GetInfo(1)\nlocal b = C_QuestLog.GetTitleForQuestID(1)\nlocal c = C_QuestLog.GetNumQuestLogEntries and 1\n",
+  });
+  assert.ok(!result.findings.some((item) => /GetInfo|GetTitleForQuestID/.test(item.text)), JSON.stringify(result.findings));
+});

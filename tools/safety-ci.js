@@ -71,11 +71,47 @@ const protectedNames = [
   "CameraOrSelectOrMoveStart",
   "AcceptBattlefieldPort",
   "JoinBattlefield",
+  // Quest, gossip, trainer, taxi and talent actions (backlog 68): the player clicks these, an addon never does.
+  // C_QuestLog.AbandonQuest and C_QuestLog.SetAbandonQuest are covered by the bare names.
+  "AcceptQuest",
+  "ConfirmAcceptQuest",
+  "CompleteQuest",
+  "GetQuestReward",
+  "AcceptGossipQuest",
+  "SelectGossipOption",
+  "SelectGossipActiveQuest",
+  "SelectGossipAvailableQuest",
+  "SelectActiveQuest",
+  "SelectAvailableQuest",
+  "QuestFrameAcceptButton_OnClick",
+  "QuestFrameCompleteButton_OnClick",
+  "QuestFrameCompleteQuestButton_OnClick",
+  "AbandonQuest",
+  "SetAbandonQuest",
+  "ConfirmBinder",
+  "TakeTaxiNode",
+  "BuyTrainerService",
+  "LearnTalent",
+  "PickupMerchantItem",
+  "DeleteCursorItem",
+];
+// Namespaced actions whose bare member name is too generic to ban everywhere (SelectOption).
+const protectedQualified = [
+  "C_GossipInfo.SelectOption",
+  "C_GossipInfo.SelectOptionByIndex",
+  "C_GossipInfo.SelectAvailableQuest",
+  "C_GossipInfo.SelectActiveQuest",
 ];
 // UI Add-On Development Policy rules 4 and 5: no advertising, no donation requests.
 const SOLICIT = /\b(?:donat(?:e|es|ion|ions)|patreon|paypal|ko-?fi|buymeacoffee|buy me a coffee|venmo|cash ?app|subscribestar)\b/i;
 // Blizzard tables an addon may add its own entries to by convention.
 const BLIZZARD_REGISTRIES = new Set(["SlashCmdList", "StaticPopupDialogs"]);
+const PROTECTED_QUALIFIED = new RegExp(
+  protectedQualified.map((full) => {
+    const [ns, member] = full.split(".");
+    return `\\b${ns}\\s*(?:\\.\\s*|\\[\\s*["'])${member}\\b`;
+  }).join("|"),
+);
 const PROTECTED = new RegExp(`\\b(?:${protectedNames.join("|")})\\s*\\(`);
 const RESTRICTED = new Set([
   "_G",
@@ -188,7 +224,7 @@ function scanLines(file, source, mode, findings, root, allow) {
     if (mode === "repo" && rel === "addon/WoWAI/WoWAI.lua") {
       protectedCandidate = protectedCandidate.replace(/\bSetBinding\b/g, "");
     }
-    if (ext === ".lua" && PROTECTED.test(protectedCandidate)) {
+    if (ext === ".lua" && (PROTECTED.test(protectedCandidate) || PROTECTED_QUALIFIED.test(protectedCandidate))) {
       findings.push(
         finding(file, lineNumber, "LUA-PROTECTED-AUTOMATION", line, root),
       );

@@ -516,6 +516,14 @@ function submit(job) {
     signal('ack', job.id, true);
     return;
   }
+  if (job.stop) {
+    // The Stop button (or Ask Claude instead): end this chat's run, drop a queued one.
+    markHandled(job);
+    stopChat(chatKey(job));
+    saveState();
+    signal('ack', job.id, true);
+    return;
+  }
   if (job.hello) {
     // The addon announcing itself: ack, offer a restore if its data is fresh,
     // and refresh the slots so it can read our clock. No agent run.
@@ -545,6 +553,16 @@ function submit(job) {
   }
   if (ownership) { claim(); return; }
   queueJob(job);
+}
+
+// End one chat's run (the child dies, close handler reports it) and forget a queued one.
+function stopChat(key) {
+  queued.delete(key);
+  const cur = running.get(key);
+  if (!cur || !cur.child) return;
+  cur.job.stopped = true;
+  log(`#${cur.job.id} stopped from the game`);
+  killTree(cur.child);
 }
 
 function queueJob(job) {
@@ -699,17 +717,31 @@ function runJob(job) {
   let stdoutText = '';
   let parserError = false;
 
+  let actionCount = 0;
+  let lastActionAt = Date.now();
+  let stallShown = '';
+  // The working record, marked stalled once the run has been quiet or long enough.
+  const publishWorking = () => {
+    stallShown = P.stallReason(job.startedAt, lastActionAt, Date.now());
+    publish(key, { chat: job.chat, id: job.id, status: 'working', text: progress.join('\n'), cwd, session: sessionId, agent: agentId, stall: stallShown }, false);
+  };
   // The window lists at most three plain phrases; the heartbeat still counts every action.
   const pushProgress = (line, plain = false) => {
     P.addProgress(progress, line, plain);
+    actionCount++;
+    lastActionAt = Date.now();
     beat(job);
-    publish(key, { chat: job.chat, id: job.id, status: 'working', text: progress.join('\n'), cwd, session: sessionId, agent: agentId }, false);
+    publishWorking();
   };
-  if (agent.stream === 'text') pushProgress(`${agent.name} is working (no live progress)`, true);
+  if (agent.stream === 'text') { pushProgress(`${agent.name} is working (no live progress)`, true); actionCount = 0; }
   if (input.note) notes.push(input.note);
   if (P.isBroadFolder(cwd)) notes.push(BROAD_NOTE(cwd));
   // Long thinking stretches produce no tool events; keep the heartbeat alive anyway.
   const keepalive = setInterval(() => beat(job), 45000);
+  // Checked often enough that the offer lands within seconds of the threshold.
+  const stallCheck = setInterval(() => {
+    if (P.stallReason(job.startedAt, lastActionAt, Date.now()) !== stallShown) publishWorking();
+  }, 10000);
 
   const handleLine = (line) => {
     if (parserError) return;
@@ -760,6 +792,7 @@ function runJob(job) {
   const cleanup = () => {
     clearTimeout(timer);
     clearInterval(keepalive);
+    clearInterval(stallCheck);
     if (input.promptFile !== undefined) { try { fs.unlinkSync(promptFile); } catch {} }
   };
 
@@ -793,10 +826,15 @@ function runJob(job) {
     const shownNotes = P.replyNotes(notes);
     for (const n of notes) if (!shownNotes.includes(String(n).trim())) log(`${tag} note not shown to the player: ${n}`);
     const extra = shownNotes.length ? `\n\n${shownNotes.join('\n\n')}` : '';
-    if (result && !result.error) {
+    if (job.stopped) {
+      finish(job, 'error', `${agent.name} was stopped.`, sessionId);
+    } else if (result && !result.error) {
       // Raw combat-log quotes stay in the saved review; the player reads one plain evidence line each.
-      const body = P.plainEvidence(String(result.text || '').trim()) || (shownNotes.length ? '' : `(${agent.name} finished without a reply)`);
-      finish(job, 'done', (body + extra).trim(), sessionId, [...denied]);
+      const text = P.plainEvidence(String(result.text || '').trim());
+      // No text and no map marks: say what the run did instead of leaving a blank.
+      const silent = !text && !mapped.note;
+      const body = silent ? P.noReplyText(agent.name, agent.stream === 'text' ? [] : progress, actionCount) : text;
+      finish(job, 'done', (body + extra).trim(), sessionId, [...denied], silent ? 'noreply' : '');
     } else if (result) {
       finish(job, 'error', (String(result.text || '') + extra).trim(), sessionId, [...denied]);
     } else {
@@ -805,7 +843,7 @@ function runJob(job) {
   });
 }
 
-function finish(job, status, text, session, denied) {
+function finish(job, status, text, session, denied, stall) {
   if (job.finished) return; // spawn failures fire both 'error' and 'close'
   Forever.onFinish(job, status, text);
   job.finished = true;
@@ -823,7 +861,7 @@ function finish(job, status, text, session, denied) {
   // A blocked run prints one short line in the game chat, whatever the agent wrote.
   if (denied && denied.length) summary = 'Needs your OK to continue. Open the window and click Allow.';
   noteMessage(job, status === 'done' ? 'assistant' : 'system', status === 'done' ? text : 'Bridge error: ' + text);
-  publish(chatKey(job), { chat: job.chat, id: job.id, status, text, summary, followUps, cwd: job.cwd, session, denied, agent: job.agent || '' }, true);
+  publish(chatKey(job), { chat: job.chat, id: job.id, status, text, summary, followUps, cwd: job.cwd, session, denied, agent: job.agent || '', stall: stall || '' }, true);
   signal('sig', job.id, true);
   log(`#${job.id}${job.session ? '@' + job.session : ''} ${status} (${text.length} chars${summary ? ', summary ' + summary.length : ', no summary'})`);
   drainQueue();
