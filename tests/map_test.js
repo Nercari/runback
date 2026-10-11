@@ -25,6 +25,16 @@ test('validateMapCommand sanitizes points, labels, kinds and layer names', () =>
   assert.equal(P.validateMapCommand({ op: 'explode' }), null);
 });
 
+test('applyMapCommands counts the points it marked and whether it cleared, for the one plain line', () => {
+  const map = P.newMap('e');
+  let r = P.applyMapCommands(map, [{ op: 'set', layer: 'a', points: [pt(1, 1), pt(2, 2)] }, { op: 'set', layer: 'b', points: [pt(3, 3)] }]);
+  assert.equal(r.marked, 3);
+  assert.equal(r.cleared, false);
+  r = P.applyMapCommands(map, [{ op: 'clearall' }]);
+  assert.equal(r.marked, 0);
+  assert.equal(r.cleared, true);
+});
+
 test('applyMapCommands bumps the version only on change and keeps the budget', () => {
   const map = P.newMap('e1');
   let r = P.applyMapCommands(map, [{ op: 'set', layer: 'a', points: [pt(1, 1)] }]);

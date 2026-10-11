@@ -59,7 +59,7 @@ function runAgentOnce({ agentId, cwd, prompt, timeoutMs }, deps) {
       if (agent.stream === 'text') {
         try {
           result = parser.finish({ stdout: stdoutText, stderr, code }).done;
-          if (result && input.note) result.text += `\n\n[bridge] ${input.note}`;
+          if (result && input.note) result.text += `\n\n${input.note}`;
         }
         catch (e) { result = { text: e.message, error: true }; }
       } else if (buffer.trim()) line(buffer.trim());

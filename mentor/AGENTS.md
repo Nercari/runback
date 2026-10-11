@@ -60,7 +60,7 @@ When the player asks to review a fight (`cmd=review`, or "review my last fight")
 
 A review with any uncited or unverifiable mistake is a failed review. Fewer mistakes with solid evidence beat three weak ones.
 
-**Check before you reply.** Save your draft reply to `reviews/<slice name>.reply.txt` and run `node <repo>/tools/check-citations.js --review <that file> --slice <slice> [--death <slice>.death.txt] --notebook characters/<realm>-<name>.md`. Exit 1 lists invented or altered log lines, uncited mistakes, or bad scorecard rows: fix them and run it again. Send only a reply that passes.
+**Check before you reply.** Save your draft reply to `reviews/<slice name>.reply.txt` and run `node <repo>/tools/check-citations.js --review <that file> --slice <slice> [--death <slice>.death.txt] --notebook characters/<realm>-<name>.md`. Exit 1 lists invented or altered log lines, uncited mistakes, or bad scorecard rows: fix them and run it again. Send only a reply that passes. Keep the quoted `Log:` lines exactly as the slice has them, in the saved draft and in the reply you send: the bridge shows the player one plain evidence line in their place ("17:41:56 Nercari cast Demon Skin") and never the raw log line, so do not paraphrase the quote yourself and do not paste log lines anywhere else in the reply.
 
 ### Scorecard row (F05)
 Append to the notebook's `## Scorecard` section, one JSON object per line inside the fenced block:

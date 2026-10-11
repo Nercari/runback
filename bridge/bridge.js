@@ -299,11 +299,12 @@ function takeMapCommands(job, text) {
   cmds.push(...blocks.cmds);
   errors.push(...blocks.errors);
   if (!cmds.length && !errors.length) return { text: blocks.text, note: '' };
-  const { changed, notes } = P.applyMapCommands(state.map, cmds);
+  const { changed, notes, marked, cleared } = P.applyMapCommands(state.map, cmds);
   if (changed) { saveState(); mapShareUntil = Date.now() + MAP_SHARE_MS; }
   const all = [...notes, ...errors];
   log(`#${job.id} map: ${all.join('; ') || 'no change'} (version ${state.map.version})`);
-  return { text: blocks.text, note: all.length ? `map: ${all.join('; ')}` : '' };
+  // The details stay in the log; the player reads one plain line.
+  return { text: blocks.text, note: P.mapNote({ marked, cleared, errors: errors.length }) };
 }
 
 // Slot file / Inbox.lua body: see protocol.luaTable.
@@ -691,13 +692,13 @@ function runJob(job) {
   let stdoutText = '';
   let parserError = false;
 
-  const pushProgress = (line) => {
-    progress.push(line);
-    while (progress.length > 10) progress.shift();
+  // The window lists at most three plain phrases; the heartbeat still counts every action.
+  const pushProgress = (line, plain = false) => {
+    P.addProgress(progress, line, plain);
     beat(job);
     publish(key, { chat: job.chat, id: job.id, status: 'working', text: progress.join('\n'), cwd, session: sessionId, agent: agentId }, false);
   };
-  if (agent.stream === 'text') pushProgress(`${agent.name} is working (no live progress)`);
+  if (agent.stream === 'text') pushProgress(`${agent.name} is working (no live progress)`, true);
   if (input.note) notes.push(input.note);
   if (P.isBroadFolder(cwd)) notes.push(BROAD_NOTE(cwd));
   // Long thinking stretches produce no tool events; keep the heartbeat alive anyway.
@@ -782,9 +783,12 @@ function runJob(job) {
     const mapped = takeMapCommands(job, result ? result.text : '');
     if (result) result.text = mapped.text;
     if (mapped.note) notes.push(mapped.note);
-    const extra = notes.length ? `\n\n[bridge] ${notes.join('\n\n[bridge] ')}` : '';
+    const shownNotes = P.replyNotes(notes);
+    for (const n of notes) if (!shownNotes.includes(String(n).trim())) log(`${tag} note not shown to the player: ${n}`);
+    const extra = shownNotes.length ? `\n\n${shownNotes.join('\n\n')}` : '';
     if (result && !result.error) {
-      const body = String(result.text || '').trim() || (notes.length ? '' : `(${agent.name} finished without a reply)`);
+      // Raw combat-log quotes stay in the saved review; the player reads one plain evidence line each.
+      const body = P.plainEvidence(String(result.text || '').trim()) || (shownNotes.length ? '' : `(${agent.name} finished without a reply)`);
       finish(job, 'done', (body + extra).trim(), sessionId, [...denied]);
     } else if (result) {
       finish(job, 'error', (String(result.text || '') + extra).trim(), sessionId, [...denied]);

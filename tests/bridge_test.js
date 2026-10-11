@@ -275,3 +275,93 @@ test('the mentor prompt forbids paste-in scripts and asks for menu paths', () =>
     }
   }
 });
+
+test('plainProgress turns every kind of raw progress line into one of a fixed set of phrases', () => {
+  const raw = [
+    '$ cd "C:/Users/x/wow-mentor" && node "C:/repo/tools/slice-fight.js" --start 1',
+    '$ node C:/repo/tools/check-citations.js --review r.txt',
+    '$ ls /tmp', '$ cat WoWCombatLog-101126.txt | head', 'read WoWCombatLog-101126_174100.txt', 'read toolu_01GxbuPG6Cvh8vs1VMiofAJe.txt',
+    'read pedro-realm.md', 'read warlock.md', 'edit a.js, b.js', 'write new.md', 'delete old.md',
+    'grep ^10/11/2026 17:4(1:(2[5-9]|[3-5]\\d)|2:(0\\d|1[0-5]))', 'grep: foo', 'glob {characters,reviews}/', 'ls src',
+    'search: warlock wand', 'fetch https://example.com/x', 'tool: fs.list', 'agent: look around', 'todo list',
+    '~ Looking at the tests first', 'Let me look at the file.', 'ToolSearch', 'TodoWrite', '', undefined,
+  ];
+  for (const line of raw) {
+    const phrase = P.plainProgress(line);
+    assert.ok(P.PROGRESS_PHRASES.includes(phrase), `${line} -> ${phrase}`);
+  }
+  assert.equal(P.plainProgress('$ node C:/repo/tools/slice-fight.js --start 1'), 'Cutting out your last fight');
+  assert.equal(P.plainProgress('$ node C:/repo/tools/check-citations.js'), 'Checking my quotes against the log');
+  assert.equal(P.plainProgress('read WoWCombatLog-101126_174100.txt'), 'Reading your combat log');
+  assert.equal(P.plainProgress('read characters/Nercari.md'), 'Reading your notebook');
+  assert.equal(P.plainProgress('grep SPELL_CAST_SUCCESS'), 'Searching the log');
+  assert.equal(P.plainProgress('grep warlock'), 'Searching your files');
+  assert.equal(P.plainProgress('search: wand vendor'), 'Searching the web');
+  assert.equal(P.plainProgress('ToolSearch'), 'Getting ready');
+  assert.equal(P.plainProgress('Let me look.'), 'Thinking it through');
+});
+
+test('addProgress keeps the newest three phrases and drops immediate repeats', () => {
+  const list = [];
+  for (const l of ['read a.txt', 'read b.txt', 'read c.txt', 'grep SPELL_', 'edit x.md', 'edit y.md']) P.addProgress(list, l);
+  assert.deepEqual(list, ['Reading your files', 'Searching the log', 'Saving your notes']);
+  P.addProgress(list, 'Antigravity is working (no live progress)', true);
+  assert.deepEqual(list, ['Searching the log', 'Saving your notes', 'Antigravity is working (no live progress)']);
+});
+
+const CAST = '10/11/2026 17:41:56.311-3  SPELL_CAST_SUCCESS,Player-4613-01457956,"Nercari-ClassicBetaPvP2-",0x511,0x0,Player-4613-01457956,"Nercari-ClassicBetaPvP2-",0x511,0x0,687,"Demon Skin",0x20';
+const HIT = '9/25/2026 19:59:52.000  SWING_DAMAGE,Creature-0-4395-0-12-1726-00001B2C3D,"Defias Magician",0xa48,0x0,Player-4395-0FFF9999,"Quelli-Testrealm",0x512,0x0,9,0,1,0,0,0,nil,nil,nil,nil';
+const SHADOW = '9/25/2026 20:00:12.100  SPELL_DAMAGE,Creature-0-1,"Defias Pillager",0xa48,0x0,Player-1-2,"Quelli-Testrealm",0x512,0x0,116,"Frostbolt",0x10,9,0';
+
+test('plainLogLine says who did what in one short sentence and keeps no raw fields', () => {
+  assert.equal(P.plainLogLine(CAST), '17:41:56 Nercari cast Demon Skin');
+  assert.equal(P.plainLogLine(HIT), '19:59:52 Defias Magician hit Quelli in melee');
+  assert.equal(P.plainLogLine(SHADOW), '20:00:12 Defias Pillager hit Quelli with Frostbolt');
+  // A quote cut short with an ellipsis still reads.
+  assert.equal(P.plainLogLine(CAST.slice(0, CAST.indexOf('0x511')) + '…'), '17:41:56 Nercari cast a spell');
+  assert.equal(P.plainLogLine('9/25/2026 20:00:30.000  UNIT_DIED,0000000000000000,nil,0x80000000,0x80000000,Creature-0-1,"Defias Pillager",0xa48,0x0'), '20:00:30 Defias Pillager died');
+  assert.equal(P.plainLogLine('not a log line'), null);
+});
+
+test('plainEvidence swaps quoted log lines for one Evidence line per mistake and leaves the rest alone', () => {
+  const review = [
+    'Fight: Hogger (17:41:34-17:42:08), win',
+    `1. Demon Skin cast mid-fight - 17:41:56`,
+    `   Log: \`${CAST}\``,
+    '   Why: it left you with 23 mana.',
+    `2. Hit while moving - 20:00:12`,
+    `   Log: ${HIT}`,
+    `   ${SHADOW}`,
+    '   Next time: stand still.',
+    'Drill: none',
+  ].join('\n');
+  const out = P.plainEvidence(review);
+  assert.equal(out, [
+    'Fight: Hogger (17:41:34-17:42:08), win',
+    '1. Demon Skin cast mid-fight - 17:41:56',
+    '   Evidence: 17:41:56 Nercari cast Demon Skin',
+    '   Why: it left you with 23 mana.',
+    '2. Hit while moving - 20:00:12',
+    '   Evidence: 19:59:52 Defias Magician hit Quelli in melee; 20:00:12 Defias Pillager hit Quelli with Frostbolt',
+    '   Next time: stand still.',
+    'Drill: none',
+  ].join('\n'));
+  // Fenced quotes, an inline span, three or more lines, and text with nothing to change.
+  assert.equal(P.plainEvidence(['Proof:', '```', CAST, '```', 'done'].join('\n')), ['Proof:', 'Evidence: 17:41:56 Nercari cast Demon Skin', 'done'].join('\n'));
+  assert.equal(P.plainEvidence(`You cast \`${CAST}\` too early.`), 'You cast 17:41:56 Nercari cast Demon Skin too early.');
+  assert.match(P.plainEvidence([CAST, HIT, SHADOW].join('\n')), /^Evidence: .*; .* \(and 1 more in your saved review\)$/);
+  assert.equal(P.plainEvidence('No quotes here, `code` stays.\n```lua\nlocal x = 1\n```'), 'No quotes here, `code` stays.\n```lua\nlocal x = 1\n```');
+  assert.equal(P.plainEvidence(''), '');
+  // Nothing raw survives, so the checker's exact quotes live only in the saved review.
+  assert.doesNotMatch(out, /SPELL_|SWING_|Player-|0x5/);
+});
+
+test('replyNotes drops the permission sentence and parser internals; mapNote is one plain line', () => {
+  assert.deepEqual(P.replyNotes(['Claude needs your OK to continue. Click Allow in the window.', 'Codex event parser failed: boom', 'x is a broad folder.']), ['x is a broad folder.']);
+  assert.deepEqual(P.replyNotes(undefined), []);
+  assert.equal(P.mapNote({ marked: 2 }), 'I marked 2 places on your map: open it with M.');
+  assert.equal(P.mapNote({ marked: 1 }), 'I marked 1 place on your map: open it with M.');
+  assert.equal(P.mapNote({ cleared: true }), 'I cleared the marks from your map.');
+  assert.equal(P.mapNote({ errors: 1 }), 'I could not mark that on your map.');
+  assert.equal(P.mapNote({}), '');
+});
