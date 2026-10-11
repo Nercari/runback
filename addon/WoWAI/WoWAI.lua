@@ -1219,7 +1219,7 @@ function WoWAI.GameContext(kind)
 		if type(mod.context) == "function" then
 			local ok, value = pcall(mod.context, kind)
 			if ok and type(value) == "string" and value ~= "" then
-				local moduleMax = kind and kind ~= "game" and 700 or 300
+				local moduleMax = tonumber(mod.contextMax) or (kind and kind ~= "game" and 700 or 300)
 				table.insert(extra, value:sub(1, moduleMax))
 			end
 		end
@@ -1336,12 +1336,19 @@ end
 -- Sending
 ---------------------------------------------------------------------------
 
--- Plain questions that need the spellbook: a rotation, build or spell question.
-local ROTATION_WORDS = { "rotation", "opener", "build", "talents?", "specs?", "spells?", "abilit%a*", "cast%a*" }
+-- Plain questions that need a context kind, first match wins: a rotation, build
+-- or spell question gets the spellbook (backlog 61); a question about bags,
+-- selling or junk gets the bag contents (backlog 62).
+local ASK_KINDS = {
+	{ kind = "rotation", words = { "rotation", "opener", "build", "talents?", "specs?", "spells?", "abilit%a*", "cast%a*" } },
+	{ kind = "bags", words = { "bags?", "bolsas?", "sell%a*", "vend%a*", "junk", "destroy%a*", "inventory" } },
+}
 function WoWAI.AskKind(text)
 	local lower = tostring(text or ""):lower()
-	for _, word in ipairs(ROTATION_WORDS) do
-		if lower:find("%f[%a]" .. word .. "%f[%A]") then return "rotation" end
+	for _, entry in ipairs(ASK_KINDS) do
+		for _, word in ipairs(entry.words) do
+			if lower:find("%f[%a]" .. word .. "%f[%A]") then return entry.kind end
+		end
 	end
 end
 
@@ -3412,7 +3419,7 @@ SlashCmdList["WOWAI"] = function(msg)
 	local s = db.settings
 	local c = ActiveChat()
 	if cmd == "help" and rest:lower() == "forever" then
-		AddHistory(c, "system", "Forever: review, death, build, gear, quest, brief <what>, drill, practice, recap, level, look <question>, council <question>, phone, off, on")
+		AddHistory(c, "system", "Forever: review, death, build, gear, bags, quest, brief <what>, drill, practice, recap, level, look <question>, council <question>, phone, off, on")
 		WoWAI.Render()
 		return
 	end
