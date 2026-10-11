@@ -91,3 +91,41 @@ test('the Why did I die? button sends the death command; in combat it sends noth
   v.run('STUB.combat = true; STUB.FireEvent("PLAYER_REGEN_DISABLED"); CLICK("Why did I die?")');
   assert.equal(v.get('WoWAIDB.outbox'), 'nil');
 });
+
+// Backlog 51: fight questions in the player's words.
+const chat = (v, text) => { v.run(`WoWAIDB.outbox = nil; WoWAIInput:SetText(${JSON.stringify(text)}); WoWAI.SendFromInput()`); return outbox(v); };
+
+test('a plain chat message within 10 minutes of a fight carries lastFight and deaths', () => {
+  const v = vm();
+  fight(v);
+  v.run('STUB.FireEvent("PLAYER_DEAD")');
+  v.run('STUB.now = STUB.now + 599');
+  const sent = chat(v, 'what did i do wrong in my last fight?');
+  assert.equal(sent.cmd, 'nil');
+  assert.match(sent.ctx, /lastFight=start=.*,end=/);
+  assert.match(sent.ctx, /deaths=/);
+});
+
+test('a plain chat message after the 10 minute window carries neither line', () => {
+  const v = vm();
+  fight(v);
+  v.run('STUB.FireEvent("PLAYER_DEAD"); STUB.now = STUB.now + 601');
+  const sent = chat(v, 'what did i do wrong?');
+  assert.doesNotMatch(sent.ctx, /lastFight=|deaths=/);
+});
+
+test('a death alone opens the window, and nothing is added during a fight', () => {
+  let v = vm();
+  v.run('STUB.FireEvent("PLAYER_DEAD")');
+  assert.match(chat(v, 'why?').ctx, /deaths=/);
+
+  v = vm();
+  fight(v);
+  v.run('STUB.FireEvent("PLAYER_REGEN_DISABLED")');
+  assert.doesNotMatch(v.get('WoWAI.GameContext()'), /lastFight=|deaths=/);
+});
+
+test('the mentor prompt answers fight questions from the lines', () => {
+  const mentor = fs.readFileSync(path.join(__dirname, '..', '..', 'mentor', 'AGENTS.md'), 'utf8');
+  assert.ok(mentor.includes('**Answer from the lines.**'));
+});
