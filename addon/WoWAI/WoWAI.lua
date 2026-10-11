@@ -890,6 +890,7 @@ local function TryLoadSlot(why)
 	local matched = ApplyReplies(type(data) == "table" and data.replies or nil)
 	if type(data) == "table" and data.restore then ImportRestore(data.restore) end
 	if type(data) == "table" and data.map and WoWAIMap then WoWAIMap.Sync(data.map) end
+	if type(data) == "table" and data.guides and WoWAIGuide then WoWAIGuide.Sync(data.guides) end
 	if why == "signal" and not matched then
 		run.signalUnreliable = true
 	end
@@ -998,6 +999,7 @@ local function ProcessInbox()
 	ApplyReplies(inbox.replies)
 	if inbox.restore then ImportRestore(inbox.restore) end
 	if inbox.map and WoWAIMap then WoWAIMap.Sync(inbox.map) end
+	if inbox.guides and WoWAIGuide then WoWAIGuide.Sync(inbox.guides) end
 end
 
 Finish = function(chat, role, text, denied, agent, summary, followUps, stall)

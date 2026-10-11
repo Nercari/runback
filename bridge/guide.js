@@ -180,4 +180,87 @@ function parseGuideText(text) {
   return validateGuideSet(Array.isArray(data) ? data : [data], why);
 }
 
-module.exports = { GUIDE_LIMITS, GUIDE_KINDS, validateGuide, validateGuideSet, parseGuideText };
+// ---------------------------------------------------------------------------
+// Guide channel (docs/GUIDE.md, "Channel to the addon")
+// ---------------------------------------------------------------------------
+//
+// Same route as map layers: the agent writes guides to the file named by
+// WOW_AI_GUIDE_FILE, or in a ```wowguide block in its reply. The bridge validates
+// them above, keeps them in state.json (state.guides) and ships the whole set,
+// versioned, in the slot files. The addon only stores what arrives.
+
+// Guides kept in the bridge's state: at most GUIDE_LIMITS.guides, and at most this
+// many steps in all (the oldest guides go first), so a slot file stays small.
+const GUIDE_STATE_STEPS = 1500;
+
+function newGuides(epoch) {
+  return { epoch: epoch || Math.random().toString(36).slice(2, 10), version: 0, guides: [] };
+}
+
+const sameGuide = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+
+// Merge raw guides (as the agent wrote them) into `store`. A guide with an id
+// already held replaces it and counts as newest. Mutates `store`; bumps its
+// version only when something changed. Returns { changed, stored, titles, notes }.
+function applyGuides(store, rawList) {
+  const why = [];
+  const { guides } = validateGuideSet(rawList, why);
+  const notes = [...why];
+  let changed = false;
+  const titles = [];
+  for (const g of guides) {
+    const i = store.guides.findIndex(x => x.id === g.id);
+    if (i >= 0 && sameGuide(store.guides[i], g)) continue;
+    if (i >= 0) store.guides.splice(i, 1);
+    store.guides.push(g);
+    changed = true;
+    titles.push(g.title);
+    notes.push(`guide ${g.id}: ${g.steps.length} step(s)`);
+  }
+  const steps = () => store.guides.reduce((n, g) => n + g.steps.length, 0);
+  while (store.guides.length > GUIDE_LIMITS.guides || (store.guides.length > 1 && steps() > GUIDE_STATE_STEPS)) {
+    notes.push(`dropped old guide ${store.guides.shift().id} (guides full)`);
+    changed = true;
+  }
+  if (changed) store.version = (store.version || 0) + 1;
+  return { changed, stored: guides.length, titles, notes };
+}
+
+// Pull ```wowguide blocks out of a reply: a JSON guide or a JSON list of guides.
+function extractGuideBlocks(text) {
+  const raw = [], errors = [];
+  const stripped = String(text ?? '').replace(/```wowguide[^\n]*\n([\s\S]*?)```/g, (_, body) => {
+    try {
+      const v = JSON.parse(body.trim());
+      raw.push(...(Array.isArray(v) ? v : [v]));
+    } catch {
+      errors.push('unreadable wowguide block');
+    }
+    return '';
+  }).replace(/\n{3,}/g, '\n\n').trim();
+  return { text: stripped, raw, errors };
+}
+
+// Text of the run's guide file -> { raw, errors } (one guide, or a JSON list).
+function readGuideFile(src) {
+  const text = String(src ?? '').trim();
+  if (!text) return { raw: [], errors: [] };
+  try {
+    const v = JSON.parse(text);
+    return { raw: Array.isArray(v) ? v : [v], errors: [] };
+  } catch {
+    return { raw: [], errors: ['guide file is not valid JSON'] };
+  }
+}
+
+// The one line the player reads after the agent wrote a guide.
+function guideNote({ titles = [], failed = false } = {}) {
+  if (titles.length === 1) return `I saved the guide "${titles[0]}".`;
+  if (titles.length > 1) return `I saved ${titles.length} guides.`;
+  return failed ? 'I could not save that guide.' : '';
+}
+
+module.exports = {
+  GUIDE_LIMITS, GUIDE_KINDS, GUIDE_STATE_STEPS, validateGuide, validateGuideSet, parseGuideText,
+  newGuides, applyGuides, extractGuideBlocks, readGuideFile, guideNote,
+};
