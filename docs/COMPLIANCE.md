@@ -40,6 +40,7 @@ Checked and compliant:
 - Keypress reload: the hidden key catcher lets every key through to the game and only reloads the UI; it never acts in the world.
 - Translation reads chat only on channels the player turns on (none by default) and pre-fills the reply box; the player presses Enter to send.
 - Screenshots: only the game's own `Screenshot()` behind a button the player clicks.
+- Combat log: `LoggingCombat(true)` runs only from the player's click on the **Combat log** button or the **[turn on combat log]** chat link, out of combat. The login reminder and the "This fight wasn't logged" note only read `LoggingCombat()` (backlog 58).
 
 Decisions and open questions for Pedro (nercari-control #114):
 
