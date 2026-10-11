@@ -1090,3 +1090,68 @@ test('Forever blocks sends, dispatches commands, observes replies and supports c
   vm.run('STUB.now = STUB.now + 6; STUB.Tick()');
   assert.equal(vm.evaluate('STUB.replyStatus'), 'done');
 });
+
+test('stalled run: Stop and Ask Claude instead appear, and Ask Claude instead re-sends the same question to Claude', () => {
+  const vm = newVM();
+  login(vm);
+  vm.run('STUB.RunTimers()');
+  const slot = replies => `{ now = time(), cwd = "", agent = "agy", agents = { "claude", "agy" }, replies = { ${replies || ''} } }`;
+  nextSlot(vm, slot());
+  vm.run('STUB.now = STUB.now + 6; STUB.Tick()');
+  vm.run('WoWAI.Send("how do I fix my rotation?")');
+  const chatId = vm.evaluate('WoWAIDB.chats[1].id');
+  const id = vm.num('WoWAIDB.chats[1].pendingId');
+  assert.equal(vm.evaluate('WoWAI.CanAskClaude(WoWAIDB.chats[1])'), 'false', 'nothing to offer while the run is healthy');
+  vm.run('STUB.texts = {}');
+  nextSlot(vm, slot(`{ chat = "${chatId}", id = ${id}, status = "working", text = "read a", stall = "quiet" }`));
+  vm.run('STUB.now = STUB.now + 6; STUB.Tick()');
+  assert.equal(vm.evaluate('WoWAIDB.chats[1].stall'), 'quiet');
+  assert.equal(vm.evaluate('WoWAI.CanAskClaude(WoWAIDB.chats[1])'), 'true');
+  assert.ok(vm.evaluate('table.concat(STUB.texts, "|")').includes('Antigravity has gone quiet'), 'the status line says so');
+  // Ask Claude instead: the old run is stopped on the bridge, the chat moves to Claude, the question goes again.
+  vm.run('WoWAI.AskClaude()');
+  assert.equal(vm.evaluate('WoWAIDB.chats[1].agent'), 'claude');
+  const recs = stripRecords(vm);
+  const stop = recs.find(r => r.flags === 's');
+  assert.ok(stop, 'a stop record for the old run is on the strip');
+  assert.equal(stop.text, '');
+  assert.ok(Number(stop.id) !== id);
+  const again = recs.find(r => r.text === 'how do I fix my rotation?');
+  assert.ok(again, 'the same question is sent again');
+  assert.equal(again.flags, 'agent=claude');
+  assert.ok(Number(again.id) > Number(stop.id), 'the stop reaches the bridge before the new question');
+  assert.equal(vm.evaluate('WoWAIDB.chats[1].stall'), null);
+  // Already on Claude: nothing to switch to.
+  assert.equal(vm.evaluate('WoWAI.CanAskClaude(WoWAIDB.chats[1])'), 'false');
+});
+
+test('stalled run: Stop gives up and tells the bridge; a no-reply run keeps the offer', () => {
+  const vm = newVM();
+  login(vm);
+  vm.run('STUB.RunTimers()');
+  const slot = replies => `{ now = time(), cwd = "", agent = "agy", agents = { "claude", "agy" }, replies = { ${replies || ''} } }`;
+  nextSlot(vm, slot());
+  vm.run('STUB.now = STUB.now + 6; STUB.Tick()');
+  vm.run('WoWAI.Send("q1")');
+  const chatId = vm.evaluate('WoWAIDB.chats[1].id');
+  const id = vm.num('WoWAIDB.chats[1].pendingId');
+  nextSlot(vm, slot(`{ chat = "${chatId}", id = ${id}, status = "working", text = "read a", stall = "long" }`));
+  vm.run('STUB.now = STUB.now + 6; STUB.Tick()');
+  assert.equal(vm.evaluate('WoWAIDB.chats[1].stall'), 'long');
+  vm.run('WoWAI.StopRun()');
+  assert.equal(vm.evaluate('WoWAIDB.chats[1].pendingId'), null);
+  assert.equal(vm.evaluate('WoWAIDB.chats[1].agent'), '', 'Stop does not change the agent');
+  assert.ok(stripRecords(vm).some(r => r.flags === 's'));
+  // A run that ends with no reply.
+  vm.run('WoWAI.Send("q2")');
+  const id2 = vm.num('WoWAIDB.chats[1].pendingId');
+  vm.run('STUB.texts = {}');
+  nextSlot(vm, slot(`{ chat = "${chatId}", id = ${id2}, status = "done", text = "Antigravity finished without a reply. It did 3 actions:\\n- Read a", agent = "agy", stall = "noreply" }`));
+  vm.run('STUB.now = STUB.now + 6; STUB.Tick()');
+  assert.equal(vm.evaluate('WoWAIDB.chats[1].stall'), 'noreply');
+  assert.equal(vm.evaluate('WoWAI.CanAskClaude(WoWAIDB.chats[1])'), 'true');
+  assert.ok(vm.evaluate('table.concat(STUB.texts, "|")').includes('Antigravity sent no answer'));
+  // A new message clears the offer.
+  vm.run('WoWAI.Send("q3")');
+  assert.equal(vm.evaluate('WoWAIDB.chats[1].stall'), null);
+});

@@ -13,8 +13,9 @@ test('luaStr escapes everything Lua 5.1 needs', () => {
 });
 
 test('parseFlags reads new-session, hello, forget, context, agent and allow lists', () => {
-  const none = { newSession: false, hello: false, forget: false, context: false, allow: [], agent: '', model: '', effort: '', cmd: '' };
+  const none = { newSession: false, hello: false, forget: false, stop: false, context: false, allow: [], agent: '', model: '', effort: '', cmd: '' };
   assert.deepEqual(P.parseFlags(''), none);
+  assert.deepEqual(P.parseFlags('s'), { ...none, stop: true });
   assert.deepEqual(P.parseFlags('n'), { ...none, newSession: true });
   assert.deepEqual(P.parseFlags('h'), { ...none, hello: true });
   assert.deepEqual(P.parseFlags('d'), { ...none, forget: true });
@@ -39,7 +40,7 @@ test('jobsFromStrip parses the current record format and keeps separators inside
   const rec = ['sess', 'chat1', '12', 'realms', 'allow=WebSearch', 'My chat', 'hello\x1Fworld'].join('\x1F');
   const jobs = P.jobsFromStrip(12, rec);
   assert.equal(jobs.length, 1);
-  assert.deepEqual(jobs[0], { session: 'sess', chat: 'chat1', id: 12, cwd: 'realms', newSession: false, hello: false, forget: false, context: false, allow: ['WebSearch'], agent: '', model: '', effort: '', cmd: '', name: 'My chat', text: 'hello\x1Fworld', via: 'pixel' });
+  assert.deepEqual(jobs[0], { session: 'sess', chat: 'chat1', id: 12, cwd: 'realms', newSession: false, hello: false, forget: false, stop: false, context: false, allow: ['WebSearch'], agent: '', model: '', effort: '', cmd: '', name: 'My chat', text: 'hello\x1Fworld', via: 'pixel' });
   // A chat that picked its own agent says so in the flags.
   const codex = P.jobsFromStrip(13, ['sess', 'chat1', '13', '', 'agent=codex', 'My chat', 'hi'].join('\x1F'))[0];
   assert.equal(codex.agent, 'codex');
@@ -274,4 +275,36 @@ test('the mentor prompt forbids paste-in scripts and asks for menu paths', () =>
       if (/\/(run|script|console|dump)\b/.test(line)) assert.ok(/\b(no|never|rejects)\b/i.test(line), file + ': ' + line.slice(0, 120));
     }
   }
+});
+
+test('stalled runs (backlog 52): 3 quiet minutes or 5 minutes in total, and a no-reply message that says what the run did', () => {
+  const t0 = 1_000_000;
+  const min = 60 * 1000;
+  assert.equal(P.STALL_QUIET_MS, 3 * min);
+  assert.equal(P.STALL_TOTAL_MS, 5 * min);
+  assert.equal(P.stallReason(t0, t0, t0 + 2 * min + 59_000), '');
+  assert.equal(P.stallReason(t0, t0, t0 + 3 * min), 'quiet');
+  // Actions keep the quiet clock fresh; the total clock still runs out at 5 minutes.
+  assert.equal(P.stallReason(t0, t0 + 4 * min, t0 + 4 * min + 59_000), '');
+  assert.equal(P.stallReason(t0, t0 + 4 * min, t0 + 5 * min), 'long');
+  assert.equal(P.stallReason(t0, t0 + 3 * min, t0 + 6 * min), 'quiet', 'quiet wins once nothing has happened for 3 minutes');
+  // The video case: 13 m 46 s of work with no answer was never flagged; now it is from minute 5.
+  assert.notEqual(P.stallReason(t0, t0 + 13 * min, t0 + 13 * min + 46_000), '');
+
+  const text = P.noReplyText('Antigravity', ['Read LOCAL.md', 'Edit notebook.md'], 12);
+  assert.match(text, /^Antigravity finished without a reply\. It did 12 actions, the last 2 shown:/);
+  assert.match(text, /- Read LOCAL\.md\n- Edit notebook\.md\n/);
+  assert.match(text, /Ask Claude instead/);
+  assert.match(P.noReplyText('Codex', ['Run tests'], 1), /It did 1 action:/);
+  assert.match(P.noReplyText('Codex', [], 0), /finished without doing anything and without a reply/);
+
+  // The marks ride in the slot file; anything else is dropped.
+  const lua = P.luaTable('WoWAI_SlotData', [
+    { chat: 'c', id: 1, status: 'working', text: 'x', stall: 'quiet' },
+    { chat: 'c', id: 2, status: 'done', text: 'y', stall: 'noreply' },
+    { chat: 'c', id: 3, status: 'working', text: 'z', stall: '' },
+    { chat: 'c', id: 4, status: 'working', text: 'w', stall: 'x"y' },
+  ]);
+  assert.equal((lua.match(/stall = "/g) || []).length, 2);
+  assert.ok(lua.includes('stall = "quiet"') && lua.includes('stall = "noreply"'));
 });
