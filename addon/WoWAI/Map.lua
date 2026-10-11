@@ -478,9 +478,14 @@ function M.Sync(m)
 	mdb.map = { epoch = m.epoch, version = tonumber(m.version) or 0, layers = layers }
 	-- Drop navigation that points at a layer that is gone.
 	if mdb.nav and not FindLayer(mdb.nav.layer) then mdb.nav = nil end
+	-- One plain line for the player, whatever the layer names and counts (backlog 54).
+	local placed = 0
+	for _, l in ipairs(changed) do placed = placed + #l.points end
+	if placed > 0 then
+		print(string.format("I marked %d %s on your map: open it with M.", placed, placed == 1 and "place" or "places"))
+	end
 	for _, l in ipairs(changed) do
 		mdb.hidden[l.name] = nil
-		Print(string.format("%s: %d point(s)%s. Open the map (M) to see it.", l.title or l.name, #l.points, l.ordered and ", route" or ""))
 		-- A new or changed route on the player's continent starts navigation at its first
 		-- stop, unless the player is already following another route.
 		local here = PlayerOnContinent()
