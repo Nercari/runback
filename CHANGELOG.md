@@ -4,6 +4,11 @@ All notable changes to this project are recorded here. The format follows [Keep 
 
 ## [Unreleased]
 
+### Added
+
+- **Watched quests and shared pins in the context (backlog 60).** Every message now carries `Watched quests:` with the quests you track (up to 5) and their objectives, so the coach no longer says the game does not report them. A map pin you share, typed (`/mappin 1420 9.7 63.9`, `/way #1420 9.7 63.9`) or shift-clicked, gets its map name from the game (`Tirisfal Glades 9.7, 63.9`, coordinates as typed), so the coach does not have to search for what map 1420 is. Read-only game API; a missing API or an unknown map leaves the line or the text as it was. The context cap goes from 900 to 1200 bytes. Needs Pedro's live check.
+- **Known spells in the context (backlog 61).** A question about your rotation, build, talents, specs, spells or casting, `/ai build` and a review carry your spellbook with the highest rank of each spell (`Spellbook (highest rank known): Affliction: Corruption 2, Life Tap 1; ...`, at most 680 bytes), and the coach is told to trust it instead of hedging "if you have it". Unrelated chat does not carry it. New `Forever_Known.lua`; tests in `tests/forever/addon_known.test.js`. Needs Pedro's live check.
+
 ### Fixed
 
 - **Honest map coordinates (backlog 59).** The coach repeats coordinates the player gave (a shared pin, a `/mappin` line, the context position) exactly as given, so a pin at 9.7, 63.9 no longer comes back as "around 10.5, 64.2". A point the coach supplies that is approximate, from memory, Classic-era or from only one source is labelled so in the reply and in its map label. New hard rule 12 in `mentor/AGENTS.md`; test in `tests/forever/mentor_prompt_coordinates.test.js`.

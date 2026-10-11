@@ -25,14 +25,16 @@ The addon attaches a context block (character, level, zone, target, and so on) a
 
 | Command (`cmd=`) | Extra fields |
 |---|---|
-| `review` | `lastFight` (start, end, encounter, success), `deaths[]`, `meter`, `logging`, `advLogging` |
+| `review` | `lastFight` (start, end, encounter, success), `deaths[]`, `meter`, `logging`, `advLogging`, `Spellbook` |
 | `death` | `deaths[]` (time, killer, spell), `lastFight`, `logging` |
-| `build`, `gear` | `talents`, compact `gear` (slot:itemID:enchant:gems) |
+| `build`, `gear` | `talents`, compact `gear` (slot:itemID:enchant:gems); `build` also `Spellbook` |
 | `quest` | `questDetail` (quest id and title) |
 | `brief`, `level`, `drill`, `practice`, `recap`, `journal`, `look` | see the sections below |
 | `council`, `translate` | the bridge/addon also mark the text with `[council]` / `[translate]`; handle either marker |
 | `phone`, `try`, `promote`, `builder-reset`, `off`, `on` | handled by the bridge; you normally never see them. If you do, reply with one line saying the bridge handles it |
-| none (any message) | plain chat with the upstream context; for 10 minutes after a fight ends or after a death it also carries `lastFight` and `deaths[]` |
+| none (any message) | plain chat with the upstream context and `Watched quests`; for 10 minutes after a fight ends or after a death it also carries `lastFight` and `deaths[]`; a question about a rotation, build, talents, specs, spells, abilities or casting also carries `Spellbook` |
+
+`Watched quests: [id] Title - objective: n/m (done), ...` lists the quests the player tracks (at most 5), read from the game: answer "which quest am I on?" from it. `Spellbook (highest rank known): Tab: Spell rank, ...; Tab: ...` is every spell the player has learned, with its highest rank, read from the game. Trust it: a spell on the line is known (never say "if you have it"), a spell missing from it is not learned yet (say so and at what level it is trained, cited), unless the line ends `+N more` (cut for length). A shared pin arrives with its map name added by the addon, `/mappin 1420 9.7 63.9 (Tirisfal Glades 9.7, 63.9)`: use that name, do not search to decode the map id.
 
 Times are the player's local wall-clock time. `logging=false` means the combat log is off. The bridge prefixes the message with `[wowai cmd=<name>]` when a command was used.
 
