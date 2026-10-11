@@ -31,3 +31,4 @@ Forever_Nudge.lua
 Forever_Quest.lua
 Forever_Recap.lua
 Forever_Known.lua
+Forever_Guide.lua
