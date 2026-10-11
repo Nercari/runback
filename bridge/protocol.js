@@ -345,6 +345,179 @@ function describeToolUse(block) {
 }
 
 // ---------------------------------------------------------------------------
+// Plain words for the player
+// ---------------------------------------------------------------------------
+//
+// The player does not program: the "working" list, the review evidence and the
+// notes under a reply say what is happening in everyday words, never a command
+// line, a regex, a path, a tool id or a raw combat-log line.
+
+const PROGRESS_SHOWN = 3;
+
+// Every phrase plainProgress can return, so a test can prove nothing else leaks.
+const PROGRESS_PHRASES = [
+  'Reading your combat log', 'Reading your notebook', 'Checking my class notes', 'Reading your files',
+  'Cutting out your last fight', 'Checking my quotes against the log', 'Running a check',
+  'Searching the log', 'Searching your files', 'Looking through your files', 'Saving your notes',
+  'Searching the web', 'Checking a guide online', 'Using a helper tool', 'Asking a helper',
+  'Planning the steps', 'Thinking it through', 'Getting ready',
+];
+
+const LOG_WORDS = /combat|wowcombatlog|\.log\b|slice|\.death|fight|SPELL_|SWING_|UNIT_DIED|\d{1,2}:\d{2}/i;
+
+// One raw progress line (as agents.js and describeToolUse print them) as a short phrase.
+function plainProgress(line) {
+  const raw = String(line ?? '').trim();
+  const m = /^(\$|read|edit|write|delete|grep:?|glob|ls|search:|fetch|tool:|agent:|todo list|~)(?:\s+(.*))?$/s.exec(raw);
+  if (!m) return /^[A-Za-z_][\w.]*$/.test(raw) ? 'Getting ready' : 'Thinking it through';
+  const rest = m[2] || '';
+  switch (m[1]) {
+    case '$':
+      if (/slice-fight/i.test(rest)) return 'Cutting out your last fight';
+      if (/check-citations/i.test(rest)) return 'Checking my quotes against the log';
+      return LOG_WORDS.test(rest) ? 'Reading your combat log' : 'Running a check';
+    case 'read':
+      if (LOG_WORDS.test(rest)) return 'Reading your combat log';
+      if (/characters|notebook|LOCAL/i.test(rest)) return 'Reading your notebook';
+      if (/rubric|knowledge|facts|theorycraft/i.test(rest)) return 'Checking my class notes';
+      return 'Reading your files';
+    case 'edit': case 'write': case 'delete': return 'Saving your notes';
+    case 'grep': case 'grep:': return LOG_WORDS.test(rest) ? 'Searching the log' : 'Searching your files';
+    case 'glob': case 'ls': return 'Looking through your files';
+    case 'search:': return 'Searching the web';
+    case 'fetch': return 'Checking a guide online';
+    case 'tool:': return 'Using a helper tool';
+    case 'agent:': return 'Asking a helper';
+    case 'todo list': return 'Planning the steps';
+    default: return 'Thinking it through';
+  }
+}
+
+// Add one raw progress line to the shown list: a plain phrase, no immediate
+// repeat, only the newest PROGRESS_SHOWN. Returns the list.
+function addProgress(list, line, plain = false) {
+  const phrase = plain ? String(line) : plainProgress(line);
+  if (list[list.length - 1] !== phrase) list.push(phrase);
+  while (list.length > PROGRESS_SHOWN) list.shift();
+  return list;
+}
+
+// A combat-log line (or a cut one ending in an ellipsis) as one plain sentence:
+// "20:00:11 Brakka cast Shield Bash". Names and spells come from the line
+// itself; amounts are left out because the log layout varies (spec item 23).
+const LOG_TS = /^\d{1,2}\/\d{1,2}(?:\/\d{4})? (\d{2}:\d{2}:\d{2})\.\d+(?:[+-]\d{1,2}(?::?\d{2})?)?/;
+
+function logFields(s) {
+  const out = [];
+  let cur = '', quoted = false;
+  for (const ch of s) {
+    if (ch === '"') quoted = !quoted;
+    else if (ch === ',' && !quoted) { out.push(cur); cur = ''; } else cur += ch;
+  }
+  out.push(cur);
+  return out;
+}
+
+const EVENT_VERBS = {
+  SPELL_CAST_SUCCESS: ['cast', ''], SPELL_CAST_START: ['started casting', ''], SPELL_CAST_FAILED: ['failed to cast', ''],
+  SPELL_AURA_APPLIED: ['gained', ''], SPELL_AURA_REFRESH: ['refreshed', ''], SPELL_AURA_REMOVED: ['lost', ''],
+  SPELL_DAMAGE: ['hit', 'with'], SPELL_PERIODIC_DAMAGE: ['damaged', 'with'], SWING_DAMAGE: ['hit', 'in melee'],
+  SPELL_HEAL: ['healed', 'with'], SPELL_PERIODIC_HEAL: ['healed', 'with'], SPELL_INTERRUPT: ['interrupted', 'with'],
+  SPELL_MISSED: ['missed', 'with'], SWING_MISSED: ['missed', 'in melee'], SPELL_DISPEL: ['dispelled', 'with'],
+};
+
+function plainLogLine(line) {
+  const t = String(line ?? '').trim().replace(/\s*(?:…|\.{3})$/, '');
+  const ts = LOG_TS.exec(t);
+  if (!ts) return null;
+  const f = logFields(t.slice(ts[0].length).trim());
+  const event = f[0] || '';
+  const who = (n) => String(n || '').replace(/^nil$/, '').replace(/-.*$/, '').trim();
+  const source = who(f[2]) || 'Someone';
+  const dest = who(f[6]);
+  if (event === 'UNIT_DIED') return `${ts[1]} ${who(f[6]) || 'a unit'} died`;
+  const verb = EVENT_VERBS[event];
+  if (!verb) return `${ts[1]} ${source}: ${event.toLowerCase().replace(/_/g, ' ')}`.trim();
+  const melee = event.startsWith('SWING_');
+  const spell = melee ? '' : String(f[10] || '').trim();
+  if (event === 'SPELL_AURA_APPLIED' || event === 'SPELL_AURA_REFRESH' || event === 'SPELL_AURA_REMOVED') {
+    return `${ts[1]} ${dest || source} ${verb[0]} ${spell || 'an effect'}`;
+  }
+  const target = dest && dest !== source ? ` ${dest}` : '';
+  if (verb[1] === '') return `${ts[1]} ${source} ${verb[0]} ${spell || 'a spell'}${target ? ' on' + target : ''}`;
+  if (melee) return `${ts[1]} ${source} ${verb[0]}${target || ' you'} ${verb[1]}`;
+  return `${ts[1]} ${source} ${verb[0]}${target || ' you'} ${verb[1]} ${spell || 'a spell'}`;
+}
+
+// The reply the player reads: raw combat-log quotes become one "Evidence:" line
+// per mistake. The saved review (reviews/*.reply.txt) keeps the exact quotes
+// for tools/check-citations.js; only this displayed copy is plain.
+function plainEvidence(text) {
+  const lines = String(text ?? '').split('\n');
+  const out = [];
+  let group = null; // { indent, items } while consecutive quote lines are being collected
+  let fence = null; // { marker, raw, other } while inside a code fence
+  const flush = () => {
+    if (!group) return;
+    const shown = group.items.slice(0, 2).join('; ');
+    const more = group.items.length > 2 ? ` (and ${group.items.length - 2} more in your saved review)` : '';
+    out.push(`${group.indent}Evidence: ${shown}${more}`);
+    group = null;
+  };
+  const quote = (raw) => raw.trim().replace(/^Log:\s*/i, '').replace(/^`+|`+$/g, '').trim();
+  const take = (indent, raw) => {
+    const plain = plainLogLine(quote(raw));
+    if (!plain) return false;
+    if (!group) group = { indent, items: [] };
+    group.items.push(plain);
+    return true;
+  };
+  const closeFence = (closing) => {
+    for (const raw of fence.raw) take(fence.indent, raw);
+    flush();
+    if (!fence.raw.length || fence.other.length) out.push(fence.open, ...fence.other, ...(closing === undefined ? [] : [closing]));
+    fence = null;
+  };
+  for (const line of lines) {
+    const fm = /^(\s*)(`{3,})/.exec(line);
+    if (fence) {
+      if (fm && line.trim().startsWith(fence.marker)) { closeFence(line); continue; }
+      if (plainLogLine(quote(line))) fence.raw.push(line);
+      else if (line.trim()) fence.other.push(line);
+      continue;
+    }
+    if (fm) { flush(); fence = { marker: fm[2], indent: fm[1], open: line, raw: [], other: [] }; continue; }
+    const indent = /^\s*/.exec(line)[0];
+    if (take(indent, line)) continue;
+    flush();
+    // A quote inside a sentence: swap the backticked span for its plain form.
+    out.push(line.replace(/`([^`]+)`/g, (whole, span) => {
+      const plain = plainLogLine(span);
+      return plain ? plain : whole;
+    }));
+  }
+  if (fence) closeFence();
+  flush();
+  return out.join('\n');
+}
+
+// Notes for the player under a reply. Dropped: the permission sentence (the Allow
+// button and the game chat line already say it, and the sentence outlives the
+// button) and parser internals (they go to bridge.log).
+const INTERNAL_NOTE = /needs your OK to continue|event parser failed/i;
+function replyNotes(notes) {
+  return (Array.isArray(notes) ? notes : []).map(n => String(n).trim()).filter(n => n && !INTERNAL_NOTE.test(n));
+}
+
+// The one line the player reads after the agent marked the map.
+function mapNote({ marked = 0, cleared = false, errors = 0 } = {}) {
+  if (marked > 0) return `I marked ${marked} ${marked === 1 ? 'place' : 'places'} on your map: open it with M.`;
+  if (cleared) return 'I cleared the marks from your map.';
+  if (errors > 0) return 'I could not mark that on your map.';
+  return '';
+}
+
+// ---------------------------------------------------------------------------
 // Out: what the game reads
 // ---------------------------------------------------------------------------
 
@@ -465,20 +638,21 @@ function newMap(epoch) {
 // Apply commands in order. Returns { changed, notes } and mutates `map`.
 function applyMapCommands(map, cmds, now = Date.now()) {
   const notes = [];
-  let changed = false;
+  let changed = false, marked = 0, cleared = false;
   for (const raw of cmds || []) {
     const why = [];
     const c = validateMapCommand(raw, why);
     notes.push(...why);
     if (!c) continue;
     if (c.op === 'clearall') {
-      if (Object.keys(map.layers).length) { map.layers = {}; changed = true; }
+      if (Object.keys(map.layers).length) { map.layers = {}; changed = true; cleared = true; }
       notes.push('cleared all layers');
     } else if (c.op === 'clear') {
-      if (map.layers[c.layer]) { delete map.layers[c.layer]; changed = true; notes.push(`cleared layer ${c.layer}`); }
+      if (map.layers[c.layer]) { delete map.layers[c.layer]; changed = true; cleared = true; notes.push(`cleared layer ${c.layer}`); }
     } else {
       map.layers[c.layer] = { title: c.title, ordered: c.ordered, loop: c.loop, points: c.points, t: now };
       changed = true;
+      marked += c.points.length;
       notes.push(`layer ${c.layer}: ${c.points.length} point(s)`);
     }
   }
@@ -492,7 +666,7 @@ function applyMapCommands(map, cmds, now = Date.now()) {
     changed = true;
   }
   if (changed) map.version = (map.version || 0) + 1;
-  return { changed, notes };
+  return { changed, notes, marked, cleared };
 }
 
 // Pull ```wowmap blocks out of a reply: a JSON object, an array, or one object per line.
@@ -553,6 +727,7 @@ module.exports = {
   resolveCwd, isBroadFolder, pickDefaultCwd, sameFolder, baseName,
   parseFlags, validModel, validEffort, jobsFromStrip, parseOutbox, systemPrompt, splitSummary,
   ruleFor, rulesFor, describeToolUse,
+  PROGRESS_SHOWN, PROGRESS_PHRASES, plainProgress, addProgress, plainLogLine, plainEvidence, replyNotes, mapNote,
   luaStr, luaTable, SILENT_WAV,
   MAP_LIMITS, validateMapCommand, newMap, applyMapCommands, extractMapBlocks, parseMapFile, luaMap,
 };
