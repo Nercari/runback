@@ -42,7 +42,7 @@ const TMP_DIR = path.join(HERE, 'tmp'); // prompt files for agents that read the
 const argv = process.argv.slice(2);
 if (argv.includes('--on')) { try { fs.unlinkSync(path.join(HERE, 'KILLED')); } catch {} }
 if (argv.includes('--help') || argv.includes('-h')) {
-  console.log('wow-ai [--project <dir>] [--once] [--inject "text" [--agent <id>] [--model <name>]]\n\n' +
+  console.log('wow-ai [--project <dir>] [--once] [--inject "text" [--agent <id>] [--model <name>] [--effort <level>]]\n\n' +
     'Runs the WoW AI bridge. Chats without a folder of their own work in <dir>,\n' +
     'or in the folder you started it from, or in defaultCwd from bridge/config.json.\n' +
     `Agents: ${A.agentIds().join(', ')} (the default is "agent" in config.json; chats pick with /wow-ai agent).`);
@@ -61,6 +61,8 @@ const agentIdx = argv.indexOf('--agent');
 const injectAgent = agentIdx >= 0 ? argv[agentIdx + 1] : '';
 const modelIdx = argv.indexOf('--model');
 const injectModel = modelIdx >= 0 ? argv[modelIdx + 1] : '';
+const effortIdx = argv.indexOf('--effort');
+const injectEffort = effortIdx >= 0 ? argv[effortIdx + 1] : '';
 const exitWhenIdle = once || inject !== null;
 
 // The agent chats use unless they pick their own (/wow-ai agent, "agent=" flag).
@@ -608,6 +610,17 @@ function runJob(job) {
     }
     acfg = { ...acfg, model: job.model };
   }
+  // The chat's reasoning level (an "effort=" flag): only a level the catalog lists for
+  // this model, and only for an agent whose CLI takes one from here. No level, no flag.
+  if (job.effort) {
+    const why = A.effortProblem(agentId, acfg, job.effort);
+    if (why) {
+      log(`${tag} effort "${job.effort}" refused for ${agentId}: ${why}`);
+      finish(job, 'error', `${why}\nPick one from the AI button under the chat, or list the levels in agents.${agentId}.models in config.json.`);
+      return;
+    }
+    acfg = { ...acfg, effort: job.effort };
+  }
   const cmd = A.resolveCommand(agentId, acfg);
   if (!cmd.found) {
     log(`${tag} ${agentId} not found: ${cmd.note}`);
@@ -912,7 +925,7 @@ Forever.init({ cfg, log, HERE, REPO, SAVED_VARS, state, saveState, atomicWrite, 
   } });
 process.on('exit', () => Forever.stop());
 if (inject !== null) {
-  submit({ id: state.lastId + 1, session: '', chat: '', text: inject, cwd: '', newSession: false, via: 'inject', agent: injectAgent || '', model: injectModel || '' });
+  submit({ id: state.lastId + 1, session: '', chat: '', text: inject, cwd: '', newSession: false, via: 'inject', agent: injectAgent || '', model: injectModel || '', effort: injectEffort || '' });
 } else {
   pollSavedVariables();
   if (once) {

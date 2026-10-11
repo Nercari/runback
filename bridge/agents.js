@@ -354,6 +354,7 @@ const AGENTS = {
     name: 'Claude',
     command: 'claude',
     install: 'https://claude.com/claude-code, then run `claude` once and log in',
+    takesEffort: true, // --effort, confirmed on Pedro's PC 2026-10-09 (docs/model-picker-spec.md)
     windowsPaths: () => [path.join(os.homedir(), '.local', 'bin', 'claude.exe')],
     posixPaths: () => [path.join(os.homedir(), '.local', 'bin', 'claude')],
     args({ cfg, resume, system }) {
@@ -363,6 +364,7 @@ const AGENTS = {
       const denied = Array.isArray(cfg.deniedTools) ? cfg.deniedTools.filter(isRule) : [];
       if (denied.length) a.push('--disallowedTools', ...denied);
       if (cfg.model) a.push('--model', cfg.model);
+      if (cfg.effort) a.push('--effort', cfg.effort);
       if (resume) a.push('--resume', resume);
       if (system) a.push('--append-system-prompt', system);
       return a.concat(Array.isArray(cfg.extraArgs) ? cfg.extraArgs : []);
@@ -467,12 +469,14 @@ const AGENTS = {
   hermes: {
     name: 'Hermes', command: 'hermes',
     install: 'Install Hermes Agent and run `hermes setup` once.',
+    takesEffort: true, // chat --reasoning, confirmed on Pedro's PC 2026-10-09
     windowsPaths: () => [], posixPaths: () => [],
     stream: 'text',
     args({ cfg, resume, cwd, images }) {
       const a = ['chat', '--query-file', '-', '-Q', '--in', cwd, '--source', 'tool'];
       if (resume) a.push('--resume', resume);
       if (cfg.model) a.push('-m', cfg.model);
+      if (cfg.effort) a.push('--reasoning', cfg.effort);
       if (images && images.length && !String(images[0]).startsWith('-')) a.push('--image', images[0]);
       // R1: hermes never runs with --yolo from the bridge, even via extraArgs.
       return a.concat(Array.isArray(cfg.extraArgs) ? cfg.extraArgs.filter(x => !/^(-y|--yolo)(=.*)?$/.test(String(x))) : []);
@@ -522,6 +526,19 @@ function agentConfig(cfg, id) {
 // agents.<id>.model first. Empty: the agent only runs on its own default model.
 function modelChoices(acfg, id) {
   return M.entries(acfg, id).filter(e => validModel(e.id)).map(e => e.id);
+}
+
+// Why a chat's effort level cannot run: '' when it can. The level must be one the
+// catalog (or config.json) lists for the model the chat runs on, and the agent's CLI
+// must take one from here. No level, no flag, so this is only asked for a level.
+function effortProblem(id, acfg, effort) {
+  const agent = AGENTS[id];
+  if (!agent.takesEffort) return `${agent.name} takes no effort level from here yet.`;
+  if (!acfg.model) return `Pick a model first: effort "${effort}" belongs to a model.`;
+  const entry = M.entries(acfg, id).find(e => e.id === acfg.model);
+  const levels = entry ? entry.efforts : [];
+  if (!levels.includes(effort)) return `${agent.name} ${acfg.model} has no effort "${effort}" here. Levels: ${levels.join(', ') || 'none'}.`;
+  return '';
 }
 
 // ---------------------------------------------------------------------------
@@ -615,7 +632,7 @@ function resolveCommand(id, cfg = {}) {
 }
 
 module.exports = {
-  AGENTS, DEFAULT_AGENT, agentIds, normalizeAgent, displayName, agentConfig, modelChoices, modelEntries: M.entries,
+  AGENTS, DEFAULT_AGENT, agentIds, normalizeAgent, displayName, agentConfig, modelChoices, modelEntries: M.entries, effortProblem,
   grokRules, snippet, contextBlock,
   claudeParser, codexParser, grokParser, agyParser, hermesParser, codexItemLine, grokCall, grokRefusal, shellInner,
   resolveCommand, unwrapShim, nativeNextTo,
