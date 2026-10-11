@@ -148,11 +148,12 @@ function validModel(m) { return typeof m === 'string' && MODEL_TOKEN.test(m); }
 const EFFORT_TOKEN = /^[a-z]{1,16}$/;
 function validEffort(e) { return typeof e === 'string' && EFFORT_TOKEN.test(e); }
 function parseFlags(flags) {
-  const out = { newSession: false, hello: false, forget: false, context: false, allow: [], agent: '', model: '', effort: '', cmd: '' };
+  const out = { newSession: false, hello: false, forget: false, stop: false, context: false, allow: [], agent: '', model: '', effort: '', cmd: '' };
   for (const tok of String(flags || '').split(';')) {
     if (tok === 'n') out.newSession = true;
     else if (tok === 'h') out.hello = true;
     else if (tok === 'd') out.forget = true;
+    else if (tok === 's') out.stop = true;
     else if (tok === 'c') out.context = true;
     else if (tok.startsWith('allow=')) out.allow.push(...tok.slice(6).split(',').map(s => s.trim()).filter(Boolean));
     else if (tok.startsWith('agent=')) out.agent = tok.slice(6).trim().toLowerCase();
@@ -571,6 +572,29 @@ function luaStr(s) {
     + '"';
 }
 
+// Stalled runs (backlog 52). A run that has shown no new action for STALL_QUIET_MS,
+// or has lasted STALL_TOTAL_MS, is marked "quiet" or "long" in its working record so
+// the game can offer Stop and "Ask Claude instead". A run that ends with no reply
+// carries "noreply". Worst wait with no way out: STALL_TOTAL_MS (was 13 m 46 s).
+const STALL_QUIET_MS = 3 * 60 * 1000;
+const STALL_TOTAL_MS = 5 * 60 * 1000;
+const STALL_KINDS = ['quiet', 'long', 'noreply'];
+function stallReason(startedAt, lastActionAt, now) {
+  if (now - lastActionAt >= STALL_QUIET_MS) return 'quiet';
+  if (now - startedAt >= STALL_TOTAL_MS) return 'long';
+  return '';
+}
+
+// The reply for a run that ended with no text: what it did, from its action lines.
+function noReplyText(agentName, actions, total) {
+  const n = Number(total) || actions.length;
+  if (!n) return `${agentName} finished without doing anything and without a reply.`;
+  const shown = actions.length < n ? `, the last ${actions.length} shown` : '';
+  return `${agentName} finished without a reply. It did ${n} ${n === 1 ? 'action' : 'actions'}${shown}:\n` +
+    actions.map(a => `- ${a}`).join('\n') +
+    '\nIt may have changed files even so. Click Ask Claude instead to send the same question to Claude, or ask again.';
+}
+
 // The slot file / Inbox.lua body: the latest record of every chat, the bridge's
 // clock, default folder and default agent (plus the agents installed on this
 // PC and the models each can switch to), and
@@ -599,6 +623,7 @@ function luaTable(globalName, records, opts = {}) {
     lines.push(`\t\t\tsession = ${luaStr(r.session || '')},`);
     lines.push(`\t\t\tagent = ${luaStr(r.agent || '')},`);
     if (r.summary) lines.push(`\t\t\tsummary = ${luaStr(r.summary)},`);
+    if (STALL_KINDS.includes(r.stall)) lines.push(`\t\t\tstall = ${luaStr(r.stall)},`);
     if (Array.isArray(r.followUps) && r.followUps.length) {
       lines.push(`\t\t\tfollowUps = { ${r.followUps.map(luaStr).join(', ')} },`);
     }
@@ -771,5 +796,6 @@ module.exports = {
   ruleFor, rulesFor, describeToolUse,
   PROGRESS_SHOWN, PROGRESS_PHRASES, plainProgress, addProgress, plainLogLine, plainEvidence, replyNotes, mapNote,
   luaStr, luaTable, SILENT_WAV,
+  STALL_QUIET_MS, STALL_TOTAL_MS, stallReason, noReplyText,
   cleanText, MAP_LIMITS, validateMapCommand, newMap, applyMapCommands, extractMapBlocks, parseMapFile, luaMap,
 };

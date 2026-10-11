@@ -796,11 +796,14 @@ ApplyReplies = function(replies)
 			if (r.status == "done" or r.status == "error") and ForeverBlocked() then
 				HoldReply(c, r)
 			elseif r.status == "done" then
-				Finish(c, "assistant", r.text or "", denied, r.agent, r.summary, r.followUps)
+				Finish(c, "assistant", r.text or "", denied, r.agent, r.summary, r.followUps, r.stall)
 			elseif r.status == "error" then
 				Finish(c, "system", "Bridge error: " .. tostring(r.text), denied)
 			elseif r.status == "working" then
 				c.progress = r.text
+				-- The bridge marks a run quiet or long; the window then offers Stop and Ask Claude instead.
+				c.stall = (r.stall == "quiet" or r.stall == "long") and r.stall or nil
+				WoWAI.UpdateStatus()
 			end
 			if c.pendingId == nil then
 				for _, mod in ipairs(ForeverModules()) do if type(mod.onReply) == "function" then pcall(mod.onReply, c, r) end end
@@ -940,7 +943,7 @@ local function Tick()
 			if rec.forget then db.forget[rec.forget] = nil end
 			run.outbound[id] = nil
 			changed = true
-		elseif rec.hello and now - rec.sentAt >= 20 then
+		elseif (rec.hello or rec.stop) and now - rec.sentAt >= 20 then
 			run.outbound[id] = nil
 			changed = true
 		elseif now - rec.sentAt >= STRIP_SECONDS then
@@ -949,8 +952,9 @@ local function Tick()
 				-- Nobody picked it up: show it again.
 				rec.sentAt = now
 				changed = true
-			elseif rec.forget then
-				-- The bridge is away; db.forget keeps it for the next hello.
+			elseif rec.forget or rec.stop then
+				-- The bridge is away; db.forget keeps a delete for the next hello, and a
+				-- stop has nothing left to stop by then.
 				run.outbound[id] = nil
 				changed = true
 			else
@@ -996,7 +1000,7 @@ local function ProcessInbox()
 	if inbox.map and WoWAIMap then WoWAIMap.Sync(inbox.map) end
 end
 
-Finish = function(chat, role, text, denied, agent, summary, followUps)
+Finish = function(chat, role, text, denied, agent, summary, followUps, stall)
 	AddHistory(chat, role, text, chat.pendingId, denied, agent)
 	if type(followUps) == "table" and #followUps > 0 then
 		local keep = {}
@@ -1007,6 +1011,8 @@ Finish = function(chat, role, text, denied, agent, summary, followUps)
 	end
 	chat.pendingId = nil
 	chat.progress = nil
+	-- A run that ended with no reply keeps the Ask Claude instead offer.
+	chat.stall = (role == "assistant" and stall == "noreply") and "noreply" or nil
 	if run.act then run.act[chat.id] = nil end
 	NotedBridge()
 	local visible = ui.frame and ui.frame:IsShown() and db.activeChat == chat.id
@@ -1390,6 +1396,7 @@ function WoWAI.Send(text, allow, opts)
 	c.pendingId = id
 	c.draft = nil
 	c.progress = nil
+	c.stall = nil
 	AddHistory(c, "user", text, id)
 	-- A chat still carrying its default name takes its title from the first message
 	-- you send (system notes like "/wow-ai cd" before it don't count).
@@ -1483,6 +1490,53 @@ function WoWAI.Resend()
 	ScheduleNextPoll()
 	RefreshStrip()
 	WoWAI.UpdateStatus()
+end
+
+-- The text of the last message the player sent in a chat.
+local function LastUserText(c)
+	for i = #c.history, 1, -1 do
+		if c.history[i].role == "user" then return c.history[i].text end
+	end
+end
+
+-- Stop button: give up on the pending message here and tell the bridge to end the
+-- agent's run (a record like a delete: no text, flag "s"). Pixel transport only;
+-- in reload mode the bridge cannot be told until the next reload.
+function WoWAI.StopRun(c)
+	c = c or ActiveChat()
+	if not c or not c.pendingId then return end
+	if db.settings.mode == "pixel" then
+		db.lastSeq = db.lastSeq + 1
+		run.outbound[db.lastSeq] = { chat = c.id, cwd = c.cwd, flags = "s", name = c.name, text = "", sentAt = GetTime(), stop = true }
+	end
+	AddHistory(c, "system", "Stopped waiting for " .. ChatAgentName(c) .. "; the bridge was told to stop it")
+	run.outbound[c.pendingId] = nil
+	if run.act then run.act[c.id] = nil end
+	c.pendingId = nil
+	c.progress = nil
+	c.stall = nil
+	RefreshStrip()
+	if not AnyPending() and not WoWAI.reloadAfterCombat then keyCatcher:Hide() end
+	WoWAI.Render()
+end
+
+-- Whether "Ask Claude instead" makes sense: Claude is installed on the bridge PC,
+-- this chat is not already on it, and there is a question to send again.
+function WoWAI.CanAskClaude(c)
+	return c ~= nil and c.stall ~= nil and run.bridgeAgents ~= nil and Contains(run.bridgeAgents, "claude")
+		and ChatAgent(c) ~= "claude" and LastUserText(c) ~= nil
+end
+
+-- Ask Claude instead: stop the stalled run if there is one, switch this chat to
+-- Claude and send the same question again. Only ever runs from the player's click.
+function WoWAI.AskClaude(c)
+	c = c or ActiveChat()
+	if not WoWAI.CanAskClaude(c) then return end
+	local text = LastUserText(c)
+	if c.pendingId then WoWAI.StopRun(c) end
+	c.stall = nil
+	WoWAI.SetPool(c, "claude", "")
+	WoWAI.Send(text)
 end
 
 function WoWAI.SendFromInput()
@@ -1841,6 +1895,20 @@ end
 -- Rendering
 ---------------------------------------------------------------------------
 
+-- Stop and Ask Claude instead sit at the right end of the status line, only while a
+-- run is stalled (or ended with no reply). The status text gives way to them.
+function WoWAI.UpdateStallButtons(c)
+	if not ui.stopBtn then return end
+	local stop = c ~= nil and c.pendingId ~= nil and c.stall ~= nil
+	local ask = WoWAI.CanAskClaude(c)
+	ui.stopBtn:SetShown(stop)
+	ui.askBtn:SetShown(ask)
+	local width = 0
+	if ask then width = width + 150 end
+	if stop then width = width + 60 end
+	ui.status:SetPoint("RIGHT", ui.frame, "RIGHT", -(60 + width), 0)
+end
+
 function WoWAI.UpdateStatus()
 	if not ui.status then return end
 	local c = ActiveChat()
@@ -1857,6 +1925,8 @@ function WoWAI.UpdateStatus()
 				s = "Slot pool used up this session - next keypress reloads to free it"
 			elseif run.pixelFailed then
 				s = "Bridge didn't see your message after " .. STRIP_TRIES .. " tries - next keypress switches to the reload path (or /wow-ai reload)"
+			elseif c.stall then
+				s = ChatAgentName(c) .. (c.stall == "quiet" and " has gone quiet" or " is taking long") .. " - " .. ActivityLine(c)
 			elseif c.progress or (run.act and run.act[c.id] and run.act[c.id].count > 0) then
 				s = ChatAgentName(c) .. " is working - " .. ActivityLine(c)
 			elseif rec and not rec.acked then
@@ -1891,10 +1961,13 @@ function WoWAI.UpdateStatus()
 		s = "Reply arrived. Your draft is back in the box - Enter to send it"
 	elseif run.restoring then
 		s = "Connecting to the bridge..."
+	elseif c and c.stall == "noreply" then
+		s = ChatAgentName(c) .. " sent no answer"
 	else
 		s = "Ready"
 	end
 	ui.status:SetText(s)
+	WoWAI.UpdateStallButtons(c)
 	run.statusText = s
 	WoWAI.UpdateDot()
 	WoWAI.UpdateConnect()
@@ -2536,6 +2609,16 @@ local function BuildUI()
 	status:SetPoint("RIGHT", f, "RIGHT", -60, 0)
 	status:SetJustifyH("LEFT")
 	ui.status = status
+
+	-- Stalled run (backlog 52): both are the player's own click.
+	local askBtn = MakeButton(f, "Ask Claude instead", 144, function() WoWAI.AskClaude() end)
+	askBtn:SetPoint("TOPRIGHT", f, "TOPRIGHT", -34, -28)
+	askBtn:Hide()
+	ui.askBtn = askBtn
+	local stopBtn = MakeButton(f, "Stop", 54, function() WoWAI.StopRun() end)
+	stopBtn:SetPoint("RIGHT", askBtn, "LEFT", -4, 0)
+	stopBtn:Hide()
+	ui.stopBtn = stopBtn
 
 	-- Minimize button in the corner where a close X would be: this window is never
 	-- closed from here, only collapsed to the mini bar (Esc does the same, see OnHide).
