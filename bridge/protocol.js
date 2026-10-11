@@ -249,6 +249,13 @@ const MAP_HINT = [
   'x and y are map percent on the map with that uiMapID (the context gives the player\'s current one). kind is one of ore, herb, quest, turnin, kill, loot, object, explore, npc, trainer, vendor, dungeon, flight, poi. Only mark the map when asked for a route, marks or locations; say in the reply what you drew.',
 ];
 
+// How the agent hands over a leveling guide (docs/GUIDE.md). Sent with the game context.
+const GUIDE_HINT = [
+  'You can give the player a leveling guide: a read-only list of steps they follow by hand. Either write the guide as JSON to the file named by the WOW_AI_GUIDE_FILE environment variable or, for a short one, end the reply with a fenced block whose language tag is wowguide. Only when asked for a guide. Format:',
+  '{"id":"<name>","title":"<shown title>","source":"<where the facts came from>","minLevel":1,"maxLevel":10,"steps":[{"kind":"accept|do|turnin|travel|train|buy|note","text":"<what the player does>","quest":"<quest name>","questId":<id>,"points":[{"m":<uiMapID>,"x":<0-100>,"y":<0-100>}]}]}',
+  'Every step is something the player does by hand: never a macro, a script or a /run line. Say in the reply what the guide covers.',
+];
+
 function systemPrompt(ctx, primer) {
   const lines = [...REPLY_FORMAT];
   const text = String(ctx || '').trim();
@@ -259,7 +266,9 @@ function systemPrompt(ctx, primer) {
       '',
       'Use this when the request is about the game or the character (questions, macros, addon code, gear advice); ignore it when the task is unrelated. Never give the player /run, /script, /console or /dump lines to paste, for settings, key bindings or anything else: give the game menu path and the value instead, one setting per line ("Options > Controls > Auto Loot: on"). Items, spells or quests the player shift-clicked into a message appear as [Name] in the text, with their tooltip in a "Linked from the game" block at the end of the message.',
       '',
-      ...MAP_HINT);
+      ...MAP_HINT,
+      '',
+      ...GUIDE_HINT);
   }
   const ref = text ? String(primer || '').trim() : '';
   if (ref) {
@@ -634,6 +643,7 @@ function luaTable(globalName, records, opts = {}) {
   }
   lines.push('\t},');
   if (opts.map) lines.push(luaMap(opts.map));
+  if (opts.guides) lines.push(luaGuides(opts.guides));
   const restore = opts.restore;
   if (restore) {
     lines.push('\trestore = {', `\t\ttoken = ${luaStr(restore.token)},`, '\t\tchats = {');
@@ -776,6 +786,38 @@ function luaMap(map) {
   return lines.join('\n');
 }
 
+// The guide set (already validated by guide.js) as the Lua the slot files carry.
+// Optional fields are written only when present; the addon only stores them.
+function luaGuides(store) {
+  const list = a => `{ ${a.map(luaStr).join(', ')} }`;
+  const lines = ['\tguides = {', `\t\tepoch = ${luaStr(store.epoch)},`, `\t\tversion = ${Number(store.version) || 0},`, '\t\tlist = {'];
+  for (const g of store.guides || []) {
+    const head = [`id = ${luaStr(g.id)}`, `title = ${luaStr(g.title)}`];
+    if (g.minLevel) head.push(`minLevel = ${g.minLevel}`);
+    if (g.maxLevel) head.push(`maxLevel = ${g.maxLevel}`);
+    if (g.faction) head.push(`faction = ${luaStr(g.faction)}`);
+    if (g.source) head.push(`source = ${luaStr(g.source)}`);
+    lines.push(`\t\t\t{ ${head.join(', ')}, steps = {`);
+    for (const s of g.steps) {
+      const f = [`kind = ${luaStr(s.kind)}`, `text = ${luaStr(s.text)}`];
+      if (s.quest) f.push(`quest = ${luaStr(s.quest)}`);
+      if (s.questId) f.push(`questId = ${s.questId}`);
+      if (s.points) f.push(`points = { ${s.points.map(p => `{ m = ${p.m}, x = ${p.x}, y = ${p.y}${p.radius ? `, radius = ${p.radius}` : ''}${p.label ? `, label = ${luaStr(p.label)}` : ''} }`).join(', ')} }`);
+      if (s.level) f.push(`level = { ${s.level.min ? `min = ${s.level.min}` : ''}${s.level.min && s.level.max ? ', ' : ''}${s.level.max ? `max = ${s.level.max}` : ''} }`);
+      if (s.class) f.push(`class = ${list(s.class)}`);
+      if (s.race) f.push(`race = ${list(s.race)}`);
+      if (s.faction) f.push(`faction = ${luaStr(s.faction)}`);
+      if (s.optional) f.push('optional = true');
+      if (s.sticky) f.push('sticky = true');
+      if (s.completewith) f.push(`completewith = ${s.completewith}`);
+      lines.push(`\t\t\t\t{ ${f.join(', ')} },`);
+    }
+    lines.push('\t\t\t} },');
+  }
+  lines.push('\t\t},', '\t},');
+  return lines.join('\n');
+}
+
 // A valid, silent 10 ms WAV. An empty file "won't play"; this one will.
 const SILENT_WAV = (() => {
   const rate = 8000, samples = 80;
@@ -797,5 +839,5 @@ module.exports = {
   PROGRESS_SHOWN, PROGRESS_PHRASES, plainProgress, addProgress, plainLogLine, plainEvidence, replyNotes, mapNote,
   luaStr, luaTable, SILENT_WAV,
   STALL_QUIET_MS, STALL_TOTAL_MS, stallReason, noReplyText,
-  cleanText, MAP_LIMITS, validateMapCommand, newMap, applyMapCommands, extractMapBlocks, parseMapFile, luaMap,
+  cleanText, MAP_LIMITS, validateMapCommand, newMap, applyMapCommands, extractMapBlocks, parseMapFile, luaMap, luaGuides,
 };
