@@ -1142,7 +1142,7 @@ test('stalled run: Stop and Ask Claude instead appear, and Ask Claude instead re
   const slot = replies => `{ now = time(), cwd = "", agent = "agy", agents = { "claude", "agy" }, replies = { ${replies || ''} } }`;
   nextSlot(vm, slot());
   vm.run('STUB.now = STUB.now + 6; STUB.Tick()');
-  vm.run('WoWAI.Send("how do I fix my rotation?")');
+  vm.run('WoWAI.Send("how do I get to Undercity?")');
   const chatId = vm.evaluate('WoWAIDB.chats[1].id');
   const id = vm.num('WoWAIDB.chats[1].pendingId');
   assert.equal(vm.evaluate('WoWAI.CanAskClaude(WoWAIDB.chats[1])'), 'false', 'nothing to offer while the run is healthy');
@@ -1160,7 +1160,7 @@ test('stalled run: Stop and Ask Claude instead appear, and Ask Claude instead re
   assert.ok(stop, 'a stop record for the old run is on the strip');
   assert.equal(stop.text, '');
   assert.ok(Number(stop.id) !== id);
-  const again = recs.find(r => r.text === 'how do I fix my rotation?');
+  const again = recs.find(r => r.text === 'how do I get to Undercity?');
   assert.ok(again, 'the same question is sent again');
   assert.equal(again.flags, 'agent=claude');
   assert.ok(Number(again.id) > Number(stop.id), 'the stop reaches the bridge before the new question');
