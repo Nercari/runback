@@ -6,6 +6,8 @@ Bridge modules live in `bridge/forever/modules/*.js`, load by filename, and can 
 
 Bridge `ctx` exposes `cfg`, `log`, `HERE`, `REPO`, `state`, `saveState`, `atomicWrite`, `submit(job)`, `finish(job,status,text)`, `publish(key,record,urgent)`, `chatKey(job)`, and `runAgentOnce({agentId,cwd,prompt,timeoutMs})`, which resolves to `{status,text}` without changing a chat transcript or session.
 
+`06-review-wait.js` holds a review (`cmd=review`) while the newest combat log ends more than 3 seconds before `lastFight.end`: it sends one plain line to the window ("Waiting for the game to save the fight to the combat log..."), checks every 2 seconds, and lets the review start when the file catches up or after 2 minutes (then says it starts anyway). It only reads the log. Settings: `forever.combatLogDir`, `forever.reviewWait` (`docs/CONFIGURATION.md`).
+
 ```js
 module.exports = {
   init(ctx) { ctx.log('sample ready'); },
