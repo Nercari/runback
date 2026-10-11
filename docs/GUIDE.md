@@ -98,6 +98,27 @@ Same route as map layers (`docs/MAP.md`); nothing new is invented.
 2. **The bridge validates when the run ends.** The file and the blocks go through `validateGuideSet` above; a block is taken out of the text the player reads, valid or not. A guide that does not validate is dropped and never stored (the reason goes to `bridge.log`). The reply gets one plain line: `I saved the guide "<title>".`, `I saved N guides.` or `I could not save that guide.`
 3. **The bridge keeps them in `state.json`** under `guides` as `{ epoch, version, guides }`. A guide with an `id` already held replaces it. At most 12 guides and 1500 steps in all are kept, the oldest dropped first (`GUIDE_STATE_STEPS` in `bridge/guide.js`); this keeps the slot files small. The version goes up only when something changed.
 4. **The slot files carry the whole set** as `guides = { epoch, version, list }` for three minutes after a change (on progress publishes only while it is small), and again after every hello, exactly as the map does. The field names inside each guide and step are the ones in this document. The addon replaces its copy when the version is newer or the epoch is another (the bridge's state was reset), so a guide is never applied twice and a client that lost its saved data gets its guides back on its next hello.
-5. **The addon only stores them.** `addon/WoWAI/Guide.lua` keeps the set in the `WoWAIGuideDB` saved variable and offers `WoWAIGuide.List()`, `Find(id)` and `Version()` for the guide panel (item 69). It shows nothing, prints nothing, reads no game state and calls no game action, so nothing appears in combat. There is no panel, no progress tracking and no map point yet (items 69 to 71).
+5. **The addon only stores them.** `addon/WoWAI/Guide.lua` keeps the set in the `WoWAIGuideDB` saved variable and offers `WoWAIGuide.List()`, `Find(id)` and `Version()` for the guide panel (item 69). It shows nothing, prints nothing, reads no game state and calls no game action. The guide panel below reads from it. There is no progress tracking and no map point yet (items 70 and 71).
 
 To remove a guide, send a guide with the same `id`; there is no clear command yet.
+
+## Guide panel
+
+`addon/WoWAI/Forever_Guide.lua` (backlog 69) is a small window with the current step of one guide and the next two. It only shows text: every step is still something you do by hand.
+
+- **Previous / Next** move one step. Nothing moves on its own yet (item 70 ticks steps off from the quest log).
+- **Pick guide** (or **Next guide (N)** when there are several) switches to the next stored guide; each guide remembers its own step. A new set opens on the newest guide until you pick one.
+- The **X** hides the window.
+- Steps whose filters (`level`, `class`, `race`, `faction`) do not fit your character are skipped. Text is shown as plain text: a `|` in it shows as `|`, never as a game escape code.
+- **In combat, during an encounter or a challenge run the window hides**, and it comes back when the fight ends, like the chat window (item 31). Guide commands typed mid-fight only print "The guide shows when the fight ends."
+- The window can be dragged. Its position, whether it is open, the chosen guide and the step in each guide are kept in `WoWAIGuideDB.panel`.
+
+| Command | What it does |
+|---|---|
+| `/wow-ai guide` | Show or hide the panel. |
+| `/wow-ai guide show` / `hide` | Show or hide it. |
+| `/wow-ai guide next` / `prev` | Next or previous step (`back` and `previous` work too). |
+| `/wow-ai guide list` | Print the stored guides with their number and id. |
+| `/wow-ai guide pick <n or id>` | Switch to that guide. |
+
+Anything else after `guide` (`/ai guide me to Goldshire`) is a message for the agent, as with the other command words. `/ai` works the same as `/wow-ai`.
