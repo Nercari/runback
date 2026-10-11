@@ -548,6 +548,13 @@ function submit(job) {
 }
 
 function queueJob(job) {
+  // Defence in depth for backlog 55: the addon keeps "/" lines local; one that
+  // still arrives gets a plain line back and no agent run.
+  if (!job.cmd && P.isSlashLine(job.text)) {
+    signal('ack', job.id, true);
+    finish(job, 'done', P.SLASH_REFUSAL, job.session || '', []);
+    return;
+  }
   const key = chatKey(job);
   const cur = running.get(key);
   if (cur && cur.job.id === job.id) return;

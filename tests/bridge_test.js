@@ -276,6 +276,18 @@ test('the mentor prompt forbids paste-in scripts and asks for menu paths', () =>
   }
 });
 
+test('a prompt starting with / is a command line the bridge will not forward to an agent (backlog 55)', () => {
+  assert.equal(P.isSlashLine('/model 3.8 flash'), true);
+  assert.equal(P.isSlashLine('  /run print(1)'), true);
+  assert.equal(P.isSlashLine('what does /ai do?'), false);
+  assert.equal(P.isSlashLine(''), false);
+  assert.equal(P.isSlashLine(undefined), false);
+  assert.ok(!P.SLASH_REFUSAL.includes('\n') && P.SLASH_REFUSAL.length < 200, 'one plain line');
+  const src = require('fs').readFileSync(path.join(__dirname, '..', 'bridge', 'bridge.js'), 'utf8');
+  const q = src.slice(src.indexOf('function queueJob'), src.indexOf('function drainQueue'));
+  assert.ok(q.indexOf('P.isSlashLine(job.text)') > -1 && q.indexOf('P.isSlashLine(job.text)') < q.indexOf('runJob(job)'), 'the check runs before any agent starts');
+});
+
 test('plainProgress turns every kind of raw progress line into one of a fixed set of phrases', () => {
   const raw = [
     '$ cd "C:/Users/x/wow-mentor" && node "C:/repo/tools/slice-fight.js" --start 1',

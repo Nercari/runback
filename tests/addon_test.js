@@ -627,6 +627,50 @@ test('the AI picker switches between the agents installed on the PC and their mo
   assert.equal(vm.evaluate('WoWAIDB.chats[2].model'), 'opus');
 });
 
+test('a box line starting with / never reaches the agent: known commands run here, unknown ones get one plain line (backlog 55)', () => {
+  const vm = newVM();
+  login(vm);
+  vm.run('STUB.RunTimers()');
+  nextSlot(vm, '{ now = time(), cwd = "", agent = "claude", agents = { "claude", "hermes" }, models = { claude = { "opus", "sonnet", "haiku" }, hermes = { } }, replies = { } }');
+  vm.run('STUB.now = STUB.now + 6; STUB.Tick()');
+  assert.equal(vm.evaluate('WoWAI.IsConnected()'), 'true');
+  const last = () => vm.evaluate('WoWAIDB.chats[1].history[#WoWAIDB.chats[1].history].text');
+  const lastRole = () => vm.evaluate('WoWAIDB.chats[1].history[#WoWAIDB.chats[1].history].role');
+  const type = line => vm.run(`WoWAIInput:SetText(${JSON.stringify(line)}); WoWAI.SendFromInput()`);
+  const sent = () => stripRecords(vm).filter(r => !r.hello);
+  // /model <name> takes effect locally, like the AI picker.
+  type('/model sonnet');
+  assert.equal(vm.evaluate('WoWAIDB.chats[1].agent'), 'claude');
+  assert.equal(vm.evaluate('WoWAIDB.chats[1].model'), 'sonnet');
+  assert.ok(last().includes('agent set to Claude · sonnet'));
+  assert.equal(vm.evaluate('WoWAIDB.chats[1].pendingId'), null, 'nothing is waiting on an agent');
+  // The reported case: a model name the bridge does not list is refused, not sent, and the chat keeps its name.
+  type('/model 3.8 flash');
+  assert.equal(vm.evaluate('WoWAIDB.chats[1].model'), 'sonnet');
+  assert.ok(last().includes('Unknown model "3.8 flash" for Claude'));
+  assert.equal(lastRole(), 'system');
+  assert.equal(vm.evaluate('WoWAIDB.chats[1].name'), 'Chat 1');
+  // /model alone lists them; /agent switches the AI.
+  type('/model');
+  assert.ok(last().includes('Models for Claude: opus, sonnet, haiku'));
+  type('/agent hermes');
+  assert.equal(vm.evaluate('WoWAIDB.chats[1].agent'), 'hermes');
+  // Anything else is unknown: one plain line, no user message, no agent run.
+  type('/foo bar');
+  assert.equal(last(), 'Unknown command /foo. Type /help to see what the box understands.');
+  type('/run print(1)');
+  assert.ok(last().startsWith('Unknown command /run.'), 'game commands are not run from the box');
+  type('/help');
+  assert.ok(last().includes('/model [name]'));
+  assert.equal(vm.evaluate('WoWAIDB.chats[1].pendingId'), null);
+  assert.equal(vm.evaluate('(function() for _, m in ipairs(WoWAIDB.chats[1].history) do if m.role == "user" then return true end end return false end)()'), 'false', 'no slash line was sent as a message');
+  assert.equal(sent().length, 0, 'nothing went out on the strip');
+  assert.equal(vm.evaluate('WoWAIInput:GetText()'), '', 'the box is cleared');
+  // A plain line still goes out.
+  type('what talent?');
+  assert.ok(sent().some(r => r.text === 'what talent?'));
+});
+
 test('replies saved under the old "claude" role are read as assistant replies from Claude', () => {
   const vm = newVM();
   vm.run('WoWAIDB = { chats = { { id = "c1", name = "Old", cwd = "", history = { { role = "user", text = "q", id = 1, t = 1 }, { role = "claude", text = "a", id = 1, t = 2 } }, unread = 0, created = 1 } }, activeChat = "c1", settings = {} }');
