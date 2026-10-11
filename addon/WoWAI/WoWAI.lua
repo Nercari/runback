@@ -1963,7 +1963,10 @@ function WoWAI.UpdateStatus()
 			if run.slotsMissing then
 				s = "Reply slots not installed (run install-slots.js, restart WoW). Using reload instead: Enter or Refresh"
 			elseif run.slotsExhausted then
-				s = "Slot pool used up this session - next keypress reloads to free it"
+				-- No slot left to read the reply through; only a reload frees the pool.
+				-- The addon cannot tell whether the reply is finished, so it says "check".
+				s = "Out of reply slots: click Get reply to check for your reply (the game UI reloads)"
+				if c.stall then s = ChatAgentName(c) .. (c.stall == "quiet" and " has gone quiet. " or " is taking long. ") .. s end
 			elseif run.pixelFailed then
 				s = "Bridge didn't see your message after " .. STRIP_TRIES .. " tries - next keypress switches to the reload path (or /wow-ai reload)"
 			elseif c.stall then
@@ -2038,7 +2041,10 @@ function WoWAI.UpdateStatus()
 	ui.cwd:SetText("cwd: " .. cwdText .. "   agent: " .. agentText .. "   mode: " .. mode)
 	if ui.pool then ui.pool:SetText("AI: " .. ((c and c.agent and c.agent ~= "") and PoolName(c.agent, ChatModel(c)) or (run.bridgeAgent and AgentName(run.bridgeAgent) or "default"))) end
 	if ui.resend then ui.resend:SetShown(c and c.pendingId ~= nil and mode == "pixel") end
-	if ui.refresh then ui.refresh:SetShown(mode ~= "pixel" or run.slotsExhausted or run.slotsMissing or run.pixelFailed or false) end
+	if ui.refresh then
+		ui.refresh:SetText((mode == "pixel" and run.slotsExhausted and c and c.pendingId) and "Get reply" or "Reload")
+		ui.refresh:SetShown(mode ~= "pixel" or run.slotsExhausted or run.slotsMissing or run.pixelFailed or false)
+	end
 	WoWAI.UpdateLogButton()
 	WoWAI.UpdateMini()
 end
