@@ -2,7 +2,7 @@
 
 A **guide** is a named, ordered list of steps for the player to follow by hand: where to go, which quest to accept, what to do, when to turn in. The format is read-only data. **Every step is something the player does themselves.** No field in it triggers, queues or automates a game action (accepting, turning in, targeting, travelling, buying, training); a guide only says what to do and where. This keeps it inside `docs/COMPLIANCE.md`.
 
-`bridge/guide.js` validates and sanitises guide files the way `bridge/protocol.js` does map layers: unknown fields are dropped, numbers are clamped, text is cleaned of control characters and `|` (so no WoW escape code such as `|c`, `|H` or `|T` survives), and bad input is dropped with a plain reason instead of throwing. Backlog items 67 (channel to the addon), 72 (the mentor writes guides) and 74 (starter guide) build on these field names.
+`bridge/guide.js` validates and sanitises guide files the way `bridge/protocol.js` does map layers: unknown fields are dropped, numbers are clamped, text is cleaned of control characters and `|` (so no WoW escape code such as `|c`, `|H` or `|T` survives), and bad input is dropped with a plain reason instead of throwing. Backlog item 67 (channel to the addon, below) is built; items 72 (the mentor writes guides) and 74 (starter guide) build on these field names.
 
 A guide file is one guide as JSON, or a JSON list of guides.
 
@@ -89,3 +89,15 @@ None of them throws, and none passes unknown fields, `__proto__` keys, escape co
 - Guide text is written by us or by the mentor from the player's own data folder (`docs/MAP.md`, "Where the data comes from"). Nothing is copied from RestedXP, Questie or any other paid or licensed guide.
 - Steps are things the player does by hand, never macros, scripts or `/run` lines. Cleaning does not make a macro safe; the mentor's rules (item 72) keep them out.
 - Every guide the mentor writes has a `source` (hard rule 13 in `mentor/AGENTS.md`), and a step that is approximate or single-source says so in its `text`. The validator keeps `source` as written; it cannot judge whether it is true.
+
+## Channel to the addon
+
+Same route as map layers (`docs/MAP.md`); nothing new is invented.
+
+1. **The agent hands over a guide** in either of two ways, whatever the agent. The bridge sets `WOW_AI_GUIDE_FILE` in the environment of every run (a file under `bridge/guidejobs/`, one per job, deleted when the run ends); the agent writes one guide, or a JSON list of guides, to it. Or the agent ends its reply with a fenced block whose language tag is `wowguide`, holding one guide or a list. The system prompt that goes with the game context explains both ways, and says that every step is something the player does by hand.
+2. **The bridge validates when the run ends.** The file and the blocks go through `validateGuideSet` above; a block is taken out of the text the player reads, valid or not. A guide that does not validate is dropped and never stored (the reason goes to `bridge.log`). The reply gets one plain line: `I saved the guide "<title>".`, `I saved N guides.` or `I could not save that guide.`
+3. **The bridge keeps them in `state.json`** under `guides` as `{ epoch, version, guides }`. A guide with an `id` already held replaces it. At most 12 guides and 1500 steps in all are kept, the oldest dropped first (`GUIDE_STATE_STEPS` in `bridge/guide.js`); this keeps the slot files small. The version goes up only when something changed.
+4. **The slot files carry the whole set** as `guides = { epoch, version, list }` for three minutes after a change (on progress publishes only while it is small), and again after every hello, exactly as the map does. The field names inside each guide and step are the ones in this document. The addon replaces its copy when the version is newer or the epoch is another (the bridge's state was reset), so a guide is never applied twice and a client that lost its saved data gets its guides back on its next hello.
+5. **The addon only stores them.** `addon/WoWAI/Guide.lua` keeps the set in the `WoWAIGuideDB` saved variable and offers `WoWAIGuide.List()`, `Find(id)` and `Version()` for the guide panel (item 69). It shows nothing, prints nothing, reads no game state and calls no game action, so nothing appears in combat. There is no panel, no progress tracking and no map point yet (items 69 to 71).
+
+To remove a guide, send a guide with the same `id`; there is no clear command yet.
