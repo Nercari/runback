@@ -47,6 +47,26 @@ test('skin applies classic frame art and missing textures safely fall back', () 
   assert.equal(v.get('WoWAICopyFill.x'), '-11');
 });
 
+test('skinned windows keep a solid opaque fill under the content (backlog 53)', () => {
+  const v = vm(true);
+  for (const name of ['WoWAIFrame', 'WoWAIMini']) {
+    assert.equal(v.get(`${name}.wowaiSolidFill ~= nil`), 'true', `${name} has a solid fill`);
+    assert.equal(v.get(`${name}.wowaiSolidFill.color[4]`), '1', `${name} fill is opaque`);
+    assert.equal(v.get(`${name}.wowaiSolidFill.x`), '-11', `${name} fill sits inside the dialog border`);
+  }
+  // A re-skin (login again) must not stack a second fill.
+  const before = v.get('#WoWAIFrame.textures') + '/' + v.get('#WoWAIMini.textures');
+  v.run('STUB.FireEvent("PLAYER_LOGIN")');
+  assert.equal(v.get('#WoWAIFrame.textures') + '/' + v.get('#WoWAIMini.textures'), before);
+  // The copy box reuses its own fill instead of adding another.
+  v.run('WoWAI.ShowCopy("x")');
+  assert.equal(v.get('WoWAICopy.wowaiSolidFill == WoWAICopyFill'), 'true');
+  assert.equal(v.get('WoWAICopy.wowaiSolidFill.color[4]'), '1');
+  // With the skin off, nothing is added.
+  const off = vm(false);
+  assert.equal(off.get('WoWAIFrame.wowaiSolidFill == nil'), 'true');
+});
+
 test('speakers use class, gold and system colours', () => {
   const v = vm();
   v.run(`
