@@ -88,3 +88,4 @@ None of them throws, and none passes unknown fields, `__proto__` keys, escape co
 
 - Guide text is written by us or by the mentor from the player's own data folder (`docs/MAP.md`, "Where the data comes from"). Nothing is copied from RestedXP, Questie or any other paid or licensed guide.
 - Steps are things the player does by hand, never macros, scripts or `/run` lines. Cleaning does not make a macro safe; the mentor's rules (item 72) keep them out.
+- Every guide the mentor writes has a `source` (hard rule 13 in `mentor/AGENTS.md`), and a step that is approximate or single-source says so in its `text`. The validator keeps `source` as written; it cannot judge whether it is true.
