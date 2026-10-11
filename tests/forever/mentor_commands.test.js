@@ -24,12 +24,13 @@ function ruleAllows(rule, cmd) {
 }
 function allowed(rules, cmd) { return parts(cmd).every(p => rules.some(r => ruleAllows(r, p))); }
 
-// The `node <repo>/tools/...` lines written in mentor/AGENTS.md, with placeholders filled in.
+// The `node <repo>/tools/...` lines written in mentor/AGENTS.md, with placeholders filled in
+// and the path in the platform's own form, as the bridge builds its rules.
 function mentorCommands() {
   const text = fs.readFileSync(path.join(ROOT, 'mentor', 'AGENTS.md'), 'utf8');
   const out = [];
   for (const m of text.matchAll(/`(node <repo>\/tools\/(slice-fight|check-citations)\.js[^`]*)`/g)) {
-    out.push(m[1].replace(/<repo>/g, REPO).replace(/\[[^\]]*\]/g, '').replace(/<[^>]*>/g, 'x').replace(/\s+/g, ' ').trim());
+    out.push(m[1].replace(/<repo>\/tools\//g, path.join(REPO, 'tools') + path.sep).replace(/\[[^\]]*\]/g, '').replace(/<[^>]*>/g, 'x').replace(/\s+/g, ' ').trim());
   }
   return out;
 }
