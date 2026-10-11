@@ -1199,3 +1199,21 @@ test('stalled run: Stop gives up and tells the bridge; a no-reply run keeps the 
   vm.run('WoWAI.Send("q3")');
   assert.equal(vm.evaluate('WoWAIDB.chats[1].stall'), null);
 });
+
+test('a bridge reply carries its follow-up questions into the history: strings only, at most two', () => {
+  const vm = newVM();
+  login(vm);
+  connect(vm);
+  const chatId = vm.evaluate('WoWAIDB.chats[1].id');
+  const deliver = (extra) => {
+    vm.run('WoWAI.Send("do it")');
+    const id = vm.num('WoWAIDB.chats[1].pendingId');
+    nextSlot(vm, `{ now = time(), cwd = "", replies = { { chat = "${chatId}", id = ${id}, status = "done", text = "ok", agent = "claude"${extra} } } }`);
+    vm.run('STUB.now = STUB.now + 6; STUB.Tick()');
+    assert.equal(vm.evaluate('WoWAIDB.chats[1].pendingId'), null);
+  };
+  deliver(', followUps = { "a?", "", 5, "b?", "c?" }');
+  assert.equal(vm.evaluate('table.concat(WoWAIDB.chats[1].history[#WoWAIDB.chats[1].history].followUps, "|")'), 'a?|b?');
+  deliver('');
+  assert.equal(vm.evaluate('WoWAIDB.chats[1].history[#WoWAIDB.chats[1].history].followUps'), null, 'no tag, none stored');
+});

@@ -410,3 +410,31 @@ test('replyNotes drops the permission sentence and parser internals; mapNote is 
   assert.equal(P.mapNote({ errors: 1 }), 'I could not mark that on your map.');
   assert.equal(P.mapNote({}), '');
 });
+
+test('splitFollowUps turns a FOLLOW-UPS line into at most two short questions and strips it from the reply', () => {
+  const r = P.splitFollowUps('Use Shadow Bolt.\n\nFOLLOW-UPS: What is my best rotation? | Which gear next?\nTL;DR: Use Shadow Bolt.');
+  assert.deepEqual(r.followUps, ['What is my best rotation?', 'Which gear next?']);
+  assert.equal(r.text, 'Use Shadow Bolt.\n\nTL;DR: Use Shadow Bolt.');
+  assert.equal(P.splitSummary(r.text).summary, 'Use Shadow Bolt.', 'the summary is unaffected');
+  // No tag, no follow-ups, text untouched.
+  assert.deepEqual(P.splitFollowUps('plain reply'), { text: 'plain reply', followUps: [] });
+  assert.deepEqual(P.splitFollowUps(undefined), { text: '', followUps: [] });
+  // Cap at two, drop empty ones, collapse whitespace, tolerate bold and bullets.
+  assert.deepEqual(P.splitFollowUps('a\n**FOLLOW-UPS:** one |  | two   words | three').followUps, ['one', 'two words']);
+  assert.deepEqual(P.splitFollowUps('a\n- Follow-ups: "quoted?"').followUps, ['quoted?']);
+  // A tag with nothing in it still disappears and shows no buttons.
+  assert.deepEqual(P.splitFollowUps('a\nFOLLOW-UPS: | \nb'), { text: 'a\nb', followUps: [] });
+  // Long questions are cut at a word, at most 80 characters.
+  const long = P.splitFollowUps('a\nFOLLOW-UPS: ' + 'word '.repeat(40)).followUps[0];
+  assert.ok(long.length <= 80 && long.endsWith('word'), long);
+  // Only a line start counts, not the phrase inside a sentence.
+  assert.deepEqual(P.splitFollowUps('see FOLLOW-UPS: x | y').followUps, []);
+  // Without the colon it is a sentence, not the tag.
+  assert.deepEqual(P.splitFollowUps('Go north.\nFollow up with the trainer in Orgrimmar.'), { text: 'Go north.\nFollow up with the trainer in Orgrimmar.', followUps: [] });
+  assert.deepEqual(P.splitFollowUps('a\n**Follow-ups**: one').followUps, ['one']);
+  // The reply-format rules tell the agent about the tag; the slot file carries it.
+  assert.ok(P.systemPrompt('').includes('FOLLOW-UPS: <question> | <question>'));
+  const lua = P.luaTable('WoWAI_SlotData', [{ chat: 'c', id: 1, status: 'done', text: 'x', followUps: ['Why "this"?', 'And that?'] }, { chat: 'c', id: 2, status: 'done', text: 'y', followUps: [] }]);
+  assert.ok(lua.includes('followUps = { "Why \\"this\\"?", "And that?" },'), lua);
+  assert.equal(lua.split('followUps').length, 2, 'none for a reply without follow-ups');
+});
