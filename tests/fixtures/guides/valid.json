@@ -1,0 +1,17 @@
+{
+  "id": "demo-start",
+  "title": "Demo starter route",
+  "minLevel": 1,
+  "maxLevel": 3,
+  "faction": "Alliance",
+  "source": "Invented test guide, not a real route",
+  "steps": [
+    { "kind": "accept", "text": "Talk to the sample officer by the camp fire.", "quest": "Sample Task One", "questId": 90001,
+      "points": [{ "m": 9990, "x": 45.5, "y": 60.25, "label": "Camp fire" }] },
+    { "kind": "do", "text": "Defeat five practice dummies near the camp.", "quest": "Sample Task One", "questId": 90001,
+      "points": [{ "m": 9990, "x": 47, "y": 62, "radius": 5 }], "level": { "min": 1, "max": 2 }, "sticky": true },
+    { "kind": "turnin", "text": "Report back to the sample officer.", "quest": "Sample Task One", "questId": 90001, "completewith": 4 },
+    { "kind": "note", "text": "Optional: look around the camp.", "optional": true },
+    { "kind": "train", "text": "Visit your class trainer.", "class": ["Warrior", "Mage"], "race": ["Human"] }
+  ]
+}

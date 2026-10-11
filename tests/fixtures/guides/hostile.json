@@ -1,0 +1,18 @@
+[
+  { "id": "evil", "title": "|cffff0000Red|r |Hitem:1:0|h[x]|h\nline", "source": "|TInterface\\Icons\\x:16|t",
+    "__proto__": { "polluted": true }, "constructor": { "prototype": { "polluted": true } },
+    "steps": [
+      { "kind": "do", "text": "Go\u0000 to\u001b |cff00ff00green|r\n\tplace|Hquest:1|h", "quest": "|cffffffffName|r", "questId": "12",
+        "__proto__": { "polluted": true }, "points": [{ "m": 1, "x": "NaN", "y": 5 }, "junk", null, { "m": 1.5, "x": 1, "y": 1 }, { "m": 1, "x": 1, "y": 1, "label": "ok|r" }] },
+      { "kind": "run_macro", "text": "unknown kind" },
+      { "kind": "note", "text": 42 },
+      { "kind": "note", "text": "ok", "class": ["|cffAAAAAAMage", 7, "Rogue", "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx", { "a": 1 }], "faction": "Neutral", "optional": "yes" },
+      null, 7, "string", [[]],
+      { "kind": "note", "text": "ok2", "completewith": 1 },
+      { "kind": "note", "text": "ok3", "completewith": 999 }
+    ] },
+  { "id": "bad id!", "steps": [{ "kind": "note", "text": "x" }] },
+  { "id": "nosteps", "steps": "not a list" },
+  { "id": "deep", "steps": [{ "kind": "note", "text": "x", "points": [[[[[[]]]]]], "level": { "min": { "a": [] } } }] },
+  "text", 5, null, []
+]
