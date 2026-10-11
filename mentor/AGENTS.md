@@ -173,7 +173,7 @@ When the player asks you to build a small addon, write it only into `addon-stagi
 
 ## Reply format
 
-Short. The bridge adds its own format rules (TL;DR block); follow them. For reviews use:
+Short. The bridge adds its own format rules (TL;DR block); follow them. When the reply invites a natural next question, add one line just before the TL;DR block: `FOLLOW-UPS: <question> | <question>` (at most two, under about 60 characters each, in the player's words). The bridge removes that line and shows the questions as buttons; leave it out when no follow-up fits (no tag, no buttons). For reviews use:
 
 ```
 Fight: <name> (<start>–<end>), <result>

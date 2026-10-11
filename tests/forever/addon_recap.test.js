@@ -68,3 +68,41 @@ test('/ai recap sends cmd=recap with the default text out of combat only', () =>
   v.run('STUB.combat = true; STUB.FireEvent("PLAYER_REGEN_DISABLED"); SlashCmdList.WOWAI("recap")');
   assert.match(v.get('WoWAIDB.chats[1].history[#WoWAIDB.chats[1].history].text'), /AI paused in combat/);
 });
+
+test('recap offer: window use restarts the quiet spell (no offer within 5 minutes of use)', () => {
+  const v = vm();
+  v.run('WoWAI.Toggle(true)');
+  fight(v);
+  v.run('STUB.now = STUB.now + 200; WoWAI.SendFromInput()');
+  v.run('STUB.now = STUB.now + 150'); // 350 s after the fight, 150 s after the last use
+  v.run('STUB.RunTimers()');
+  assert.ok(!prints(v).includes('recap this session'), 'used the window 150 s ago');
+  v.run('STUB.now = STUB.now + 200'); // 350 s after the last use
+  v.run('STUB.RunTimers()');
+  assert.ok(prints(v).includes('[recap this session]'), 'offered once the window has been quiet for 5 minutes');
+});
+
+test('recap offer: every kind of window use counts, and an unused window does not delay it', () => {
+  const uses = {
+    open: 'WoWAI.Toggle(false); WoWAI.Toggle(true)',
+    send: 'WoWAI.SendFromInput()',
+    typing: 'WoWAIInput.hooks.OnTextChanged[1](WoWAIInput, true)',
+    clickBox: 'WoWAIInput.hooks.OnEditFocusGained[1](WoWAIInput)',
+    clickWindow: 'WoWAIFrame.hooks.OnMouseDown[1](WoWAIFrame)',
+    replyShown: 'WoWAI.Toggle(true); WoWAI.internal.ActiveChat().pendingId = 99; WoWAI.internal.Finish(WoWAI.internal.ActiveChat(), "assistant", "hi")',
+  };
+  for (const [name, code] of Object.entries(uses)) {
+    const v = vm();
+    v.run('WoWAI.Toggle(true)');
+    fight(v);
+    v.run('STUB.now = STUB.now + 250');
+    try { v.run(code); } catch (e) { assert.fail(`${name}: ${e.message}`); }
+    v.run('STUB.now = STUB.now + 100; STUB.RunTimers()');
+    assert.ok(!prints(v).includes('recap this session'), `${name} should delay the offer`);
+  }
+  // No window use: the normal offer.
+  const v = vm();
+  fight(v);
+  v.run('STUB.now = STUB.now + 350; STUB.RunTimers()');
+  assert.ok(prints(v).includes('recap this session'), 'no window use, normal offer');
+});

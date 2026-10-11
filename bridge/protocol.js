@@ -231,10 +231,12 @@ function parseOutbox(src) {
 // reply-format rule. Claude and Grok take this as a system prompt; for Codex,
 // agents.js puts it at the top of the prompt.
 const SUMMARY_MARKER = 'TL;DR:';
+const FOLLOW_MARKER = 'FOLLOW-UPS:';
 const REPLY_FORMAT = [
   'The user is talking to you from inside World of Warcraft through the wow-ai addon. They type in a small in-game window and your reply is shown there as plain text (markdown is not rendered), so keep replies compact and formatting simple.',
   '',
   `Only a short summary of each reply is printed into the game chat, where the user actually sees it while playing; the full reply is only visible if they open the addon window. So end EVERY reply with a final block that starts with "${SUMMARY_MARKER}" on its own line and holds one or two short lines (under about 200 characters in total) saying what you did or what the answer is, and what you need from the user if anything. Write it as plain text. Do not repeat the summary elsewhere, and put nothing after it.`,
+  `Optionally, just before that block, add one line "${FOLLOW_MARKER} <question> | <question>" with at most two short questions (under about 60 characters each) the user is likely to ask next, in their words. Add it only when the reply invites a natural next question; otherwise leave the line out. It becomes buttons under the reply and is not shown as text.`,
 ];
 
 // How the agent draws on the world map (see "Map layers" below and docs/MAP.md).
@@ -277,6 +279,34 @@ function splitSummary(text) {
   const last = [...full.matchAll(MARKER_RE)].pop();
   const summary = last ? full.slice(last.index + last[0].length).trim() : '';
   return { text: full, summary };
+}
+
+// Pull the follow-up suggestions out of a reply: a line "FOLLOW-UPS: a | b"
+// (bold, bullet or heading marks around the marker are tolerated). Every such
+// line is removed from the text; the last one counts. At most two questions,
+// whitespace collapsed, cut to 80 characters at a word, empty ones dropped.
+// No tag, no follow-ups.
+const FOLLOW_LINE_RE = /^[ \t]*(?:[#>*\-][ \t]*)*(?:\*\*|__)?[ \t]*FOLLOW[- ]?UPS?[ \t]*:?[ \t]*(?:\*\*|__)?[ \t]*:?[ \t]*(.*)$/i;
+const FOLLOW_MAX = 2, FOLLOW_LEN = 80;
+function cleanFollowUp(raw) {
+  let q = String(raw).replace(/\s+/g, ' ').trim().replace(/^["'`*_\s]+|["'`*_\s]+$/g, '');
+  if (q.length > FOLLOW_LEN) {
+    q = q.slice(0, FOLLOW_LEN);
+    const cut = q.lastIndexOf(' ');
+    if (cut > FOLLOW_LEN / 2) q = q.slice(0, cut);
+  }
+  return q;
+}
+function splitFollowUps(text) {
+  const kept = [];
+  let tag = null;
+  for (const line of String(text || '').split('\n')) {
+    const m = FOLLOW_LINE_RE.exec(line);
+    if (m) tag = m[1]; else kept.push(line);
+  }
+  if (tag === null) return { text: String(text || ''), followUps: [] };
+  const followUps = tag.split('|').map(cleanFollowUp).filter(Boolean).slice(0, FOLLOW_MAX);
+  return { text: kept.join('\n').replace(/\n{3,}/g, '\n\n').trim(), followUps };
 }
 
 // ---------------------------------------------------------------------------
@@ -560,6 +590,9 @@ function luaTable(globalName, records, opts = {}) {
     lines.push(`\t\t\tsession = ${luaStr(r.session || '')},`);
     lines.push(`\t\t\tagent = ${luaStr(r.agent || '')},`);
     if (r.summary) lines.push(`\t\t\tsummary = ${luaStr(r.summary)},`);
+    if (Array.isArray(r.followUps) && r.followUps.length) {
+      lines.push(`\t\t\tfollowUps = { ${r.followUps.map(luaStr).join(', ')} },`);
+    }
     if (Array.isArray(r.denied) && r.denied.length) {
       lines.push(`\t\t\tdenied = { ${r.denied.map(luaStr).join(', ')} },`);
     }
@@ -725,7 +758,7 @@ module.exports = {
   fromHex, pad3, slotNumber, chatKey, sessKey,
   alreadyHandled, markHandled, pruneStale, MONTH_MS,
   resolveCwd, isBroadFolder, pickDefaultCwd, sameFolder, baseName,
-  parseFlags, validModel, validEffort, jobsFromStrip, parseOutbox, systemPrompt, splitSummary,
+  parseFlags, validModel, validEffort, jobsFromStrip, parseOutbox, systemPrompt, splitSummary, splitFollowUps,
   ruleFor, rulesFor, describeToolUse,
   PROGRESS_SHOWN, PROGRESS_PHRASES, plainProgress, addProgress, plainLogLine, plainEvidence, replyNotes, mapNote,
   luaStr, luaTable, SILENT_WAV,

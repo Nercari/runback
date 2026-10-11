@@ -741,6 +741,12 @@ local function ScheduleNextPoll()
 	run.nextPollAt = (run.sentAt or GetTime()) + t
 end
 
+local MAX_FOLLOW_UPS = 2 -- suggested follow-up buttons under a reply
+-- The player is using the window (open, type, send, click, or a reply lands in
+-- it): tell the extension modules so the recap offer waits (Forever_Recap.lua).
+local function WindowUsed()
+	if WoWAIForever and WoWAIForever.Fire then WoWAIForever.Fire("WINDOW_USED") end
+end
 local Finish -- defined below
 
 -- The bridge has read this record: whatever game context rode on it is now
@@ -790,7 +796,7 @@ ApplyReplies = function(replies)
 			if (r.status == "done" or r.status == "error") and ForeverBlocked() then
 				HoldReply(c, r)
 			elseif r.status == "done" then
-				Finish(c, "assistant", r.text or "", denied, r.agent, r.summary)
+				Finish(c, "assistant", r.text or "", denied, r.agent, r.summary, r.followUps)
 			elseif r.status == "error" then
 				Finish(c, "system", "Bridge error: " .. tostring(r.text), denied)
 			elseif r.status == "working" then
@@ -990,13 +996,21 @@ local function ProcessInbox()
 	if inbox.map and WoWAIMap then WoWAIMap.Sync(inbox.map) end
 end
 
-Finish = function(chat, role, text, denied, agent, summary)
+Finish = function(chat, role, text, denied, agent, summary, followUps)
 	AddHistory(chat, role, text, chat.pendingId, denied, agent)
+	if type(followUps) == "table" and #followUps > 0 then
+		local keep = {}
+		for _, q in ipairs(followUps) do
+			if type(q) == "string" and q ~= "" and #keep < MAX_FOLLOW_UPS then keep[#keep + 1] = q end
+		end
+		chat.history[#chat.history].followUps = keep
+	end
 	chat.pendingId = nil
 	chat.progress = nil
 	if run.act then run.act[chat.id] = nil end
 	NotedBridge()
 	local visible = ui.frame and ui.frame:IsShown() and db.activeChat == chat.id
+	if visible then WindowUsed() end
 	if not visible then
 		chat.unread = (chat.unread or 0) + 1
 	end
@@ -1473,6 +1487,7 @@ end
 
 function WoWAI.SendFromInput()
 	if not ui.input then return end
+	WindowUsed()
 	local text = ui.input:GetText()
 	ui.input:SetText("")
 	ui.input:ClearFocus() -- hand the keyboard back to the game after sending
@@ -1974,13 +1989,10 @@ function WoWAI.FastModelOffer(c)
 	end
 end
 
--- One-click follow-ups under the newest finished reply. A question click types it
--- into the box (the player presses Enter); "Review my last fight" is the same
--- command as the window's Review button.
-WoWAI.FOLLOW_UPS = {
-	{ label = "Review my last fight", cmd = "review" },
-	{ label = "What should I buy first?", fill = "What should I buy first, and where do I get it?" },
-}
+-- One-click follow-ups under the newest finished reply: only the questions the
+-- mentor suggested in that reply (the bridge turns its "FOLLOW-UPS:" line into
+-- `followUps`, at most two). A click types the question into the box; the player
+-- presses Enter. A reply without the tag shows no buttons.
 
 function WoWAI.Render()
 	local c = ActiveChat()
@@ -1995,6 +2007,7 @@ function WoWAI.Render()
 		ui.content:SetWidth(width)
 		local y, n = 0, 0
 		local function Place(role, text, when, dim, denied, agent, starters, follow)
+			-- `follow` is the list of suggested questions (newest finished reply only).
 			n = n + 1
 			local b = GetBubble(n)
 			local st = ROLE_STYLE[role] or ROLE_STYLE.system
@@ -2062,26 +2075,25 @@ function WoWAI.Render()
 			for k = #cmds + 1, #b.copies do b.copies[k]:Hide() end
 			b.follows = b.follows or {}
 			local nfollow = 0
-			if follow and not (WoWAIForever and WoWAIForever.Locked and WoWAIForever.Locked()) then
-				for _, fu in ipairs(WoWAI.FOLLOW_UPS) do
+			if type(follow) == "table" and not (WoWAIForever and WoWAIForever.Locked and WoWAIForever.Locked()) then
+				for _, question in ipairs(follow) do
+					if nfollow >= MAX_FOLLOW_UPS then break end
 					nfollow = nfollow + 1
 					local fb = b.follows[nfollow]
 					if not fb then
 						fb = CreateFrame("Button", nil, b, "UIPanelButtonTemplate")
 						fb:SetHeight(20)
 						fb:SetScript("OnClick", function(self)
-							if self.cmd then
-								SlashCmdList["WOWAI"](self.cmd)
-							elseif ui.input then
+							if ui.input then
 								ui.input:SetText(self.fill)
 								ui.input:SetFocus()
 							end
 						end)
 						b.follows[nfollow] = fb
 					end
-					fb:SetText(fu.label)
+					fb:SetText(question)
 					fb:SetWidth(math.min(width - 24, fb:GetFontString():GetStringWidth() + 30))
-					fb.cmd, fb.fill = fu.cmd, fu.fill
+					fb.fill = question
 					fb:ClearAllPoints()
 					fb:SetPoint("TOPLEFT", b.body, "BOTTOMLEFT", 0, -6 - extra)
 					fb:Show()
@@ -2101,7 +2113,7 @@ function WoWAI.Render()
 		for i, m in ipairs(c.history) do
 			-- The Allow button only makes sense on the newest reply, and only while idle.
 			local denied = (i == last and not c.pendingId and type(m.denied) == "table" and #m.denied > 0) and m.denied or nil
-			local follow = i == last and not c.pendingId and m.role == "assistant" and not denied
+			local follow = i == last and not c.pendingId and m.role == "assistant" and not denied and m.followUps or nil
 			Place(m.role, m.text, m.t and date("%H:%M", m.t) or "", false, denied, m.agent, nil, follow)
 		end
 		if c.pendingId then
@@ -2410,6 +2422,7 @@ local function BuildUI()
 
 	local f = CreateFrame("Frame", "WoWAIFrame", UIParent, "BackdropTemplate")
 	ui.frame = f
+	f:HookScript("OnMouseDown", WindowUsed)
 	f:SetSize(s.width, s.height)
 	if s.point then
 		f:SetPoint(s.point, UIParent, s.relPoint or s.point, s.x or 0, s.y or 0)
@@ -2797,6 +2810,8 @@ local function BuildUI()
 	input:SetSize(500, 40)
 	input:SetScript("OnEnterPressed", function() WoWAI.SendFromInput() end)
 	input:SetScript("OnEscapePressed", function(self) self:ClearFocus() end)
+	input:HookScript("OnTextChanged", function(self, userInput) if userInput then WindowUsed() end end)
+	input:HookScript("OnEditFocusGained", WindowUsed)
 	inScroll:SetScrollChild(input)
 	inScroll:HookScript("OnSizeChanged", function(self, w, h)
 		input:SetWidth(w)
@@ -3063,6 +3078,7 @@ function WoWAI.Toggle(show)
 	if show == nil then show = not ui.frame:IsShown() end
 	if show then
 		db.settings.minimized = false
+		WindowUsed()
 		local c = ActiveChat()
 		if c then c.unread = 0 end
 	end
@@ -3389,7 +3405,7 @@ SlashCmdList["WOWAI"] = function(msg)
 	end
 end
 
-WoWAI.internal = { AddHistory = AddHistory, ActiveChat = ActiveChat, Render = WoWAI.Render, RefreshStrip = RefreshStrip, FindChat = FindChat, Chats = function() return db.chats end, SwitchChat = WoWAI.SwitchChat }
+WoWAI.internal = { AddHistory = AddHistory, Finish = Finish, ActiveChat = ActiveChat, Render = WoWAI.Render, RefreshStrip = RefreshStrip, FindChat = FindChat, Chats = function() return db.chats end, SwitchChat = WoWAI.SwitchChat }
 
 ---------------------------------------------------------------------------
 -- Events

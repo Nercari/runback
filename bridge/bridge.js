@@ -808,12 +808,15 @@ function finish(job, status, text, session, denied) {
   saveState();
   // A finished reply ends with the "TL;DR:" block the system prompt asks for:
   // that part is what the game chat prints; the window gets the whole reply.
-  let summary = '';
-  if (status === 'done') ({ text, summary } = P.splitSummary(text));
+  let summary = '', followUps = [];
+  if (status === 'done') {
+    ({ text, followUps } = P.splitFollowUps(text));
+    ({ text, summary } = P.splitSummary(text));
+  }
   // A blocked run prints one short line in the game chat, whatever the agent wrote.
   if (denied && denied.length) summary = 'Needs your OK to continue. Open the window and click Allow.';
   noteMessage(job, status === 'done' ? 'assistant' : 'system', status === 'done' ? text : 'Bridge error: ' + text);
-  publish(chatKey(job), { chat: job.chat, id: job.id, status, text, summary, cwd: job.cwd, session, denied, agent: job.agent || '' }, true);
+  publish(chatKey(job), { chat: job.chat, id: job.id, status, text, summary, followUps, cwd: job.cwd, session, denied, agent: job.agent || '' }, true);
   signal('sig', job.id, true);
   log(`#${job.id}${job.session ? '@' + job.session : ''} ${status} (${text.length} chars${summary ? ', summary ' + summary.length : ', no summary'})`);
   drainQueue();

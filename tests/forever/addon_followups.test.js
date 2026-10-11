@@ -32,34 +32,40 @@ function vm() {
   return { run, get };
 }
 const outbox = v => v.get('WoWAIDB.outbox and WoWAIDB.outbox.cmd');
-const reply = v => v.run(`local c = WoWAIDB.chats[1]
-  table.insert(c.history, { role = "assistant", text = "Use Shadow Bolt.", t = time() })
+const reply = (v, followUps = ['What should I buy first?', 'Which talent next?']) => v.run(`local c = WoWAIDB.chats[1]
+  table.insert(c.history, { role = "assistant", text = "Use Shadow Bolt.", t = time(), followUps = { ${followUps.map(q => JSON.stringify(q)).join(', ')} } })
   WoWAI.Toggle(true); WoWAI.Render()`);
 const shown = v => v.get('table.concat(STUB.texts, "|")');
+const visible = (v, label) => v.get(`(function() for _, f in ipairs(STUB.frames) do if f.kind == "Button" and f.text == ${JSON.stringify(label)} and f.shown then return true end end return false end)()`);
 
-test('follow-up buttons sit under the newest finished reply; a question click fills the box and sends nothing', () => {
+test('follow-up buttons are the mentor\'s suggestions under the newest finished reply; a click fills the box and sends nothing', () => {
   const v = vm();
   reply(v);
-  assert.ok(shown(v).includes('What should I buy first?'));
-  v.run('CLICK("What should I buy first?")');
-  assert.ok(shown(v).includes('What should I buy first, and where do I get it?'), 'typed into the box');
+  assert.equal(visible(v, 'What should I buy first?'), 'true');
+  assert.equal(visible(v, 'Which talent next?'), 'true');
+  assert.equal(visible(v, 'Review my last fight'), 'false', 'the old fixed buttons are gone');
+  v.run('CLICK("Which talent next?")');
+  assert.ok(shown(v).includes('Which talent next?'), 'typed into the box');
   assert.equal(v.get('WoWAIDB.chats[1].pendingId'), 'nil', 'nothing sent by itself');
   assert.equal(outbox(v), 'nil');
 });
 
-test('the Review follow-up is the same review command as the Review button', () => {
-  const v = vm();
-  reply(v);
-  v.run('STUB.FireEvent("PLAYER_REGEN_DISABLED"); STUB.now = STUB.now + 30; STUB.FireEvent("PLAYER_REGEN_ENABLED")');
-  v.run('CLICK("Review my last fight")');
-  assert.equal(outbox(v), 'review');
+test('a reply without suggestions shows no buttons; at most two show even if more arrive', () => {
+  let v = vm();
+  reply(v, []);
+  assert.equal(visible(v, 'What should I buy first?'), 'false');
+  v = vm();
+  reply(v, ['one?', 'two?', 'three?']);
+  assert.equal(visible(v, 'one?'), 'true');
+  assert.equal(visible(v, 'two?'), 'true');
+  assert.equal(visible(v, 'three?'), 'false');
 });
 
 test('no follow-ups in combat or while a reply is pending', () => {
   let v = vm();
   v.run('STUB.combat = true; STUB.FireEvent("PLAYER_REGEN_DISABLED")');
   reply(v);
-  const fb = () => v.get('(function() for _, f in ipairs(STUB.frames) do if f.kind == "Button" and f.text == "What should I buy first?" and f.shown then return true end end return false end)()');
+  const fb = () => visible(v, 'What should I buy first?');
   assert.equal(fb(), 'false');
   v.run('STUB.combat = false; STUB.FireEvent("PLAYER_REGEN_ENABLED"); WoWAI.Render()');
   assert.equal(fb(), 'true', 'back after the fight');
