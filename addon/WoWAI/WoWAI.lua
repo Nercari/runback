@@ -2440,6 +2440,11 @@ function WoWAI.UpdateMini()
 	else
 		t = "|cff999999idle|r"
 	end
+	-- Set by Forever_CombatLog.lua when a fight ends with the log off. It wins over
+	-- the reply count until the log is on: the next pull is the one still to save.
+	if WoWAI.unloggedFight and type(LoggingCombat) == "function" and not LoggingCombat() then
+		t = "|cffff8040This fight wasn't logged|r"
+	end
 	ui.miniBadge:SetText(t)
 	if ui.miniPulse then
 		if unread > 0 then
@@ -2535,8 +2540,9 @@ function WoWAI.AskInBox(chatId, text)
 	end
 end
 
--- Clicks on our [reply] / [open] links in the chat frame.
+-- Clicks on our [reply] / [open] / [turn on combat log] links in the chat frame.
 hooksecurefunc("SetItemRef", function(link)
+	if link == "wowai:combatlog" then return WoWAI.CombatLogLinkClicked() end
 	local action, chatId = tostring(link):match("^wowai:(%a+):(%w+)")
 	if not action or not db then return end
 	if FindChat(chatId) then WoWAI.SwitchChat(chatId) end
@@ -3099,12 +3105,8 @@ local function BuildUI()
 	ui.death = death
 
 	-- Shows whether the game is writing the combat log and switches it on or off.
-	-- LoggingCombat is not a protected function; it only runs on the player's
-	-- click, never in combat.
 	local logBtn = MakeButton(f, "Combat log: ?", 130, function()
-		if InCombatLockdown() or type(LoggingCombat) ~= "function" then return end
-		LoggingCombat(not LoggingCombat())
-		WoWAI.UpdateLogButton()
+		if type(LoggingCombat) == "function" then WoWAI.SetCombatLog(not LoggingCombat()) end
 	end)
 	logBtn:SetPoint("LEFT", death, "RIGHT", 6, 0)
 	logBtn:SetScript("OnEnter", function(self)
@@ -3238,6 +3240,27 @@ local function BuildUI()
 		WoWAIForever.Fire("UI_BUILT", { frame = f, title = title, status = status, panel = panel,
 			menu = menu, scroll = scroll, inputBg = inputBg, input = input, cwd = cwd, grip = grip,
 			mini = m, chatButtons = ui.chatButtons })
+	end
+end
+
+-- The only place the addon switches the combat log, and only from the player's
+-- click: the Combat log button and the [turn on combat log] chat link. LoggingCombat
+-- is not a protected function, but it never runs in combat or by itself.
+function WoWAI.SetCombatLog(on)
+	if InCombatLockdown() or type(LoggingCombat) ~= "function" then return false end
+	LoggingCombat(on)
+	if on then WoWAI.unloggedFight = false end
+	WoWAI.UpdateLogButton()
+	WoWAI.UpdateMini()
+	return true
+end
+
+-- A click on [turn on combat log] (Forever_CombatLog.lua prints it).
+function WoWAI.CombatLogLinkClicked()
+	if InCombatLockdown() then
+		print("|cff7ec8ff[WoW AI]|r The combat log can be switched on out of combat only.")
+	elseif WoWAI.SetCombatLog(true) then
+		print("|cff7ec8ff[WoW AI]|r Combat log on.")
 	end
 end
 
