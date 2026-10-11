@@ -97,6 +97,9 @@ test('Sync applies a new version once, starts navigation, ignores stale versions
   assert.equal(vm.evaluate('WoWAIMapDB.nav.layer'), 'mining');
   assert.equal(vm.evaluate('WoWAIMapDB.nav.index'), '1');
   const prints = () => vm.num('#STUB.prints');
+  // One plain chat line, no addon tag, layer name or "point(s)" (backlog 54).
+  assert.equal(vm.evaluate('#STUB.prints'), '1');
+  assert.equal(vm.evaluate('STUB.prints[1]'), 'I marked 3 places on your map: open it with M.');
   const before = prints();
   vm.run(`WoWAIMap.Sync(${LAYER})`); // same version: nothing
   assert.equal(prints(), before);

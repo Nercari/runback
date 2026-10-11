@@ -13,6 +13,10 @@ The bridge can drive three coding agents: Claude Code, OpenAI Codex and xAI's Gr
 
 All three run headless on the bridge PC, so log in once by hand in a terminal there (`claude`, `codex`, `grok login`); the bridge reuses the cached login.
 
+## What the player reads
+
+The parsers below turn each CLI's stream into raw progress lines (`$ grep ...`, `read toolu_01Gx...txt`). Those never reach the game. The bridge maps every raw line to one of a fixed set of plain phrases ("Reading your combat log", "Searching the web", `P.PROGRESS_PHRASES` in `bridge/protocol.js`) and the "working" list shows the newest three, with no immediate repeats; the heartbeat still counts every action. A finished reply goes through the same kind of filter: a quoted combat-log line becomes one `Evidence:` sentence per mistake (the saved review keeps the exact quotes for `tools/check-citations.js`), notes carry no `[bridge]` prefix, the "needs your OK" sentence is not printed (the Allow button and the fixed chat line say it), and map marks become one line. Details of what the bridge itself decided (layer names, parser errors) go to `bridge.log`.
+
 ## The shared vocabulary
 
 Every agent's block in `config.json` has the same keys, and the bridge maps them to that agent's own switches:

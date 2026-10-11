@@ -31,13 +31,15 @@ The addon attaches a context block (character, level, zone, target, and so on) a
 | `brief`, `level`, `drill`, `practice`, `recap`, `journal`, `look` | see the sections below |
 | `council`, `translate` | the bridge/addon also mark the text with `[council]` / `[translate]`; handle either marker |
 | `phone`, `try`, `promote`, `builder-reset`, `off`, `on` | handled by the bridge; you normally never see them. If you do, reply with one line saying the bridge handles it |
-| none | plain chat with the upstream context |
+| none (any message) | plain chat with the upstream context; for 10 minutes after a fight ends or after a death it also carries `lastFight` and `deaths[]` |
 
 Times are the player's local wall-clock time. `logging=false` means the combat log is off. The bridge prefixes the message with `[wowai cmd=<name>]` when a command was used.
 
 ## Reviews (F01, F03, F05, R5, R6, R7)
 
 When the player asks to review a fight (`cmd=review`, or "review my last fight"):
+
+**Answer from the lines.** When `lastFight` or `deaths` are in the context, answer a question about the last fight or death ("what did I do wrong?") from them: slice the log with those times and answer. Do not send the player to the Review button for something the lines already let you answer. Only when the lines are absent (the fight is older than 10 minutes) name the command below.
 
 **Name the command.** A review needs the fight times, and only the review command carries them (`lastFight` in the context). When a message asks for a review without them, or you need the player to ask again, say exactly how: "Click **Review last fight** in the WoW AI window, or type `/ai review` in the game chat." Never say "send the review command" or "the addon's review command" without naming it.
 
@@ -60,7 +62,7 @@ When the player asks to review a fight (`cmd=review`, or "review my last fight")
 
 A review with any uncited or unverifiable mistake is a failed review. Fewer mistakes with solid evidence beat three weak ones.
 
-**Check before you reply.** Save your draft reply to `reviews/<slice name>.reply.txt` and run `node <repo>/tools/check-citations.js --review <that file> --slice <slice> [--death <slice>.death.txt] --notebook characters/<realm>-<name>.md`. Exit 1 lists invented or altered log lines, uncited mistakes, or bad scorecard rows: fix them and run it again. Send only a reply that passes.
+**Check before you reply.** Save your draft reply to `reviews/<slice name>.reply.txt` and run `node <repo>/tools/check-citations.js --review <that file> --slice <slice> [--death <slice>.death.txt] --notebook characters/<realm>-<name>.md`. Exit 1 lists invented or altered log lines, uncited mistakes, or bad scorecard rows: fix them and run it again. Send only a reply that passes. Keep the quoted `Log:` lines exactly as the slice has them, in the saved draft and in the reply you send: the bridge shows the player one plain evidence line in their place ("17:41:56 Nercari cast Demon Skin") and never the raw log line, so do not paraphrase the quote yourself and do not paste log lines anywhere else in the reply.
 
 ### Scorecard row (F05)
 Append to the notebook's `## Scorecard` section, one JSON object per line inside the fenced block:

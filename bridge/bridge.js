@@ -299,11 +299,12 @@ function takeMapCommands(job, text) {
   cmds.push(...blocks.cmds);
   errors.push(...blocks.errors);
   if (!cmds.length && !errors.length) return { text: blocks.text, note: '' };
-  const { changed, notes } = P.applyMapCommands(state.map, cmds);
+  const { changed, notes, marked, cleared } = P.applyMapCommands(state.map, cmds);
   if (changed) { saveState(); mapShareUntil = Date.now() + MAP_SHARE_MS; }
   const all = [...notes, ...errors];
   log(`#${job.id} map: ${all.join('; ') || 'no change'} (version ${state.map.version})`);
-  return { text: blocks.text, note: all.length ? `map: ${all.join('; ')}` : '' };
+  // The details stay in the log; the player reads one plain line.
+  return { text: blocks.text, note: P.mapNote({ marked, cleared, errors: errors.length }) };
 }
 
 // Slot file / Inbox.lua body: see protocol.luaTable.
@@ -717,15 +718,15 @@ function runJob(job) {
     stallShown = P.stallReason(job.startedAt, lastActionAt, Date.now());
     publish(key, { chat: job.chat, id: job.id, status: 'working', text: progress.join('\n'), cwd, session: sessionId, agent: agentId, stall: stallShown }, false);
   };
-  const pushProgress = (line) => {
-    progress.push(line);
+  // The window lists at most three plain phrases; the heartbeat still counts every action.
+  const pushProgress = (line, plain = false) => {
+    P.addProgress(progress, line, plain);
     actionCount++;
     lastActionAt = Date.now();
-    while (progress.length > 10) progress.shift();
     beat(job);
     publishWorking();
   };
-  if (agent.stream === 'text') { pushProgress(`${agent.name} is working (no live progress)`); actionCount = 0; }
+  if (agent.stream === 'text') { pushProgress(`${agent.name} is working (no live progress)`, true); actionCount = 0; }
   if (input.note) notes.push(input.note);
   if (P.isBroadFolder(cwd)) notes.push(BROAD_NOTE(cwd));
   // Long thinking stretches produce no tool events; keep the heartbeat alive anyway.
@@ -815,13 +816,17 @@ function runJob(job) {
     const mapped = takeMapCommands(job, result ? result.text : '');
     if (result) result.text = mapped.text;
     if (mapped.note) notes.push(mapped.note);
-    const extra = notes.length ? `\n\n[bridge] ${notes.join('\n\n[bridge] ')}` : '';
+    const shownNotes = P.replyNotes(notes);
+    for (const n of notes) if (!shownNotes.includes(String(n).trim())) log(`${tag} note not shown to the player: ${n}`);
+    const extra = shownNotes.length ? `\n\n${shownNotes.join('\n\n')}` : '';
     if (job.stopped) {
       finish(job, 'error', `${agent.name} was stopped.`, sessionId);
     } else if (result && !result.error) {
+      // Raw combat-log quotes stay in the saved review; the player reads one plain evidence line each.
+      const text = P.plainEvidence(String(result.text || '').trim());
       // No text and no map marks: say what the run did instead of leaving a blank.
-      const silent = !String(result.text || '').trim() && !mapped.note;
-      const body = silent ? P.noReplyText(agent.name, agent.stream === 'text' ? [] : progress, actionCount) : String(result.text || '').trim();
+      const silent = !text && !mapped.note;
+      const body = silent ? P.noReplyText(agent.name, agent.stream === 'text' ? [] : progress, actionCount) : text;
       finish(job, 'done', (body + extra).trim(), sessionId, [...denied], silent ? 'noreply' : '');
     } else if (result) {
       finish(job, 'error', (String(result.text || '') + extra).trim(), sessionId, [...denied]);
