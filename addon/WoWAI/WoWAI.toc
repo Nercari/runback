@@ -29,4 +29,5 @@ Forever_Keys.lua
 Forever_Nudge.lua
 Forever_Quest.lua
 Forever_Recap.lua
+Forever_CombatLog.lua
 Forever_Known.lua
