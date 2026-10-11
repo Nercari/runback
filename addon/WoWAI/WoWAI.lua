@@ -1036,7 +1036,7 @@ end
 -- are meaningless markup to the agent; their tooltips are what the player sees).
 -- Every game API here is optional: whatever the client lacks is left out.
 
-local CONTEXT_MAX = 900 -- bytes of context per record; the strip has ~3.2 KB for everything
+local CONTEXT_MAX = 1200 -- bytes of context per record; the strip has ~3.2 KB for everything
 local LINK_LINES_MAX = 30 -- tooltip lines kept per link
 local LINK_BYTES_MAX = 900 -- bytes kept per link
 
@@ -1256,11 +1256,39 @@ local function TooltipLines(payload)
 	return lines
 end
 
--- What a link is, in words: "item 2140 (Uncommon)", "spell 1978", "quest 176".
+local function MapName(id)
+	local info = Try(C_Map and C_Map.GetMapInfo, tonumber(id))
+	if type(info) == "table" and type(info.name) == "string" and info.name ~= "" then return info.name end
+end
+
+-- A shared map pin names its map by number ("/mappin 1420 9.7 63.9"). The map's
+-- name goes after it, coordinates exactly as typed, so the agent need not look
+-- the number up (backlog 60). An unknown map leaves the text as it was.
+local PIN_PATTERNS = {
+	"/mappin%s+#?(%d+)%s+(%d+%.?%d*)[,%s]+(%d+%.?%d*)",
+	"/way%s+#(%d+)%s+(%d+%.?%d*)[,%s]+(%d+%.?%d*)",
+}
+function WoWAI.DecodePins(text)
+	for _, pattern in ipairs(PIN_PATTERNS) do
+		text = text:gsub("(" .. pattern .. ")", function(whole, id, x, y)
+			local name = MapName(id)
+			return name and (whole .. " (" .. name .. " " .. x .. ", " .. y .. ")") or whole
+		end)
+	end
+	return text
+end
+
+-- What a link is, in words: "item 2140 (Uncommon)", "spell 1978", "quest 176",
+-- "map pin Tirisfal Glades 9.7, 63.9".
 local function DescribeLink(payload)
 	local kind, id = payload:match("^(%a+):(%d+)")
 	if not kind then return payload:match("^(%a+)") or "link" end
 	local s = kind .. " " .. id
+	if kind == "worldmap" then
+		local x, y = payload:match("^worldmap:%d+:(%d+):(%d+)")
+		local name = MapName(id)
+		if name and x then return "map pin " .. name .. " " .. tonumber(x) / 100 .. ", " .. tonumber(y) / 100 end
+	end
 	if kind == "item" then
 		local _, _, quality = Try((C_Item and C_Item.GetItemInfo) or GetItemInfo, payload)
 		local desc = type(quality) == "number" and _G["ITEM_QUALITY" .. quality .. "_DESC"]
@@ -1300,6 +1328,15 @@ end
 -- Sending
 ---------------------------------------------------------------------------
 
+-- Plain questions that need the spellbook: a rotation, build or spell question.
+local ROTATION_WORDS = { "rotation", "opener", "build", "talents?", "specs?", "spells?", "abilit%a*", "cast%a*" }
+function WoWAI.AskKind(text)
+	local lower = tostring(text or ""):lower()
+	for _, word in ipairs(ROTATION_WORDS) do
+		if lower:find("%f[%a]" .. word .. "%f[%A]") then return "rotation" end
+	end
+end
+
 -- allow: optional list of permission rules to grant before this message runs.
 function WoWAI.Send(text, allow, opts)
 	opts = type(opts) == "table" and opts or {}
@@ -1331,8 +1368,8 @@ function WoWAI.Send(text, allow, opts)
 		return
 	end
 	-- Shift-clicked links become [Name] plus their tooltip, which is what the agent can read.
-	local links
-	text, links = WoWAI.ExpandLinks(text)
+	local links, asked = nil, text
+	text, links = WoWAI.ExpandLinks(WoWAI.DecodePins(text))
 	local limit = Codec.MAX_PAYLOAD - 300
 	if #text > limit then
 		AddHistory(c, "system", "That message is too long for one send (" .. #text .. " chars, max ~" .. limit .. "). Split it up." .. (links > 0 and " Each linked item adds its tooltip to the message." or ""))
@@ -1340,16 +1377,18 @@ function WoWAI.Send(text, allow, opts)
 		return
 	end
 	-- The game context rides along when the bridge doesn't have this version yet.
+	-- A command, or a plain question about spells (backlog 61), gets that kind's context.
 	local ctx
-	if type(opts.cmd) == "string" then
-		ctx = db.settings.context and WoWAI.GameContext(opts.cmd) or ""
+	local kind = type(opts.cmd) == "string" and opts.cmd or WoWAI.AskKind(asked)
+	if kind then
+		ctx = db.settings.context and WoWAI.GameContext(kind) or ""
 	else
 		ctx = ContextToSend(limit - #text)
 	end
 	ctx = ctx or ""
 	local addition = type(opts.context) == "string" and opts.context or ""
 	-- A command profile or one-off addition is not the base context the bridge caches.
-	local temporaryContext = type(opts.cmd) == "string" or addition ~= ""
+	local temporaryContext = kind ~= nil or addition ~= ""
 	local contextMax = math.max(0, Codec.MAX_PAYLOAD - 520 - #text)
 	if #ctx > contextMax then ctx = ctx:sub(1, contextMax) end
 	if addition ~= "" then
