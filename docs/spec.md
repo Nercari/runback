@@ -13,7 +13,7 @@ Baseline (2026-10-03, `forever` at cbebd5a): `npm test` 187/187 pass, codec roun
 5. **Upstream.** Compare with `chelinho139/wow-ai` main; bring in useful upstream fixes by PR, keeping `forever` behaviour.
 6. **Measured improvement.** Each improvement PR names one number (a test count, a gate passed, a failure fixed) before and after.
 
-## Backlog (numbered; next free: 64)
+## Backlog (numbered; next free: 66)
 
 1. **Live gates (WOW-02).** Pedro runs `probe/PROBE.md` on the installed Forever client; agents turn the results into the gate table and switch features to their fallback where a gate fails. Needs Pedro in game.
 2. **Live column.** Fill the Live column of the coverage doc from Pedro's in-game checks, one short checklist per batch.
@@ -88,5 +88,8 @@ Items 47 to 63 come from the third video review (2026-10-11: recording A, 40 min
 61. **Known spells in the context.** A rotation answer hedged "if you have it" on Bane of Agony and Life Tap (A 18:05). Build, rotation and review requests carry the spellbook with ranks. Metric: "if you have it" hedges 2 → 0.
 62. **"What can I sell or drop?"** Pedro destroyed items one by one with full bags (A 28:40). A question that sends bag contents with vendor prices and quest flags; the mentor answers with a short list and the player does every action. Nothing is sold, dropped or moved by the addon. Check `docs/COMPLIANCE.md` before building.
 63. **Low-health pulls in the recap.** Several pulls in a row at low health from A 34:05. The session recap (item 40) and requested reviews add "fights started below 50% health: N" with one tip; never shown before a pull.
+
+64. **OpenCode as an agent.** Pedro asked (2026-10-11) to use his OpenCode models in game. Record the CLI's real flags and output on his PC (version 2.0), then add `opencode` to the bridge so it shows in the AI menu. Ticket in `docs/model-picker-spec.md`. No spend: only models his sign-in already gives. Metric: OpenCode replies in game 0 → 1.
+65. **OpenCode models and reasoning in the picker.** Same request: pick an OpenCode model and its reasoning level ("variant") like in the OpenCode CLI. Needs 64 and items 42, 44, 45. Ticket in `docs/model-picker-spec.md`.
 
 Add new items at the end with the next number; mark done items `(done, PR #n)` instead of deleting them.
