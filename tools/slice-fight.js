@@ -363,4 +363,4 @@ if (require.main === module) {
     process.exitCode = 2;
   }
 }
-module.exports = { argsOf, stamp, seekAt, run, recap };
+module.exports = { argsOf, stamp, firstLast, seekAt, run, recap };
