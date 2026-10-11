@@ -22,6 +22,8 @@ local function Gear()
 	return s
 end
 
+local FIGHT_WINDOW = 600 -- seconds after a fight or death that plain messages still carry it
+
 local function Summary(kind)
 	local lines = {}
 	local last = fights[#fights]
@@ -33,29 +35,52 @@ local function Summary(kind)
 		if last.ok ~= nil then s = s .. ",ok=" .. (last.ok and "1" or "0") end
 		return s
 	end
-	if kind == "review" or kind == "death" then
+	local function deathsLine()
 		local d = {}
 		for _, v in ipairs(deaths) do
 			if not last or not last.stop or v.t >= last.stop - 600 then
 				d[#d + 1] = date("%Y-%m-%dT%H:%M:%S", v.t) .. "@" .. v.zone
 			end
 		end
-		if #d > 0 then lines[#lines + 1] = "deaths=" .. table.concat(d, ";") end
+		return #d > 0 and "deaths=" .. table.concat(d, ";") or nil
+	end
+	-- Backlog 51: for 10 minutes after a fight ends or after a death, every message
+	-- carries the fight and death lines, so "what did I do wrong?" can be answered
+	-- without the Review button. Never while a fight is running.
+	local function recent()
+		if current then return false end
+		local now = time()
+		if last and last.stop and now - last.stop <= FIGHT_WINDOW then return true end
+		for _, v in ipairs(deaths) do
+			if now - v.t <= FIGHT_WINDOW then return true end
+		end
+		return false
+	end
+	if kind == "review" or kind == "death" then
+		local dl = deathsLine()
+		if dl then lines[#lines + 1] = dl end
 		local f = fightLine()
 		if f then lines[#lines + 1] = f end
 		if kind == "review" and meter and not WoWAIForever.Locked() then lines[#lines + 1] = meter end
 		local logging = type(LoggingCombat) == "function" and LoggingCombat() or false
 		lines[#lines + 1] = "logging=" .. tostring(logging)
 		if kind == "review" then lines[#lines + 1] = "advLogging=" .. tostring(GetCVar and GetCVar("advancedCombatLogging") == "1" or false) end
-	elseif kind == "gear" or kind == "build" then
-		lines[#lines + 1] = "gear=" .. Gear()
-	elseif kind == "quest" and quest then
-		lines[#lines + 1] = "questDetail=" .. quest
-	elseif kind == "level" then
-		local cur, max = UnitXP("player"), UnitXPMax("player")
-		local elapsed = math.max(1, time() - loginAt)
-		lines[#lines + 1] = "xp=" .. cur .. "/" .. max .. " lvl " .. UnitLevel("player") .. ", xph=" .. math.floor(xpGained * 3600 / elapsed)
-		if playedTotal ~= nil then lines[#lines + 1] = "played=" .. playedTotal .. "," .. tostring(playedLevel or 0) end
+	else
+		if kind == "gear" or kind == "build" then
+			lines[#lines + 1] = "gear=" .. Gear()
+		elseif kind == "quest" and quest then
+			lines[#lines + 1] = "questDetail=" .. quest
+		elseif kind == "level" then
+			local cur, max = UnitXP("player"), UnitXPMax("player")
+			local elapsed = math.max(1, time() - loginAt)
+			lines[#lines + 1] = "xp=" .. cur .. "/" .. max .. " lvl " .. UnitLevel("player") .. ", xph=" .. math.floor(xpGained * 3600 / elapsed)
+			if playedTotal ~= nil then lines[#lines + 1] = "played=" .. playedTotal .. "," .. tostring(playedLevel or 0) end
+		end
+		if recent() then
+			local dl, f = deathsLine(), fightLine()
+			if dl then lines[#lines + 1] = dl end
+			if f then lines[#lines + 1] = f end
+		end
 	end
 	return table.concat(lines, "\n")
 end
