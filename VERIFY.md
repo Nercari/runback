@@ -23,6 +23,19 @@ npm test                  -> exit 0
 >>> CODEC ROUND-TRIP PASS
 ```
 
+## Output (2026-10-11, `forever` 3a94d58 plus branch `claude/project-thread-edo5q8`, backlog 67 guide channel, Linux)
+
+```
+npm ci                    -> exit 0
+node tools/safety-ci.js   -> exit 0
+npm test                  -> exit 0
+# tests 443
+# pass 440
+# fail 0
+# skipped 3
+>>> CODEC ROUND-TRIP PASS
+```
+
 ## Output (2026-10-11, `forever` 9105985 plus branch `claude/project-thread-a27skz`, backlog 60 watched quests and pins, 61 spellbook, Linux)
 
 ```
