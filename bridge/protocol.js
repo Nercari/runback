@@ -282,11 +282,12 @@ function splitSummary(text) {
 }
 
 // Pull the follow-up suggestions out of a reply: a line "FOLLOW-UPS: a | b"
-// (bold, bullet or heading marks around the marker are tolerated). Every such
+// (bold, bullet or heading marks around the marker are tolerated; the colon is
+// required, so a sentence starting "Follow up with..." stays in the reply). Every such
 // line is removed from the text; the last one counts. At most two questions,
 // whitespace collapsed, cut to 80 characters at a word, empty ones dropped.
 // No tag, no follow-ups.
-const FOLLOW_LINE_RE = /^[ \t]*(?:[#>*\-][ \t]*)*(?:\*\*|__)?[ \t]*FOLLOW[- ]?UPS?[ \t]*:?[ \t]*(?:\*\*|__)?[ \t]*:?[ \t]*(.*)$/i;
+const FOLLOW_LINE_RE = /^[ \t]*(?:[#>*\-][ \t]*)*(?:\*\*|__)?[ \t]*FOLLOW[- ]?UPS?[ \t]*(?:\*\*|__)?[ \t]*:[ \t]*(?:\*\*|__)?[ \t]*(.*)$/i;
 const FOLLOW_MAX = 2, FOLLOW_LEN = 80;
 function cleanFollowUp(raw) {
   let q = String(raw).replace(/\s+/g, ' ').trim().replace(/^["'`*_\s]+|["'`*_\s]+$/g, '');
