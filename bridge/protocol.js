@@ -139,13 +139,16 @@ function sameFolder(a, b) {
 // running, "c" = the record carries a game-context field before the text (an
 // empty one clears the context the bridge keeps), "agent=codex" = run this
 // chat with that agent instead of the bridge's default (see agents.js),
-// "model=sonnet" = run it on that model (one of the agent's modelChoices).
+// "model=sonnet" = run it on that model (one of the agent's modelChoices),
+// "effort=high" = at that reasoning level (one the catalog lists for the model).
 // A model name as an agent CLI takes it ("opus", "gpt-5-codex",
 // "claude-sonnet-4-5[1m]", "openrouter/x-ai/grok-4"). It goes into argv, never a shell.
 const MODEL_TOKEN = /^[A-Za-z0-9][A-Za-z0-9._:\/@\[\]-]{0,63}$/;
 function validModel(m) { return typeof m === 'string' && MODEL_TOKEN.test(m); }
+const EFFORT_TOKEN = /^[a-z]{1,16}$/;
+function validEffort(e) { return typeof e === 'string' && EFFORT_TOKEN.test(e); }
 function parseFlags(flags) {
-  const out = { newSession: false, hello: false, forget: false, context: false, allow: [], agent: '', model: '', cmd: '' };
+  const out = { newSession: false, hello: false, forget: false, context: false, allow: [], agent: '', model: '', effort: '', cmd: '' };
   for (const tok of String(flags || '').split(';')) {
     if (tok === 'n') out.newSession = true;
     else if (tok === 'h') out.hello = true;
@@ -154,6 +157,7 @@ function parseFlags(flags) {
     else if (tok.startsWith('allow=')) out.allow.push(...tok.slice(6).split(',').map(s => s.trim()).filter(Boolean));
     else if (tok.startsWith('agent=')) out.agent = tok.slice(6).trim().toLowerCase();
     else if (tok.startsWith('model=')) { const m = tok.slice(6).trim(); if (validModel(m)) out.model = m; }
+    else if (tok.startsWith('effort=')) { const e = tok.slice(7).trim(); if (validEffort(e)) out.effort = e; }
     else if (tok.startsWith('cmd=')) { const cmd = tok.slice(4); if (/^[a-z0-9-]{1,24}$/.test(cmd)) out.cmd = cmd; }
   }
   return out;
@@ -203,6 +207,8 @@ function parseOutbox(src) {
   if (agent && agent[1]) job.agent = agent[1].toLowerCase();
   const model = b.match(/\["model"\]\s*=\s*"([^"]*)"/);
   if (model && validModel(model[1])) job.model = model[1];
+  const effort = b.match(/\["effort"\]\s*=\s*"([^"]*)"/);
+  if (effort && validEffort(effort[1])) job.effort = effort[1];
   const allow = b.match(/\["allow"\]\s*=\s*"([0-9a-fA-F]*)"/);
   if (allow && allow[1]) job.allow = fromHex(allow[1]).split('\x1F').filter(Boolean);
   const cmd = b.match(/\["cmd"\]\s*=\s*"([a-z0-9-]{1,24})"/);
@@ -545,7 +551,7 @@ module.exports = {
   fromHex, pad3, slotNumber, chatKey, sessKey,
   alreadyHandled, markHandled, pruneStale, MONTH_MS,
   resolveCwd, isBroadFolder, pickDefaultCwd, sameFolder, baseName,
-  parseFlags, validModel, jobsFromStrip, parseOutbox, systemPrompt, splitSummary,
+  parseFlags, validModel, validEffort, jobsFromStrip, parseOutbox, systemPrompt, splitSummary,
   ruleFor, rulesFor, describeToolUse,
   luaStr, luaTable, SILENT_WAV,
   MAP_LIMITS, validateMapCommand, newMap, applyMapCommands, extractMapBlocks, parseMapFile, luaMap,

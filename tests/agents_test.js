@@ -109,6 +109,37 @@ test('Antigravity arguments and captured stream parser', () => {
   assert.equal(results[results.length - 1].done.text.trim(), 'HELLO');
 });
 
+test('effort: Claude --effort and Hermes --reasoning only with a level; other agents refuse one', () => {
+  const claude = A.AGENTS.claude.args({ cfg: { model: 'opus', effort: 'high' }, resume: '', system: '', cwd: 'C:\\p' });
+  assert.deepEqual(claude, ['-p', '--output-format', 'stream-json', '--verbose', '--permission-mode', 'acceptEdits', '--model', 'opus', '--effort', 'high']);
+  assert.ok(!A.AGENTS.claude.args({ cfg: { model: 'opus' }, resume: '', system: '', cwd: '.' }).includes('--effort'));
+  const hermes = A.AGENTS.hermes.args({ cfg: { model: 'm', effort: 'xhigh' }, cwd: '.', resume: '' });
+  assert.deepEqual(hermes, ['chat', '--query-file', '-', '-Q', '--in', '.', '--source', 'tool', '-m', 'm', '--reasoning', 'xhigh']);
+  assert.ok(!A.AGENTS.hermes.args({ cfg: { model: 'm' }, cwd: '.', resume: '' }).includes('--reasoning'));
+  for (const id of ['codex', 'grok', 'agy']) {
+    assert.ok(!A.AGENTS[id].args({ cfg: { model: 'x', effort: 'high' }, cwd: '.', resume: '', images: [] }).includes('high'), id);
+  }
+});
+
+test('effortProblem: a level must belong to the chosen model and the agent must take one', () => {
+  assert.equal(A.effortProblem('claude', { model: 'opus' }, 'high'), '');
+  assert.equal(A.effortProblem('claude', { model: 'opus' }, 'max'), '');
+  // Unknown level, `ultracode`, a model without levels, and no model are all refused with a reason.
+  assert.match(A.effortProblem('claude', { model: 'opus' }, 'turbo'), /no effort "turbo".*Levels: low, medium, high, xhigh, max/);
+  assert.match(A.effortProblem('claude', { model: 'opus' }, 'ultracode'), /no effort "ultracode"/);
+  assert.match(A.effortProblem('claude', { model: 'haiku' }, 'high'), /Levels: none/);
+  assert.match(A.effortProblem('claude', {}, 'high'), /Pick a model first/);
+  // A model that is not in the list has no levels.
+  assert.match(A.effortProblem('claude', { model: 'claude-x' }, 'high'), /Levels: none/);
+  // Agents whose CLI flag is unconfirmed take no level, whatever the catalog lists.
+  for (const id of ['codex', 'grok', 'agy']) assert.match(A.effortProblem(id, { model: 'gpt-6-sol' }, 'high'), /takes no effort level/, id);
+  // Hermes lists levels only in config.json.
+  const cfg = { model: 'm', models: [{ id: 'm', efforts: ['low', 'high'], defaultEffort: 'low' }] };
+  assert.equal(A.effortProblem('hermes', cfg, 'high'), '');
+  assert.match(A.effortProblem('hermes', cfg, 'max'), /Levels: low, high/);
+  assert.match(A.effortProblem('hermes', { model: 'm' }, 'high'), /Levels: none/);
+});
+
 test('Hermes command modes, image forwarding and plain text completion', () => {
   const args = A.AGENTS.hermes.args({ cfg: { permissionMode: 'acceptEdits', model: 'm' }, cwd: 'C:\\work', resume: 's1', images: ['a.png'] });
   assert.deepEqual(args, ['chat', '--query-file', '-', '-Q', '--in', 'C:\\work', '--source', 'tool', '--resume', 's1', '-m', 'm', '--image', 'a.png']);

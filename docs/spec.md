@@ -64,7 +64,7 @@ Items 41 to 46 make the AI picker match each CLI's own models and effort levels 
 
 41. **Confirm the CLIs on Pedro's PC.** (done, results in `docs/model-picker-spec.md`; Grok not installed, Codex sign-in expired) Record each CLI's real model list and effort flag on his PC, through Remote Control; no game.
 42. **Built-in model catalog.** `bridge/models.js` with every CLI's models and effort levels. Metric: models offered with no config, Claude 3 / others 0 → the CLIs' own counts.
-43. **Effort on the command line.** `effort=` flag, checked per model, passed as each CLI's own flag.
+43. **Effort on the command line** (done for Claude `--effort` and Hermes `--reasoning`, this PR; Codex waits for `codex login` and one rerun, Grok for an install on Pedro's PC, agy keeps the level in the model id). `effort=` flag, checked per model, passed as each CLI's own flag.
 44. **Effort levels in the inbox.** The bridge tells the addon which levels each model takes and its default.
 45. **Effort row in the AI picker.** Pick a level after the model; chat label "Agent · model · effort"; closed in combat. Live look by Pedro.
 46. **Read the CLI's own model list.** Codex cache, `agy models`, `grok models`, behind an off → shadow → on switch.

@@ -13,7 +13,7 @@ test('luaStr escapes everything Lua 5.1 needs', () => {
 });
 
 test('parseFlags reads new-session, hello, forget, context, agent and allow lists', () => {
-  const none = { newSession: false, hello: false, forget: false, context: false, allow: [], agent: '', model: '', cmd: '' };
+  const none = { newSession: false, hello: false, forget: false, context: false, allow: [], agent: '', model: '', effort: '', cmd: '' };
   assert.deepEqual(P.parseFlags(''), none);
   assert.deepEqual(P.parseFlags('n'), { ...none, newSession: true });
   assert.deepEqual(P.parseFlags('h'), { ...none, hello: true });
@@ -28,13 +28,18 @@ test('parseFlags reads new-session, hello, forget, context, agent and allow list
   for (const bad of ['--dangerously-skip-permissions', 'a b', 'x$(y)', 'o"pus', 'a'.repeat(65), '']) {
     assert.equal(P.parseFlags('model=' + bad).model, '', bad);
   }
+  // An effort level is lowercase letters only, up to 16, like the catalog's levels.
+  assert.deepEqual(P.parseFlags('agent=claude;model=opus;effort=high'), { ...none, agent: 'claude', model: 'opus', effort: 'high' });
+  for (const bad of ['--effort', 'High', 'high5', 'a b', 'a'.repeat(17), '']) {
+    assert.equal(P.parseFlags('effort=' + bad).effort, '', bad);
+  }
 });
 
 test('jobsFromStrip parses the current record format and keeps separators inside text', () => {
   const rec = ['sess', 'chat1', '12', 'realms', 'allow=WebSearch', 'My chat', 'hello\x1Fworld'].join('\x1F');
   const jobs = P.jobsFromStrip(12, rec);
   assert.equal(jobs.length, 1);
-  assert.deepEqual(jobs[0], { session: 'sess', chat: 'chat1', id: 12, cwd: 'realms', newSession: false, hello: false, forget: false, context: false, allow: ['WebSearch'], agent: '', model: '', cmd: '', name: 'My chat', text: 'hello\x1Fworld', via: 'pixel' });
+  assert.deepEqual(jobs[0], { session: 'sess', chat: 'chat1', id: 12, cwd: 'realms', newSession: false, hello: false, forget: false, context: false, allow: ['WebSearch'], agent: '', model: '', effort: '', cmd: '', name: 'My chat', text: 'hello\x1Fworld', via: 'pixel' });
   // A chat that picked its own agent says so in the flags.
   const codex = P.jobsFromStrip(13, ['sess', 'chat1', '13', '', 'agent=codex', 'My chat', 'hi'].join('\x1F'))[0];
   assert.equal(codex.agent, 'codex');
@@ -145,6 +150,10 @@ test('parseOutbox decodes the SavedVariables fallback', () => {
   assert.equal(P.parseOutbox(src.replace('["newSession"]', '["model"] = "-x",\n["newSession"]')).model, undefined);
   assert.equal(P.parseOutbox('WoWAIDB = {}'), null);
   assert.equal(P.parseOutbox('["outbox"] = { ["text"] = "" }'), null);
+  // The reload outbox carries the chat's effort like its model; a bad token is dropped.
+  const withEffort = src.replace('["newSession"] = true,', '["newSession"] = true,\n["model"] = "opus",\n["effort"] = "high",');
+  assert.equal(P.parseOutbox(withEffort).effort, 'high');
+  assert.equal(P.parseOutbox(withEffort.replace('"high"', '"--x"')).effort, undefined);
 });
 
 test('resolveCwd: empty is the default, relative joins it, ~ is home, absolute wins', () => {
