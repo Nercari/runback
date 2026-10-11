@@ -103,6 +103,7 @@ Exit codes: `0` normal, `1` the injected or one-shot job failed, `2` config miss
 | `GROK_DISABLE_AUTOUPDATER` | Set to `1` for Grok runs, so a headless run never stops for an update. |
 | `GROK_HOME` | Honoured when looking for `grok.exe` (`<GROK_HOME>\bin`); Grok's own setting. |
 | `WOW_AI_MAP_FILE` | Set by the bridge for each run, whatever the agent: a file where the agent's tools append map commands, one JSON object per line (see [MAP.md](MAP.md)). |
+| `WOW_AI_GUIDE_FILE` | Set by the bridge for each run, whatever the agent: a file where the agent writes a leveling guide as JSON, one guide or a list (see [GUIDE.md](GUIDE.md), "Channel to the addon"). |
 
 ## Which folder the agent works in
 
@@ -128,6 +129,7 @@ All of these are gitignored.
 | `bridge/state.json` | Agent session ids per chat, the folder and the agent each session ran with, handled message ids per addon session token, the presence counter, and the latest game context the addon sent (`context`). Delete it to forget all sessions. |
 | `bridge/transcripts.json` | The last 200 messages of every chat, with the agent that wrote each reply, so the addon can recover its chats after the client wipes saved data. |
 | `bridge/mapjobs/` | One map command file per running job (`WOW_AI_MAP_FILE`), read and deleted when the job ends. Map layers themselves live in `state.json` (`map`). |
+| `bridge/guidejobs/` | One guide file per running job (`WOW_AI_GUIDE_FILE`), read and deleted when the job ends. Guides themselves live in `state.json` (`guides`). |
 | `bridge/bridge.log` | Everything printed to the console, with timestamps. Grows without bound; delete it whenever you like. |
 | `bridge/tmp/` | Prompt files for agents that read the prompt from disk (Grok). Each is deleted when its run ends. |
 

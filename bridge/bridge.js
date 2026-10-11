@@ -29,6 +29,7 @@ const path = require('path');
 const readline = require('readline');
 const { spawn } = require('child_process');
 const P = require('./protocol'); // the pure protocol code, unit-tested in tests/bridge_test.js
+const G = require('./guide');    // leveling guides: validation and the channel, unit-tested in tests/guide_test.js and tests/guide_channel_test.js
 const A = require('./agents');   // how each agent is launched and read, unit-tested in tests/agents_test.js
 const Forever = require('./forever');
 const { runAgentOnce: runAgent } = require('./forever/run-agent-once');
@@ -307,11 +308,51 @@ function takeMapCommands(job, text) {
   return { text: blocks.text, note: P.mapNote({ marked, cleared, errors: errors.length }) };
 }
 
+// Leveling guides the agent wrote (see guide.js, "Guide channel"): kept in state.json
+// and shipped like the map layers, in the slot files with a version.
+if (!state.guides) state.guides = G.newGuides();
+const GUIDE_DIR = path.join(HERE, 'guidejobs');
+let guideShareUntil = state.guides.guides.length ? Date.now() + MAP_SHARE_MS : 0;
+let guideLuaCache = { version: -1, epoch: '', text: '' };
+function guideLuaSize() {
+  if (guideLuaCache.version !== state.guides.version || guideLuaCache.epoch !== state.guides.epoch) {
+    guideLuaCache = { version: state.guides.version, epoch: state.guides.epoch, text: P.luaGuides(state.guides) };
+  }
+  return guideLuaCache.text.length;
+}
+
+function guideFileFor(job) {
+  return path.join(GUIDE_DIR, `${String(job.chat || 'default').replace(/[^\w-]/g, '_')}-${job.id}.json`);
+}
+
+// Collect what the run wrote (its guide file, then ```wowguide blocks in its
+// reply), validate and keep it, and return the reply text without the blocks plus
+// one plain note, if a guide was offered.
+function takeGuides(job, text) {
+  const file = guideFileFor(job);
+  let raw = [], errors = [];
+  try {
+    const r = G.readGuideFile(fs.readFileSync(file, 'utf8'));
+    raw = r.raw; errors = r.errors;
+  } catch {}
+  try { fs.unlinkSync(file); } catch {}
+  const blocks = G.extractGuideBlocks(text);
+  raw.push(...blocks.raw);
+  errors.push(...blocks.errors);
+  if (!raw.length && !errors.length) return { text: blocks.text, note: '' };
+  const { changed, notes, titles, stored } = G.applyGuides(state.guides, raw);
+  if (changed) { saveState(); guideShareUntil = Date.now() + MAP_SHARE_MS; }
+  log(`#${job.id} guide: ${[...notes, ...errors].join('; ') || 'no change'} (version ${state.guides.version})`);
+  // A guide already held and sent again is still stored, so it is not a failure.
+  return { text: blocks.text, note: G.guideNote({ titles, failed: !stored }) };
+}
+
 // Slot file / Inbox.lua body: see protocol.luaTable.
 function slotFile(globalName, records, urgent = true) {
   const map = Date.now() < mapShareUntil && (urgent || mapLuaSize() <= MAP_PROGRESS_MAX) ? state.map : null;
+  const guides = Date.now() < guideShareUntil && (urgent || guideLuaSize() <= MAP_PROGRESS_MAX) ? state.guides : null;
   const { agents, models } = pools();
-  return P.luaTable(globalName, records, { cwd: DEFAULT_CWD, restore: pendingRestore, agent: DEFAULT_AGENT, agents, models, map });
+  return P.luaTable(globalName, records, { cwd: DEFAULT_CWD, restore: pendingRestore, agent: DEFAULT_AGENT, agents, models, map, guides });
 }
 
 // What the in-game picker offers: the agents installed on this PC (all of them
@@ -533,6 +574,7 @@ function submit(job) {
     maybeOfferRestore(job);
     // Even an empty set: a client holding layers from a reset bridge must drop them.
     mapShareUntil = Date.now() + MAP_SHARE_MS;
+    guideShareUntil = Date.now() + MAP_SHARE_MS;
     publishNow();
     log(`hello from session ${job.session}${pendingRestore ? ' (restore offered)' : ''}`);
     return;
@@ -695,6 +737,12 @@ function runJob(job) {
     fs.rmSync(mapFileFor(job), { force: true });
     env.WOW_AI_MAP_FILE = mapFileFor(job);
   } catch (e) { log(`${tag} map file unavailable: ${e.message}`); }
+  // Where this run writes a leveling guide (docs/GUIDE.md); any agent can use it.
+  try {
+    fs.mkdirSync(GUIDE_DIR, { recursive: true });
+    fs.rmSync(guideFileFor(job), { force: true });
+    env.WOW_AI_GUIDE_FILE = guideFileFor(job);
+  } catch (e) { log(`${tag} guide file unavailable: ${e.message}`); }
 
   log(`${tag} (${job.via}) ${agent.name} starting in ${cwd}${resume ? ' (resume ' + resume.slice(0, 8) + ')' : ' (new session)'}${ctx ? ' [game context]' : ''}${running.size ? ' [' + (running.size + 1) + ' running]' : ''}`);
   const runInfo = { agentId, cwd, args, input, env };
@@ -823,6 +871,9 @@ function runJob(job) {
     const mapped = takeMapCommands(job, result ? result.text : '');
     if (result) result.text = mapped.text;
     if (mapped.note) notes.push(mapped.note);
+    const guided = takeGuides(job, result ? result.text : '');
+    if (result) result.text = guided.text;
+    if (guided.note) notes.push(guided.note);
     const shownNotes = P.replyNotes(notes);
     for (const n of notes) if (!shownNotes.includes(String(n).trim())) log(`${tag} note not shown to the player: ${n}`);
     const extra = shownNotes.length ? `\n\n${shownNotes.join('\n\n')}` : '';
@@ -832,7 +883,7 @@ function runJob(job) {
       // Raw combat-log quotes stay in the saved review; the player reads one plain evidence line each.
       const text = P.plainEvidence(String(result.text || '').trim());
       // No text and no map marks: say what the run did instead of leaving a blank.
-      const silent = !text && !mapped.note;
+      const silent = !text && !mapped.note && !guided.note;
       const body = silent ? P.noReplyText(agent.name, agent.stream === 'text' ? [] : progress, actionCount) : text;
       finish(job, 'done', (body + extra).trim(), sessionId, [...denied], silent ? 'noreply' : '');
     } else if (result) {

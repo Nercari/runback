@@ -3,13 +3,14 @@
 ## Notes: Talk to Claude Code, Codex or Grok from inside the game, one session per chat. Needs the companion bridge (see README).
 ## Author: chelinho139
 ## Version: 0.4.0
-## SavedVariables: WoWAIDB, WoWAIMapDB, WoWAIForeverDB, WoWAI_Bulk
+## SavedVariables: WoWAIDB, WoWAIMapDB, WoWAIGuideDB, WoWAIForeverDB, WoWAI_Bulk
 ## OptionalDeps: WoWAI_Nodes
 
 Codec.lua
 Inbox.lua
 WoWAI.lua
 Map.lua
+Guide.lua
 Forever.lua
 Forever_Lockout.lua
 Forever_Calm.lua
