@@ -64,8 +64,9 @@ function Methods.GetStringWidth(self) return 100 end
 function Methods.GetFontString(self) return self end
 function Methods.GetPoint(self) return "CENTER", nil, "CENTER", 0, 0 end
 function Methods.SetPoint(self, point, rel, relPoint, x, y)
-	if type(rel) == "number" then x, y = rel, relPoint end
+	if type(rel) == "number" then x, y, rel, relPoint = rel, relPoint, nil, nil end
 	self.x, self.y = x or 0, y or 0
+	self.anchor = { point = point, rel = rel, relPoint = relPoint or point }
 end
 -- Scroll frames: tests set .vrange; SetVerticalScroll clamps to it and fires OnVerticalScroll like the client.
 function Methods.GetVerticalScrollRange(self) return self.vrange or 0 end

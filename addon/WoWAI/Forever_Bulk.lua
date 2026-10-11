@@ -196,7 +196,8 @@ local function EnsureAHFrame()
 	local parent = AuctionHouseFrame or AuctionFrame or UIParent
 	ahFrame = CreateFrame("Frame", "WoWAIAHScanFrame", parent)
 	ahFrame:SetSize(120, 30)
-	ahFrame:SetPoint("TOPRIGHT", parent, "TOPRIGHT", -20, -30)
+	-- Below the frame, level with the Buy/Sell/Auctions tabs: inside it, the button covered the auction house's own Search button.
+	ahFrame:SetPoint("TOPRIGHT", parent, "BOTTOMRIGHT", -4, 2)
 	local btn = CreateFrame("Button", nil, ahFrame, "UIPanelButtonTemplate")
 	btn:SetSize(110, 24)
 	btn:SetPoint("CENTER", ahFrame, "CENTER", 0, 0)
