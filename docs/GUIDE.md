@@ -69,7 +69,7 @@ Filters (`level`, `class`, `race`, `faction`) say who sees a step; a step withou
 }
 ```
 
-A larger one is in `tests/fixtures/guides/valid.json`.
+A larger one is in `tests/fixtures/guides/valid.json`. The shipped starter guide, written by us for Deathknell (Undead, levels 1 to 5), is `guides/starter-deathknell.json`; `tests/starter_guide_test.js` checks it.
 
 ## Using the module
 
