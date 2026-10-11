@@ -272,6 +272,14 @@ function systemPrompt(ctx, primer) {
 // marker the summary is empty and the addon falls back to the reply's first
 // lines.
 const MARKER_RE = /(?:^|\n)[ \t]*(?:#+[ \t]*)?(?:\*\*|__)?[ \t]*TL;?DR[ \t]*:?[ \t]*(?:\*\*|__)?[ \t]*:?[ \t]*/gi;
+// A prompt that starts with "/" is a game or addon command, never a question for
+// the agent (backlog 55). The addon keeps those lines local; the bridge refuses
+// any that still arrive, with this one plain line.
+function isSlashLine(text) {
+  return /^\s*\//.test(String(text || ''));
+}
+const SLASH_REFUSAL = 'Lines starting with / are commands, not messages for the agent, so nothing was sent. Type /help in the box for the commands it understands, or drop the / to ask the agent.';
+
 function splitSummary(text) {
   const full = String(text || '').trim();
   const last = [...full.matchAll(MARKER_RE)].pop();
@@ -551,7 +559,7 @@ module.exports = {
   fromHex, pad3, slotNumber, chatKey, sessKey,
   alreadyHandled, markHandled, pruneStale, MONTH_MS,
   resolveCwd, isBroadFolder, pickDefaultCwd, sameFolder, baseName,
-  parseFlags, validModel, validEffort, jobsFromStrip, parseOutbox, systemPrompt, splitSummary,
+  parseFlags, validModel, validEffort, jobsFromStrip, parseOutbox, systemPrompt, splitSummary, isSlashLine, SLASH_REFUSAL,
   ruleFor, rulesFor, describeToolUse,
   luaStr, luaTable, SILENT_WAV,
   MAP_LIMITS, validateMapCommand, newMap, applyMapCommands, extractMapBlocks, parseMapFile, luaMap,

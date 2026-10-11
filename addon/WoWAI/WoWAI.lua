@@ -1478,7 +1478,36 @@ function WoWAI.SendFromInput()
 	ui.input:ClearFocus() -- hand the keyboard back to the game after sending
 	-- A lone "review" typed in the box is the review command, not a plain message.
 	if Trim(text):lower():match("^review[%.!]*$") then return SlashCmdList["WOWAI"]("review") end
+	-- A line starting with "/" is a command: it runs here or is called unknown,
+	-- and never reaches the agent (backlog 55).
+	if Trim(text):sub(1, 1) == "/" then return WoWAI.BoxCommand(text) end
 	WoWAI.Send(text)
+end
+
+-- The commands the box understands. Each maps onto the addon's own logic (the
+-- AI picker's model switch, new chat, review); none runs a game command.
+local BOX_HELP = "The box understands: /model [name] (this chat's model), /agent [name [model]] (which AI), /new [name] (new chat), /review (review your last fight), /help. Anything else starting with / is not sent; type it in the game chat instead, or drop the / to ask the agent."
+
+function WoWAI.BoxCommand(text)
+	local c = ActiveChat()
+	if not c then return end
+	local word, rest = Trim(text):match("^/(%S*)%s*(.-)$")
+	word = (word or ""):lower()
+	if word == "model" then
+		WoWAI.SetModel(rest, c)
+	elseif word == "agent" then
+		WoWAI.SetAgent(rest, c)
+	elseif word == "new" then
+		WoWAI.NewChat(rest)
+	elseif word == "review" and rest == "" then
+		return SlashCmdList["WOWAI"]("review")
+	elseif word == "help" and rest == "" then
+		AddHistory(c, "system", BOX_HELP)
+		WoWAI.Render()
+	else
+		AddHistory(c, "system", "Unknown command /" .. word:sub(1, 24) .. ". Type /help to see what the box understands.")
+		WoWAI.Render()
+	end
 end
 
 -- The Allow button: grant the rules a reply asked for, then tell the agent to carry on.
@@ -1658,6 +1687,29 @@ function WoWAI.SetAgent(rest, c)
 		end
 	end
 	WoWAI.SetPool(c, agent, model)
+end
+
+-- /model [name]: the model for this chat's agent (the bridge's default agent
+-- when the chat has none). Same checks and wording as /wow-ai agent <name> <model>.
+function WoWAI.SetModel(rest, c)
+	c = c or ActiveChat()
+	if not c then return end
+	rest = Trim(rest or "")
+	local agent = (c.agent and c.agent ~= "") and c.agent or run.bridgeAgent
+	if not agent or agent == "" then
+		AddHistory(c, "system", "Connect to the bridge first; it says which models this PC has.")
+		WoWAI.Render()
+		return
+	end
+	if rest == "" then
+		local models = ModelsFor(agent)
+		AddHistory(c, "system", "This chat uses " .. PoolName(c.agent or "", ChatModel(c)) .. ". Models for " .. AgentName(agent) .. ": " .. ((models and #models > 0) and table.concat(models, ", ") or "only its default") .. ". Pick one with /model <name>, or click the AI button under the chat.")
+		WoWAI.Render()
+	elseif rest:lower() == "default" or rest == "-" then
+		WoWAI.SetPool(c, c.agent or "", "")
+	else
+		WoWAI.SetAgent(agent .. " " .. rest, c)
+	end
 end
 
 -- The choices the AI picker lists: the bridge's default, then every agent
