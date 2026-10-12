@@ -13,7 +13,7 @@ Baseline (2026-10-03, `forever` at cbebd5a): `npm test` 187/187 pass, codec roun
 5. **Upstream.** Compare with `chelinho139/wow-ai` main; bring in useful upstream fixes by PR, keeping `forever` behaviour.
 6. **Measured improvement.** Each improvement PR names one number (a test count, a gate passed, a failure fixed) before and after.
 
-## Backlog (numbered; next free: 84)
+## Backlog (numbered; next free: 85)
 
 1. **Live gates (WOW-02).** Pedro runs `probe/PROBE.md` on the installed Forever client; agents turn the results into the gate table and switch features to their fallback where a gate fails. Needs Pedro in game.
 2. **Live column.** Fill the Live column of the coverage doc from Pedro's in-game checks, one short checklist per batch.
@@ -116,5 +116,6 @@ Items 77 to 83 come from the fourth video review of 2026-10-11 (recording "Grava
 81. **Plain names for connector tools on Allow** (done, PR #97; live check pending). "Allow PowerShell, node, mcp__claude_ai_Google_Drive__create_file & retry" (3:36). An `mcp__<server>__<action>` rule reads "Google Drive (create file)"; other unknown rules show their first word. Extends item 30. Metric: raw tool ids on Allow buttons 1 → 0.
 82. **Bottom row and footer** (done, PR #98; live look pending). Reload is drawn on top of Resend ("ResenReload", 2:12 to end), and the footer shows "cwd: C:\Users\... (bridge default) agent: Antigravity mode: pixel" all session. The two buttons never overlap; the footer details move to the light's tooltip or show only the agent name. Metric: overlapping buttons 1 → 0; developer words on screen 3 → 0. Live look by Pedro.
 83. **Combat log button flips off by itself** (done, PR #98; live check pending). The button read "off" in single stills between "on" ones with no click (3:12, 5:12, 5:21). Cause unknown. Record each `LoggingCombat()` change with its time in the diag output and say once in chat when logging turns off without the player's click. Read-only; never switches logging on. Metric: unexplained flips, 3 in 7 min → cause named, or 0.
+84. **"look" in the box, and no false look in Antigravity** (done, this PR; live check pending). Pedro pressed Print Screen, typed "look!" in the window box and pressed Send; it went to Antigravity as a plain message, which answered "No picture came through" and pointed at a Look button that does not exist (screenshot, 2026-10-12). `/ai look` in an Antigravity chat always fails, yet item 80's prompt told every agent it works. A lone "look" in the box ("look", "look!", "look at this", "look at my screen") runs `/ai look`, the box takes `/look [question]`, and a chat whose agent can't see screenshots is told so in its prompt and names the agents that can. One flag, `takesImages` in `bridge/agents.js`, decides both the prompt and the look error. Metric: lone "look" sent as a plain message 1 → 0; prompts that advertise a look that fails 1 → 0.
 
 Add new items at the end with the next number; mark done items `(done, PR #n)` instead of deleting them.

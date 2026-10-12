@@ -84,3 +84,18 @@ test('the game system prompt carries the controls and the no-invention rule', ()
   assert.match(prompt, /Never give the player \/run, \/script, \/console or \/dump lines/);
   assert.doesNotMatch(systemPrompt(''), /never invent a button/, 'unrelated projects do not get the game controls');
 });
+
+// Backlog 84: /ai look always fails in an Antigravity chat, so its prompt must not offer it.
+test('an agent that cannot see screenshots is not told /ai look works', () => {
+  const { lookFor } = require('../../bridge/agents');
+  const agy = systemPrompt('level 10 warlock', '', lookFor('agy'));
+  assert.doesNotMatch(agy, /^\/ai look/m);
+  assert.match(agy, /You can't see screenshots in this chat, so \/ai look does not work here\./);
+  assert.match(agy, /they pick Claude, Codex, Grok or Hermes with the AI button, press Print Screen, then type look in the box\./);
+  assert.match(agy, /^\/ai review \[question\]: /m, 'the other commands stay');
+  for (const agent of ['claude', 'codex', 'grok', 'hermes']) {
+    const prompt = systemPrompt('level 10 warlock', '', lookFor(agent));
+    assert.match(prompt, /^\/ai look \[question\]: asks about the newest screenshot/m, agent);
+    assert.doesNotMatch(prompt, /can't see screenshots/, agent);
+  }
+});

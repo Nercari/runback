@@ -93,7 +93,8 @@ test('screenshot look attaches newest and refuses agy', (t) => {
   assert.equal(screenshots.intercept(job, ctx), false);
   assert.deepEqual(job.images, [b]);
   assert.equal(screenshots.intercept({ cmd: 'look', agent: 'agy' }, ctx), true);
-  assert.match(ctx.finished, /can't take images/);
+  assert.equal(ctx.finished, "Antigravity can't see screenshots. To ask about your screen, pick Claude, Codex, Grok or Hermes with the AI button, then press Print Screen and type look.");
+  for (const agent of ['codex', 'grok', 'hermes']) assert.equal(screenshots.intercept({ cmd: 'look', agent }, ctx), false, agent);
   // A screenshot older than 10 minutes is never sent.
   fs.utimesSync(a, new Date(now - 3600000), new Date(now - 3600000)); fs.utimesSync(b, new Date(now - 3600000), new Date(now - 3600000));
   assert.equal(screenshots.intercept({ cmd: 'look', agent: 'claude' }, ctx), true);

@@ -286,7 +286,7 @@ const GAME_CONTROLS = {
     ['drill', '[question]', 'what to practice'],
     ['practice', '[question]', 'compares the last two target-dummy sessions'],
     ['recap', '[question]', 'recap of this session'],
-    ['look', '[question]', 'asks about the newest screenshot (press Print Screen first)'],
+    ['look', '[question]', 'asks about the newest screenshot (press Print Screen first); a lone "look" typed in the box does the same'],
     ['brief', '<what>', 'a short briefing on <what>'],
     ['council', '<question>', 'several agents answer, then one summary'],
     ['phone', '', 'continues this chat on the phone, when set up'],
@@ -300,15 +300,23 @@ const GAME_CONTROLS = {
     ['help', '', 'lists every command'],
   ],
 };
-const CONTROLS_HINT = [
-  'When you tell the player what to click or type in the addon, use only these exact names; never invent a button, menu or command. If none fits, tell them to type the question in the box.',
-  'Buttons: ' + GAME_CONTROLS.buttons.map(([label, what]) => `${label} (${what})`).join('; ') + '.',
-  'Commands, typed in the game chat (<x> is required, [x] optional):',
-  ...GAME_CONTROLS.commands.map(([name, arg, what]) => `/ai ${name}${arg ? ' ' + arg : ''}: ${what}`),
-  '/ai <text>: sends <text> as a message.',
-];
+// look: { seesImages, imageAgents }. A chat whose agent can't see screenshots (agy) is not
+// told /ai look works there; it is told which agents can see them (backlog 84).
+function controlsHint({ seesImages = true, imageAgents = '' } = {}) {
+  const commands = GAME_CONTROLS.commands.filter(([name]) => seesImages || name !== 'look');
+  return [
+    'When you tell the player what to click or type in the addon, use only these exact names; never invent a button, menu or command. If none fits, tell them to type the question in the box.',
+    'Buttons: ' + GAME_CONTROLS.buttons.map(([label, what]) => `${label} (${what})`).join('; ') + '.',
+    'Commands, typed in the game chat (<x> is required, [x] optional):',
+    ...commands.map(([name, arg, what]) => `/ai ${name}${arg ? ' ' + arg : ''}: ${what}`),
+    '/ai <text>: sends <text> as a message.',
+    ...(seesImages ? [] : [
+      `You can't see screenshots in this chat, so /ai look does not work here. If the player asks about something on their screen, say plainly that you can't see it, and that to ask about the screen they pick ${imageAgents} with the AI button, press Print Screen, then type look in the box.`,
+    ]),
+  ];
+}
 
-function systemPrompt(ctx, primer) {
+function systemPrompt(ctx, primer, look) {
   const lines = [...REPLY_FORMAT];
   const text = String(ctx || '').trim();
   if (text) {
@@ -318,7 +326,7 @@ function systemPrompt(ctx, primer) {
       '',
       'Use this when the request is about the game or the character (questions, macros, addon code, gear advice); ignore it when the task is unrelated. Never give the player /run, /script, /console or /dump lines to paste, for settings, key bindings or anything else: give the game menu path and the value instead, one setting per line ("Options > Controls > Auto Loot: on"). Items, spells or quests the player shift-clicked into a message appear as [Name] in the text, with their tooltip in a "Linked from the game" block at the end of the message.',
       '',
-      ...CONTROLS_HINT,
+      ...controlsHint(look),
       '',
       ...MAP_HINT,
       '',
