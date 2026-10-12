@@ -305,7 +305,7 @@ local function Build()
 	end
 	header = f:CreateFontString(nil, "OVERLAY", "GameFontNormal")
 	header:SetPoint("TOPLEFT", f, "TOPLEFT", 10, -9)
-	header:SetPoint("RIGHT", f, "RIGHT", -100, 0)
+	header:SetPoint("RIGHT", f, "RIGHT", -104, 0)
 	header:SetJustifyH("LEFT")
 	rows = {}
 	for i = 1, SHOWN_STEPS do
@@ -341,7 +341,7 @@ local function Build()
 	f.tick = Btn("Tick", 64, 144, function() M.Tick() end)
 	local replan = CreateFrame("Button", nil, f, "UIPanelButtonTemplate")
 	replan:SetSize(66, 18)
-	replan:SetPoint("TOPRIGHT", f, "TOPRIGHT", -30, -6)
+	replan:SetPoint("TOPRIGHT", f, "TOPRIGHT", -34, -6)
 	replan:SetText("Re-plan")
 	replan:SetScript("OnClick", function() M.Replan() end)
 	picker = Btn("Pick guide", 140, 210, function() M.Cycle() end)
