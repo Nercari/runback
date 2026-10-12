@@ -191,3 +191,15 @@ test('AH scan does nothing without C_AuctionHouse and scans shopping list when p
   assert.equal(vm.evaluate('WoWAI_Bulk.ah.items[1].price'), '150');
   assert.ok(vm.evaluate('table.concat(STUB.prints, "\\n")').includes('Scan saved: /reload to send it to the AI.'));
 });
+
+test('Scan for AI button sits below the auction house frame, not over its Search button', () => {
+  const vm = newVM('AuctionHouseFrame = CreateFrame("Frame", "AuctionHouseFrame")');
+  login(vm);
+  vm.run('STUB.FireEvent("AUCTION_HOUSE_SHOW")');
+  assert.equal(vm.evaluate('WoWAIAHScanFrame.shown'), 'true');
+  assert.equal(vm.evaluate('WoWAIAHScanFrame.anchor.point'), 'TOPRIGHT');
+  assert.equal(vm.evaluate('WoWAIAHScanFrame.anchor.rel:GetName()'), 'AuctionHouseFrame');
+  assert.equal(vm.evaluate('WoWAIAHScanFrame.anchor.relPoint'), 'BOTTOMRIGHT');
+  assert.equal(vm.evaluate('WoWAIAHScanFrame.x'), '-4');
+  assert.equal(vm.evaluate('WoWAIAHScanFrame.y'), '2');
+});
