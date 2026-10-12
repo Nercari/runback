@@ -54,6 +54,9 @@ test('a module event the client lacks is skipped instead of breaking the addon l
   for (const f of ['Codec.lua', 'Inbox.lua', 'WoWAI.lua', 'Forever.lua', 'Forever_Bulk.lua']) {
     vm.run(fs.readFileSync(path.join(ADDON, f), 'utf8'), 'WoWAI');
   }
+  assert.equal(vm.evaluate('WoWAIForever.modules[#WoWAIForever.modules].name'), 'bulk');
+  vm.run(`WoWAIForever.Register({ name = "retail-ah", events = {
+    ITEM_SEARCH_RESULTS_RECEIVED = true, COMMODITY_SEARCH_RESULTS_RECEIVED = true, AUCTION_HOUSE_SHOW = true } })`);
   assert.equal(vm.evaluate('WoWAIForever.skippedEvents.ITEM_SEARCH_RESULTS_RECEIVED'), 'true');
   assert.equal(vm.evaluate('WoWAIForever.skippedEvents.COMMODITY_SEARCH_RESULTS_RECEIVED'), 'true');
   assert.equal(vm.evaluate('WoWAIForever.skippedEvents.AUCTION_HOUSE_SHOW'), null);
@@ -65,5 +68,4 @@ test('a module event the client lacks is skipped instead of breaking the addon l
   for (const ev of ['AUCTION_HOUSE_SHOW', 'AUCTION_HOUSE_CLOSED', 'PLAYER_LEVEL_UP', 'ZONE_CHANGED_NEW_AREA', 'PLAYER_LOGOUT']) {
     assert.equal(vm.evaluate(`HAS.${ev}`), 'true', ev);
   }
-  assert.equal(vm.evaluate('WoWAIForever.modules[#WoWAIForever.modules].name'), 'bulk');
 });
