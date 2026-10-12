@@ -1309,6 +1309,13 @@ local PIN_PATTERNS = {
 	"/mappin%s+#?(%d+)%s+(%d+%.?%d*)[,%s]+(%d+%.?%d*)",
 	"/way%s+#(%d+)%s+(%d+%.?%d*)[,%s]+(%d+%.?%d*)",
 }
+function WoWAI.IsPin(line)
+	for _, pattern in ipairs(PIN_PATTERNS) do
+		if line:find("^" .. pattern) then return true end
+	end
+	return false
+end
+
 function WoWAI.DecodePins(text)
 	for _, pattern in ipairs(PIN_PATTERNS) do
 		text = text:gsub("(" .. pattern .. ")", function(whole, id, x, y)
@@ -1640,8 +1647,9 @@ function WoWAI.SendFromInput()
 	-- So is a lone "look" (backlog 84): the player pressed Print Screen and typed "look!".
 	if IsLoneLook(text) then return SlashCmdList["WOWAI"]("look") end
 	-- A line starting with "/" is a command: it runs here or is called unknown,
-	-- and never reaches the agent (backlog 55).
-	if Trim(text):sub(1, 1) == "/" then return WoWAI.BoxCommand(text) end
+	-- and never reaches the agent (backlog 55). A pasted map pin ("/mappin 1420
+	-- 9.7 63.9", "/way #1420 ...") is a place to ask about, so it goes (backlog 60).
+	if Trim(text):sub(1, 1) == "/" and not WoWAI.IsPin(Trim(text)) then return WoWAI.BoxCommand(text) end
 	WoWAI.Send(text)
 end
 

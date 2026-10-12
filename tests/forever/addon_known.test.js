@@ -108,6 +108,17 @@ test('a shared /mappin gets its map name, the coordinates exactly as typed', () 
   assert.equal(v.get('WoWAI.DecodePins("/way #1420 9.70, 63.90")'), '/way #1420 9.70, 63.90 (Tirisfal Glades 9.70, 63.90)');
 });
 
+test('a pasted pin line on its own is sent with its map name, not refused as a command', () => {
+  assert.equal(type(vm(), '/mappin 1420 9.7 63.9').text, '/mappin 1420 9.7 63.9 (Tirisfal Glades 9.7, 63.9)');
+  const v = vm();
+  assert.equal(type(v, '/way #1420 9.7 63.9').text, '/way #1420 9.7 63.9 (Tirisfal Glades 9.7, 63.9)');
+  // A bare /mappin with no coordinates is still an unknown box command and sends nothing new.
+  const before = v.get('#WoWAIDB.chats[1].history');
+  v.run('WoWAIInput:SetText("/mappin"); WoWAI.SendFromInput()');
+  assert.ok(v.get('WoWAIDB.chats[1].history[#WoWAIDB.chats[1].history].text').startsWith('Unknown command /mappin'));
+  assert.equal(Number(v.get('#WoWAIDB.chats[1].history')), Number(before) + 1);
+});
+
 test('a shared pin on an unknown map, or with no C_Map, stays as typed', () => {
   let v = vm();
   assert.equal(type(v, 'go to /mappin 99999 9.7 63.9').text, 'go to /mappin 99999 9.7 63.9');
