@@ -4,7 +4,10 @@
 -- nothing in the game. The guides come from Guide.lua (WoWAIGuide.List); the text
 -- is AI-written, so the panel hides while the lockout is on (combat, encounter,
 -- challenge run) and comes back after, like the chat window (Forever_Calm.lua).
--- State lives in WoWAIGuideDB.panel = { shown, guide = id, step = { [id] = n }, pos }.
+-- A step ticks itself off when the quest log shows it done (backlog 70), or by
+-- hand with the Tick button.
+-- State lives in WoWAIGuideDB.panel = { shown, guide = id, step = { [id] = n }, pos,
+-- ticks = { [id] = { [n] = { done, at } } } }.
 local M = {}
 WoWAIGuidePanel = M
 local SHOWN_STEPS = 3
@@ -15,6 +18,7 @@ local function Panel()
 	local p = WoWAIGuideDB.panel
 	if type(p) ~= "table" then p = {}; WoWAIGuideDB.panel = p end
 	if type(p.step) ~= "table" then p.step = {} end
+	if type(p.ticks) ~= "table" then p.ticks = {} end
 	return p
 end
 
@@ -77,9 +81,91 @@ function M.Move(order, cur, delta)
 	return order[k]
 end
 
+-- Progress from the quest log (backlog 70) ---------------------------------------
+-- A quest's state is one number: 0 not in the log, 1 in the log, 2 objectives
+-- complete, 3 turned in. A step kind is done once its quest reaches NEED[kind].
+-- Read only: the log, the completed flag and the QUEST_TURNED_IN event.
+local NEED = { accept = 1, ["do"] = 2, turnin = 3 }
+local turnedIn = {} -- quest ids seen in QUEST_TURNED_IN this session
+
+local function Results(ok, ...) if ok then return ... end end
+local function Call(fn, ...)
+	if type(fn) ~= "function" then return nil end
+	return Results(pcall(fn, ...))
+end
+local function Api(namespace, name) return type(namespace) == "table" and namespace[name] or nil end
+local function Yes(v) return v == true or v == 1 end
+
+local function AllFinished(list)
+	if type(list) ~= "table" or #list == 0 then return false end
+	for _, o in ipairs(list) do
+		if type(o) ~= "table" or o.finished ~= true then return false end
+	end
+	return true
+end
+
+local function ModernLog(out)
+	local n = Call(Api(C_QuestLog, "GetNumQuestLogEntries"))
+	if type(n) ~= "number" or not Api(C_QuestLog, "GetInfo") then return false end
+	for i = 1, math.min(n, 200) do
+		local info = Call(C_QuestLog.GetInfo, i)
+		local id = type(info) == "table" and not info.isHeader and tonumber(info.questID)
+		if id and id > 0 then
+			local done = Yes(info.isComplete) or Yes(Call(Api(C_QuestLog, "IsComplete"), id))
+				or AllFinished(Call(Api(C_QuestLog, "GetQuestObjectives"), id))
+			out[id] = done and 2 or 1
+		end
+	end
+	return true
+end
+
+local function ClassicLog(out)
+	local n = Call(GetNumQuestLogEntries)
+	if type(n) ~= "number" or type(GetQuestLogTitle) ~= "function" then return end
+	for i = 1, math.min(n, 200) do
+		local title, _, _, isHeader, _, isComplete, _, id = Call(GetQuestLogTitle, i)
+		id = tonumber(id)
+		if title and not isHeader and id and id > 0 then
+			local done = Yes(isComplete)
+			local count = Call(GetNumQuestLeaderBoards, i)
+			if not done and type(count) == "number" and count > 0 then
+				done = true
+				for j = 1, count do
+					local _, _, finished = Call(GetQuestLogLeaderBoard, j, i)
+					if not Yes(finished) then done = false end
+				end
+			end
+			out[id] = done and 2 or 1
+		end
+	end
+end
+
+-- One read of the quest log. Returns a function questId -> state (0 to 3).
+function M.Snapshot()
+	local log = {}
+	if not ModernLog(log) then ClassicLog(log) end
+	local flagged = Api(C_QuestLog, "IsQuestFlaggedCompleted") or IsQuestFlaggedCompleted
+	local seen = {}
+	return function(id)
+		id = tonumber(id)
+		if not id then return 0 end
+		if seen[id] == nil then seen[id] = (turnedIn[id] or Yes(Call(flagged, id))) and 3 or log[id] or 0 end
+		return seen[id]
+	end
+end
+
+-- Whether a step is done. A hand tick or untick ({ done, at }) wins while the
+-- quest is still in the state it was in when the player clicked.
+function M.Done(step, state, mark)
+	local now = step.questId and state(step.questId) or 0
+	if type(mark) == "table" and mark.at == now then return mark.done == true end
+	local need = step.questId and NEED[step.kind]
+	return need ~= nil and now >= need
+end
+
 -- "/wow-ai guide <rest>": returns the subcommand and its argument, or nil when the
 -- text is a message for the agent ("guide me to Goldshire").
-local WORDS = { show = 0, hide = 0, next = 0, prev = 0, list = 0, pick = 1 }
+local WORDS = { show = 0, hide = 0, next = 0, prev = 0, list = 0, tick = 0, pick = 1 }
 function M.Parse(rest)
 	local cmd, arg = (rest or ""):match("^%s*(%S*)%s*(.-)%s*$")
 	cmd = cmd:lower()
@@ -111,12 +197,21 @@ end
 
 local function Plain(s) return (tostring(s or ""):gsub("|", "||")) end
 
-local function StepLine(s)
+local function StepLine(s, done)
 	local line = (KIND[s.kind] or "Step") .. ": " .. Plain(s.text)
 	if type(s.quest) == "string" and s.quest ~= "" and not s.text:find(s.quest, 1, true) then line = line .. " (" .. Plain(s.quest) .. ")" end
 	if s.optional then line = line .. " (optional)" end
+	if done then line = line .. " (done)" end
 	return line
 end
+
+local function Marks(g)
+	local ticks = Panel().ticks
+	if type(ticks[g.id]) ~= "table" then ticks[g.id] = {} end
+	return ticks[g.id]
+end
+
+local function IsDone(g, i, state) return M.Done(g.steps[i], state, Marks(g)[i]) end
 
 -- What the panel shows: a header and up to three step lines.
 function M.Lines()
@@ -124,8 +219,9 @@ function M.Lines()
 	if not g then return "Guide", { "No guide yet. Ask the mentor: /ai make me a leveling guide" } end
 	local order = M.Order(g, Who())
 	local list, k, total = M.Window(order, Panel().step[g.id], SHOWN_STEPS)
+	local state = M.Snapshot()
 	local lines = {}
-	for _, i in ipairs(list) do lines[#lines + 1] = StepLine(g.steps[i]) end
+	for _, i in ipairs(list) do lines[#lines + 1] = StepLine(g.steps[i], IsDone(g, i, state)) end
 	if #lines == 0 then lines[1] = "No step in this guide fits your character." end
 	return Plain(g.title or g.id) .. "  " .. (total > 0 and (k .. "/" .. total) or ""), lines
 end
@@ -137,7 +233,7 @@ local frame, rows, header, picker
 local function Build()
 	if frame then return frame end
 	local f = CreateFrame("Frame", "WoWAIGuideFrame", UIParent, "BackdropTemplate")
-	f:SetSize(340, 120)
+	f:SetSize(360, 120)
 	local pos = Panel().pos
 	if type(pos) == "table" and tonumber(pos.x) and tonumber(pos.y) then
 		f:SetPoint("CENTER", UIParent, "BOTTOMLEFT", pos.x, pos.y)
@@ -187,9 +283,10 @@ local function Build()
 		b:SetScript("OnClick", fn)
 		return b
 	end
-	f.prev = Btn("Previous", 76, 8, function() M.Step(-1) end)
-	f.next = Btn("Next", 76, 86, function() M.Step(1) end)
-	picker = Btn("Pick guide", 160, 172, function() M.Cycle() end)
+	f.prev = Btn("Previous", 72, 8, function() M.Step(-1) end)
+	f.next = Btn("Next", 60, 82, function() M.Step(1) end)
+	f.tick = Btn("Tick", 64, 144, function() M.Tick() end)
+	picker = Btn("Pick guide", 140, 210, function() M.Cycle() end)
 	f:Hide()
 	frame = f
 	return f
@@ -206,6 +303,10 @@ function M.Refresh()
 	local title, lines = M.Lines()
 	header:SetText(title)
 	for i, r in ipairs(rows) do r:SetText(lines[i] or "") end
+	local g = Current()
+	local order = g and M.Order(g, Who()) or {}
+	local cur = order[Place(order, g and p.step[g.id])]
+	frame.tick:SetText(cur and IsDone(g, cur, M.Snapshot()) and "Untick" or "Tick")
 	local count = #Guides()
 	picker:SetText(count > 1 and ("Next guide (" .. count .. ")") or "Pick guide")
 	frame:Show()
@@ -222,6 +323,49 @@ function M.Step(delta)
 	local p = Panel()
 	p.step[g.id] = M.Move(M.Order(g, Who()), p.step[g.id], delta)
 	M.Refresh()
+end
+
+-- Steps this session has already seen done, per guide: the panel moves on only
+-- when the current step turns done, so Previous back onto a done step stays put.
+local seenDone = {}
+
+-- Re-read the quest log; when the current step has just turned done, move past it
+-- and every done step after it.
+function M.Evaluate()
+	local g = Current()
+	if g then
+		local p, state = Panel(), M.Snapshot()
+		local order = M.Order(g, Who())
+		local seen = seenDone[g.id] or {}
+		local k = Place(order, p.step[g.id])
+		if order[k] and not seen[order[k]] and IsDone(g, order[k], state) then
+			while k < #order and IsDone(g, order[k], state) do k = k + 1 end
+			p.step[g.id] = order[k]
+		end
+		local now = {}
+		for _, i in ipairs(order) do if IsDone(g, i, state) then now[i] = true end end
+		seenDone[g.id] = now
+	end
+	M.Refresh()
+end
+
+-- Tick or untick the current step by hand. The mark holds until the quest's
+-- state changes; ticking moves on like a step the log ticked.
+function M.Tick()
+	local g = Current()
+	if not g then return end
+	local p, state = Panel(), M.Snapshot()
+	local order = M.Order(g, Who())
+	local i = order[Place(order, p.step[g.id])]
+	if not i then return end
+	local step = g.steps[i]
+	local marks = Marks(g)
+	local want = not IsDone(g, i, state)
+	marks[i] = nil
+	if M.Done(step, state, nil) ~= want then
+		marks[i] = { done = want, at = step.questId and state(step.questId) or 0 }
+	end
+	M.Evaluate()
 end
 
 -- Choose a guide by number or id, or the next one in the list when nil.
@@ -263,6 +407,7 @@ local function Command(rest)
 	elseif cmd == "hide" then M.SetShown(false)
 	elseif cmd == "next" then M.Step(1)
 	elseif cmd == "prev" then M.Step(-1)
+	elseif cmd == "tick" then M.Tick()
 	elseif cmd == "pick" then
 		if not M.Pick(arg) then Say("No guide " .. Plain(arg) .. ". /wow-ai guide list shows them.") end
 	elseif cmd == "list" then
@@ -275,11 +420,28 @@ local function Command(rest)
 end
 M.Command = Command
 
+-- Quest data can arrive after its event, so every event reads the log now and
+-- once more a second later.
+local retryQueued = false
+local function OnEvent(event, questId)
+	if event == "QUEST_TURNED_IN" and tonumber(questId) then turnedIn[tonumber(questId)] = true end
+	M.Evaluate()
+	if not retryQueued and C_Timer and type(C_Timer.After) == "function" then
+		retryQueued = true
+		C_Timer.After(1, function() retryQueued = false; M.Evaluate() end)
+	end
+end
+
 WoWAIForever.On("LOCKOUT_CHANGED", function() M.Refresh() end)
-if WoWAIGuide then hooksecurefunc(WoWAIGuide, "Sync", function() M.Refresh() end) end
+if WoWAIGuide then hooksecurefunc(WoWAIGuide, "Sync", function() M.Evaluate() end) end
 
 WoWAIForever.Register({
 	name = "guide",
-	init = function() M.Refresh() end,
+	init = function() M.Evaluate() end,
+	events = {
+		QUEST_ACCEPTED = true, QUEST_TURNED_IN = true, QUEST_REMOVED = true,
+		QUEST_WATCH_UPDATE = true, QUEST_LOG_UPDATE = true, PLAYER_LEVEL_UP = true,
+	},
+	onEvent = OnEvent,
 	commands = { guide = Command },
 })
