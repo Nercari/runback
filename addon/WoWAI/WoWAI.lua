@@ -1342,10 +1342,12 @@ end
 
 -- Plain questions that need a context kind, first match wins: a rotation, build
 -- or spell question gets the spellbook (backlog 61); a question about bags,
--- selling or junk gets the bag contents (backlog 62).
+-- selling or junk gets the bag contents (backlog 62); "recap", as the recap offer's
+-- link writes it, gets the recap profile with the low-health count (backlog 63).
 local ASK_KINDS = {
 	{ kind = "rotation", words = { "rotation", "opener", "build", "talents?", "specs?", "spells?", "abilit%a*", "cast%a*" } },
 	{ kind = "bags", words = { "bags?", "bolsas?", "sell%a*", "vend%a*", "junk", "destroy%a*", "inventory" } },
+	{ kind = "recap", words = { "recap" } },
 }
 function WoWAI.AskKind(text)
 	local lower = tostring(text or ""):lower()
