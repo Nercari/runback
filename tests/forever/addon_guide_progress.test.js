@@ -76,7 +76,7 @@ test('each step kind ticks off from the log and the panel moves on', () => {
   v.run('LOG = {}; STUB.FireEvent("QUEST_TURNED_IN", 101, 0, 0); STUB.FireEvent("QUEST_REMOVED", 101)');
   assert.equal(step(v), '5', 'turnin: QUEST_TURNED_IN for that id, the hidden level 24 step skipped');
   v.run('SlashCmdList.WOWAI("guide prev"); SlashCmdList.WOWAI("guide prev")');
-  assert.deepEqual(rows(v), ['Do: Do the task. (done)', 'Turn in: Hand it in. (done)', 'Accept: Take the next one.']);
+  assert.deepEqual(rows(v), ['Do: Do the task. (done)', 'Accept: Take the next one.', 'Note: The end.'], 'the rows after the current step leave out done steps (backlog 76)');
   assert.equal(tickLabel(v), 'Untick');
 
   v.run('FLAGGED[102] = true; STUB.FireEvent("QUEST_LOG_UPDATE")');

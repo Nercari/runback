@@ -5,9 +5,12 @@
 -- is AI-written, so the panel hides while the lockout is on (combat, encounter,
 -- challenge run) and comes back after, like the chat window (Forever_Calm.lua).
 -- A step ticks itself off when the quest log shows it done (backlog 70), or by
--- hand with the Tick button.
+-- hand with the Tick button. Steps the player's own data shows closed (prerequisite
+-- not turned in, an exclusive quest turned in, reputation or profession too low)
+-- are skipped, and an XP pace line shows under the steps (backlog 76).
 -- State lives in WoWAIGuideDB.panel = { shown, guide = id, step = { [id] = n }, pos,
--- ticks = { [id] = { [n] = { done, at } } } }.
+-- ticks = { [id] = { [n] = { done, at } } } }, and time per level in
+-- WoWAIGuideDB.levels = { ["Name-Realm"] = { [level] = { at, sec } } }.
 local M = {}
 WoWAIGuidePanel = M
 local SHOWN_STEPS = 3
@@ -27,19 +30,45 @@ local function Locked() return WoWAIForever.Locked and WoWAIForever.Locked() ~= 
 
 -- Pure step logic -------------------------------------------------------------
 
+local function Norm(s) return type(s) == "string" and (s:lower():gsub("[%s'%-]", "")) or nil end
+
 local function Has(list, a, b)
 	if type(list) ~= "table" then return true end
-	local function norm(s) return type(s) == "string" and s:lower():gsub("[%s'%-]", "") or nil end
-	a, b = norm(a), norm(b)
+	a, b = Norm(a), Norm(b)
 	for _, name in ipairs(list) do
-		local n = norm(name)
+		local n = Norm(name)
 		if n and (n == a or n == b) then return true end
 	end
 	return false
 end
 
--- Whether a step's filters (docs/GUIDE.md) let this player see it. who = { level,
--- class, classToken, race, raceToken, faction }; an unknown value passes.
+local function Ask(fn, x) if type(fn) == "function" then return fn(x) end end
+
+-- Availability rules (backlog 76), keyed by step field. Each says false only when
+-- the player's own data shows the step closed; an unknown answer (nil) passes.
+local RULES = {
+	requires = function(ids, who)
+		for _, id in ipairs(ids) do if Ask(who.turned, id) == false then return false end end
+		return true
+	end,
+	exclusive = function(ids, who)
+		for _, id in ipairs(ids) do if Ask(who.turned, id) == true then return false end end
+		return true
+	end,
+	rep = function(r, who)
+		local s = Ask(who.standing, r.faction)
+		return s == nil or s >= (tonumber(r.standing) or 0)
+	end,
+	profession = function(p, who)
+		local s = Ask(who.skill, p.name)
+		return s == nil or s >= (tonumber(p.skill) or 0)
+	end,
+}
+
+-- Whether this player can see a step: its filters (docs/GUIDE.md) and, while its
+-- quest is neither in the log nor turned in, the availability rules. who = { level,
+-- class, classToken, race, raceToken, faction, quest, turned, standing, skill },
+-- the last four being lookups; an unknown value or a missing lookup passes.
 function M.Visible(step, who)
 	who = who or {}
 	local lv, l = tonumber(who.level), step.level
@@ -47,6 +76,10 @@ function M.Visible(step, who)
 	if who.faction and type(step.faction) == "string" and step.faction:lower() ~= who.faction:lower() then return false end
 	if who.class and not Has(step.class, who.class, who.classToken) then return false end
 	if who.race and not Has(step.race, who.race, who.raceToken) then return false end
+	if step.questId and (tonumber(Ask(who.quest, step.questId)) or 0) > 0 then return true end
+	for field, rule in pairs(RULES) do
+		if type(step[field]) == "table" and not rule(step[field], who) then return false end
+	end
 	return true
 end
 
@@ -66,18 +99,24 @@ local function Place(order, cur)
 	return #order
 end
 
--- The current step and up to n - 1 after it: returns { positions }, place, total.
-function M.Window(order, cur, n)
+-- The current step and up to n - 1 after it that are not done (done(i) true):
+-- returns { positions }, place, total.
+function M.Window(order, cur, n, done)
 	local k = Place(order, cur)
-	local list = {}
-	for j = k, math.min(#order, k + (n or SHOWN_STEPS) - 1) do list[#list + 1] = order[j] end
+	local list = { order[k] }
+	for j = k + 1, #order do
+		if #list >= (n or SHOWN_STEPS) then break end
+		if not (done and done(order[j])) then list[#list + 1] = order[j] end
+	end
 	return list, k, #order
 end
 
--- The step position after moving delta visible steps, clamped to the ends.
-function M.Move(order, cur, delta)
+-- The step position after moving delta visible steps, clamped to the ends. Moving
+-- forward passes over steps that are done (done(i) true).
+function M.Move(order, cur, delta, done)
 	if #order == 0 then return 1 end
 	local k = math.max(1, math.min(#order, Place(order, cur) + delta))
+	while delta > 0 and k < #order and done and done(order[k]) do k = k + 1 end
 	return order[k]
 end
 
@@ -140,17 +179,61 @@ local function ClassicLog(out)
 	end
 end
 
--- One read of the quest log. Returns a function questId -> state (0 to 3).
+-- One read of the quest log. Returns two lookups: questId -> state (0 to 3), and
+-- questId -> turned in (true, false, or nil when the client cannot say).
 function M.Snapshot()
 	local log = {}
 	if not ModernLog(log) then ClassicLog(log) end
 	local flagged = Api(C_QuestLog, "IsQuestFlaggedCompleted") or IsQuestFlaggedCompleted
-	local seen = {}
-	return function(id)
+	local turned = {}
+	local function Turned(id)
 		id = tonumber(id)
-		if not id then return 0 end
-		if seen[id] == nil then seen[id] = (turnedIn[id] or Yes(Call(flagged, id))) and 3 or log[id] or 0 end
-		return seen[id]
+		if not id then return nil end
+		if turned[id] == nil then
+			local v = turnedIn[id] or Call(flagged, id)
+			if Yes(v) then turned[id] = true elseif v == false or log[id] then turned[id] = false else turned[id] = "?" end
+		end
+		if turned[id] ~= "?" then return turned[id] end
+	end
+	local function State(id)
+		if Turned(id) then return 3 end
+		return log[tonumber(id)] or 0
+	end
+	return State, Turned
+end
+
+-- Reputation standing (1 Hated to 8 Exalted) with a faction id, or nil.
+local function Standing(id)
+	local data = Call(Api(C_Reputation, "GetFactionDataByID"), id)
+	if type(data) == "table" and tonumber(data.reaction) then return tonumber(data.reaction) end
+	local name, _, standing = Call(GetFactionInfoByID, id)
+	if name then return tonumber(standing) end
+end
+
+-- Profession ranks by name, read once: a lookup name -> rank, or nil when the client
+-- lists none. A profession not listed is rank 0, unless a collapsed skill header
+-- may hide it, then unknown.
+function M.Skills()
+	local ranks, found, complete = {}, false, true
+	local a, b, c, d, e = Call(GetProfessions)
+	for _, index in pairs({ a, b, c, d, e }) do
+		local name, _, rank = Call(GetProfessionInfo, index)
+		if type(name) == "string" and tonumber(rank) then ranks[Norm(name)] = tonumber(rank); found = true end
+	end
+	local n = not found and Call(GetNumSkillLines)
+	for i = 1, type(n) == "number" and math.min(n, 100) or 0 do
+		local name, isHeader, isExpanded, rank = Call(GetSkillLineInfo, i)
+		if Yes(isHeader) then
+			if not Yes(isExpanded) then complete = false end
+		elseif type(name) == "string" and tonumber(rank) then
+			ranks[Norm(name)] = tonumber(rank); found = true
+		end
+	end
+	if not found then return nil end
+	return function(name)
+		local rank = ranks[Norm(name)]
+		if rank == nil and complete then return 0 end
+		return rank
 	end
 end
 
@@ -184,6 +267,8 @@ local function Who()
 	who.class, who.classToken = UnitClass("player")
 	who.race, who.raceToken = UnitRace("player")
 	if type(UnitFactionGroup) == "function" then who.faction = UnitFactionGroup("player") end
+	who.quest, who.turned = M.Snapshot()
+	who.standing, who.skill = Standing, M.Skills()
 	return who
 end
 
@@ -213,15 +298,21 @@ end
 
 local function IsDone(g, i, state) return M.Done(g.steps[i], state, Marks(g)[i]) end
 
+-- The current guide, this player's view of it, the steps they see and a done(i) test.
+local function View()
+	local g = Current()
+	if not g then return nil end
+	local who = Who()
+	return g, who, M.Order(g, who), function(i) return IsDone(g, i, who.quest) end
+end
+
 -- What the panel shows: a header and up to three step lines.
 function M.Lines()
-	local g = Current()
+	local g, _, order, done = View()
 	if not g then return "Guide", { "No guide yet. Ask the mentor: /ai make me a leveling guide" } end
-	local order = M.Order(g, Who())
-	local list, k, total = M.Window(order, Panel().step[g.id], SHOWN_STEPS)
-	local state = M.Snapshot()
+	local list, k, total = M.Window(order, Panel().step[g.id], SHOWN_STEPS, done)
 	local lines = {}
-	for _, i in ipairs(list) do lines[#lines + 1] = StepLine(g.steps[i], IsDone(g, i, state)) end
+	for _, i in ipairs(list) do lines[#lines + 1] = StepLine(g.steps[i], done(i)) end
 	if #lines == 0 then lines[1] = "No step in this guide fits your character." end
 	return Plain(g.title or g.id) .. "  " .. (total > 0 and (k .. "/" .. total) or ""), lines
 end
@@ -233,7 +324,7 @@ local frame, rows, header, picker
 local function Build()
 	if frame then return frame end
 	local f = CreateFrame("Frame", "WoWAIGuideFrame", UIParent, "BackdropTemplate")
-	f:SetSize(360, 120)
+	f:SetSize(360, 138)
 	local pos = Panel().pos
 	if type(pos) == "table" and tonumber(pos.x) and tonumber(pos.y) then
 		f:SetPoint("CENTER", UIParent, "BOTTOMLEFT", pos.x, pos.y)
@@ -272,6 +363,10 @@ local function Build()
 		r:SetWordWrap(false)
 		rows[i] = r
 	end
+	f.pace = f:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
+	f.pace:SetPoint("TOPLEFT", f, "TOPLEFT", 10, -12 - (SHOWN_STEPS + 1) * 18)
+	f.pace:SetPoint("RIGHT", f, "RIGHT", -10, 0)
+	f.pace:SetJustifyH("LEFT")
 	local close = CreateFrame("Button", nil, f, "UIPanelCloseButton")
 	close:SetPoint("TOPRIGHT", f, "TOPRIGHT", -2, -2)
 	close:SetScript("OnClick", function() M.SetShown(false) end)
@@ -303,10 +398,10 @@ function M.Refresh()
 	local title, lines = M.Lines()
 	header:SetText(title)
 	for i, r in ipairs(rows) do r:SetText(lines[i] or "") end
-	local g = Current()
-	local order = g and M.Order(g, Who()) or {}
-	local cur = order[Place(order, g and p.step[g.id])]
-	frame.tick:SetText(cur and IsDone(g, cur, M.Snapshot()) and "Untick" or "Tick")
+	frame.pace:SetText(M.PaceLine() or "")
+	local g, _, order, done = View()
+	local cur = g and order[Place(order, p.step[g.id])]
+	frame.tick:SetText(cur and done(cur) and "Untick" or "Tick")
 	local count = #Guides()
 	picker:SetText(count > 1 and ("Next guide (" .. count .. ")") or "Pick guide")
 	frame:Show()
@@ -318,10 +413,10 @@ function M.SetShown(v)
 end
 
 function M.Step(delta)
-	local g = Current()
+	local g, _, order, done = View()
 	if not g then return end
 	local p = Panel()
-	p.step[g.id] = M.Move(M.Order(g, Who()), p.step[g.id], delta)
+	p.step[g.id] = M.Move(order, p.step[g.id], delta, done)
 	M.Refresh()
 end
 
@@ -332,18 +427,17 @@ local seenDone = {}
 -- Re-read the quest log; when the current step has just turned done, move past it
 -- and every done step after it.
 function M.Evaluate()
-	local g = Current()
+	local g, _, order, done = View()
 	if g then
-		local p, state = Panel(), M.Snapshot()
-		local order = M.Order(g, Who())
+		local p = Panel()
 		local seen = seenDone[g.id] or {}
 		local k = Place(order, p.step[g.id])
-		if order[k] and not seen[order[k]] and IsDone(g, order[k], state) then
-			while k < #order and IsDone(g, order[k], state) do k = k + 1 end
+		if order[k] and not seen[order[k]] and done(order[k]) then
+			while k < #order and done(order[k]) do k = k + 1 end
 			p.step[g.id] = order[k]
 		end
 		local now = {}
-		for _, i in ipairs(order) do if IsDone(g, i, state) then now[i] = true end end
+		for _, i in ipairs(order) do if done(i) then now[i] = true end end
 		seenDone[g.id] = now
 	end
 	M.Refresh()
@@ -352,10 +446,9 @@ end
 -- Tick or untick the current step by hand. The mark holds until the quest's
 -- state changes; ticking moves on like a step the log ticked.
 function M.Tick()
-	local g = Current()
+	local g, who, order = View()
 	if not g then return end
-	local p, state = Panel(), M.Snapshot()
-	local order = M.Order(g, Who())
+	local p, state = Panel(), who.quest
 	local i = order[Place(order, p.step[g.id])]
 	if not i then return end
 	local step = g.steps[i]
@@ -389,6 +482,87 @@ function M.Pick(which)
 end
 
 function M.Cycle() M.Pick(nil) end
+
+-- XP pace and time per level (backlog 76) -----------------------------------------
+-- The pace line is the XP gained in the last ten minutes of this session, from the
+-- game's own UnitXP / UnitXPMax read on PLAYER_XP_UPDATE. Time per level is played
+-- time counted between events, kept per character for the session recap.
+local PACE_WINDOW, PACE_MIN = 600, 300
+local pace = { gained = 0, samples = {} } -- gained: XP this session; samples: { t, gained }
+
+local function LevelTimes()
+	WoWAIGuideDB = WoWAIGuideDB or {}
+	local db = WoWAIGuideDB
+	if type(db.levels) ~= "table" then db.levels = {} end
+	local key = tostring(Call(UnitName, "player") or "?") .. "-" .. tostring(Call(GetRealmName) or "?")
+	if type(db.levels[key]) ~= "table" then db.levels[key] = {} end
+	return db.levels[key]
+end
+
+local function LevelRecord(level)
+	local t = LevelTimes()
+	if type(t[level]) ~= "table" then t[level] = {} end
+	return t[level]
+end
+
+-- Add the seconds since the last mark to the level being counted, then move to `level`.
+local function CountTime(level)
+	local now = GetTime()
+	if pace.level and pace.mark then
+		local r = LevelRecord(pace.level)
+		r.sec = (tonumber(r.sec) or 0) + math.max(0, now - pace.mark)
+	end
+	pace.mark = now
+	level = tonumber(level)
+	if level and pace.level and level > pace.level then LevelRecord(level).at = time() end
+	if level and (not pace.level or level > pace.level) then pace.level = level end
+end
+
+local function ReadXP()
+	local level, xp, max = tonumber(Call(UnitLevel, "player")), tonumber(Call(UnitXP, "player")), tonumber(Call(UnitXPMax, "player"))
+	CountTime(level)
+	if not level or not xp or not max then return end
+	local last, now = pace.last, GetTime()
+	if last and level > last.level then
+		pace.gained = pace.gained + math.max(0, last.max - last.xp) + xp
+	elseif last and level == last.level and xp >= last.xp then
+		pace.gained = pace.gained + xp - last.xp
+	else
+		pace.samples = {}
+	end
+	pace.last = { level = level, xp = xp, max = max }
+	local kept = {}
+	for _, s in ipairs(pace.samples) do if s.t >= now - PACE_WINDOW then kept[#kept + 1] = s end end
+	kept[#kept + 1] = { t = now, gained = pace.gained }
+	pace.samples = kept
+end
+
+-- "About N min to level, from your last M minutes", or nil without five minutes of
+-- readings in the last ten, or no XP gained in them.
+function M.PaceLine()
+	local s, last, now = pace.samples, pace.last, GetTime()
+	local first = s[1]
+	if not first or not last or last.max <= last.xp or first.t < now - PACE_WINDOW then return nil end
+	local span, gained = now - first.t, s[#s].gained - first.gained
+	if span < PACE_MIN or gained <= 0 then return nil end
+	local minutes = math.ceil((last.max - last.xp) * span / gained / 60)
+	return "About " .. minutes .. " min to level, from your last " .. math.floor(span / 60) .. " minutes"
+end
+
+-- For the session recap: "levelMinutes=24:38,25:12", minutes played at each level the
+-- addon saw reached (the last is the current level, still counting); "" when none.
+function M.LevelMinutes()
+	local t, list = LevelTimes(), {}
+	for level, r in pairs(t) do
+		if type(r) == "table" and r.at and tonumber(level) then list[#list + 1] = tonumber(level) end
+	end
+	table.sort(list)
+	local parts = {}
+	for j = math.max(1, #list - 4), #list do
+		parts[#parts + 1] = list[j] .. ":" .. math.floor((tonumber(t[list[j]].sec) or 0) / 60)
+	end
+	return #parts > 0 and ("levelMinutes=" .. table.concat(parts, ",")) or ""
+end
 
 local function Say(text) print("|cff66ccff[WoW AI]|r " .. text) end
 
@@ -424,6 +598,9 @@ M.Command = Command
 -- once more a second later.
 local retryQueued = false
 local function OnEvent(event, questId)
+	if event == "PLAYER_XP_UPDATE" then ReadXP(); M.Refresh(); return end
+	if event == "PLAYER_LOGOUT" then CountTime(); return end
+	if event == "PLAYER_LEVEL_UP" then CountTime(questId) end
 	if event == "QUEST_TURNED_IN" and tonumber(questId) then turnedIn[tonumber(questId)] = true end
 	M.Evaluate()
 	if not retryQueued and C_Timer and type(C_Timer.After) == "function" then
@@ -437,11 +614,13 @@ if WoWAIGuide then hooksecurefunc(WoWAIGuide, "Sync", function() M.Evaluate() en
 
 WoWAIForever.Register({
 	name = "guide",
-	init = function() M.Evaluate() end,
+	init = function() ReadXP(); M.Evaluate() end,
 	events = {
 		QUEST_ACCEPTED = true, QUEST_TURNED_IN = true, QUEST_REMOVED = true,
 		QUEST_WATCH_UPDATE = true, QUEST_LOG_UPDATE = true, PLAYER_LEVEL_UP = true,
+		PLAYER_XP_UPDATE = true, PLAYER_LOGOUT = true,
 	},
 	onEvent = OnEvent,
+	context = function(kind) if kind == "recap" then return M.LevelMinutes() end end,
 	commands = { guide = Command },
 })

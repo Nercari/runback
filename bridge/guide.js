@@ -9,11 +9,14 @@ const { cleanText } = require('./protocol');
 const GUIDE_LIMITS = {
   guides: 12, steps: 600, pointsPerStep: 8, title: 80, source: 120, text: 200, quest: 80,
   label: 60, listItems: 12, listItem: 24, level: { min: 1, max: 70 }, radius: { min: 0.5, max: 25 },
+  questIds: 12, factionId: 99999, skill: { min: 1, max: 450 },
 };
 const GUIDE_ID = /^[A-Za-z0-9_.-]{1,32}$/;
 const GUIDE_KINDS = new Set(['accept', 'do', 'turnin', 'travel', 'train', 'buy', 'note']);
 const FACTIONS = { alliance: 'Alliance', horde: 'Horde' };
 const NAME_TOKEN = /^[A-Za-z][A-Za-z '-]*$/;
+// Reputation standings as the game numbers them (1 Hated to 8 Exalted).
+const STANDINGS = ['hated', 'hostile', 'unfriendly', 'neutral', 'friendly', 'honored', 'revered', 'exalted'];
 
 const isObj = v => v !== null && typeof v === 'object' && !Array.isArray(v);
 const own = (o, k) => (Object.prototype.hasOwnProperty.call(o, k) ? o[k] : undefined);
@@ -58,6 +61,38 @@ function nameList(v) {
   return out.length ? out : null;
 }
 
+// Short list of quest ids, or null: positive integers, no repeats.
+function questIdList(v) {
+  if (!Array.isArray(v)) return null;
+  const out = [];
+  for (const item of v.slice(0, GUIDE_LIMITS.questIds * 2)) {
+    const id = posInt(item);
+    if (id && !out.includes(id)) out.push(id);
+    if (out.length >= GUIDE_LIMITS.questIds) break;
+  }
+  return out.length ? out : null;
+}
+
+// { faction: id, standing: 1..8 } or null. standing may be written as a number or a name.
+function rep(v) {
+  if (!isObj(v)) return null;
+  const id = posInt(own(v, 'faction'));
+  if (!id || id > GUIDE_LIMITS.factionId) return null;
+  const raw = own(v, 'standing');
+  const n = typeof raw === 'string' ? STANDINGS.indexOf(raw.trim().toLowerCase()) + 1 : num(raw);
+  if (!n) return null;
+  return { faction: id, standing: clamp(Math.round(n), 1, STANDINGS.length) };
+}
+
+// { name, skill } or null: a profession name and the rank needed (1 when not given).
+function profession(v) {
+  if (!isObj(v)) return null;
+  const name = clean(own(v, 'name'), GUIDE_LIMITS.listItem);
+  if (!NAME_TOKEN.test(name)) return null;
+  const n = num(own(v, 'skill'));
+  return { name, skill: n === null ? 1 : clamp(Math.round(n), GUIDE_LIMITS.skill.min, GUIDE_LIMITS.skill.max) };
+}
+
 function point(p) {
   if (!isObj(p)) return null;
   const m = own(p, 'm'), x = num(own(p, 'x')), y = num(own(p, 'y'));
@@ -100,6 +135,14 @@ function step(s, n, why) {
   if (races) out.race = races;
   const f = faction(own(s, 'faction'));
   if (f) out.faction = f;
+  for (const key of ['requires', 'exclusive']) {
+    const ids = questIdList(own(s, key));
+    if (ids) out[key] = ids;
+  }
+  const r = rep(own(s, 'rep'));
+  if (r) out.rep = r; else if (own(s, 'rep') !== undefined) why.push(`step ${n}: dropped invalid rep`);
+  const prof = profession(own(s, 'profession'));
+  if (prof) out.profession = prof; else if (own(s, 'profession') !== undefined) why.push(`step ${n}: dropped invalid profession`);
   for (const flag of ['optional', 'sticky']) if (own(s, flag) === true) out[flag] = true;
   return out;
 }
