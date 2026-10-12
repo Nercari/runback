@@ -31,6 +31,8 @@
     "slots": "node bridge/install-slots.js",
     "test": "node tests/run_all.js",
     "test:live": "node tests/inject_test.js",
+    "changelog": "node tools/changelog.js",
+    "version": "node tools/changelog.js release && git add CHANGELOG.md changes",
     "probe": "python3 bridge/capture_x11.py --probe bridge/probe.png"
   },
   "devDependencies": {
