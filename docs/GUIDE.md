@@ -98,7 +98,7 @@ Same route as map layers (`docs/MAP.md`); nothing new is invented.
 2. **The bridge validates when the run ends.** The file and the blocks go through `validateGuideSet` above; a block is taken out of the text the player reads, valid or not. A guide that does not validate is dropped and never stored (the reason goes to `bridge.log`). The reply gets one plain line: `I saved the guide "<title>".`, `I saved N guides.` or `I could not save that guide.`
 3. **The bridge keeps them in `state.json`** under `guides` as `{ epoch, version, guides }`. A guide with an `id` already held replaces it. At most 12 guides and 1500 steps in all are kept, the oldest dropped first (`GUIDE_STATE_STEPS` in `bridge/guide.js`); this keeps the slot files small. The version goes up only when something changed.
 4. **The slot files carry the whole set** as `guides = { epoch, version, list }` for three minutes after a change (on progress publishes only while it is small), and again after every hello, exactly as the map does. The field names inside each guide and step are the ones in this document. The addon replaces its copy when the version is newer or the epoch is another (the bridge's state was reset), so a guide is never applied twice and a client that lost its saved data gets its guides back on its next hello.
-5. **The addon only stores them.** `addon/WoWAI/Guide.lua` keeps the set in the `WoWAIGuideDB` saved variable and offers `WoWAIGuide.List()`, `Find(id)` and `Version()` for the guide panel (item 69). It shows nothing, prints nothing, reads no game state and calls no game action. The guide panel below reads from it. The panel ticks steps off from the quest log (item 70); there is no map point yet (item 71).
+5. **The addon only stores them.** `addon/WoWAI/Guide.lua` keeps the set in the `WoWAIGuideDB` saved variable and offers `WoWAIGuide.List()`, `Find(id)` and `Version()` for the guide panel (item 69). It shows nothing, prints nothing, reads no game state and calls no game action. The guide panel below reads from it. The panel ticks steps off from the quest log (item 70) and puts the current step's points on the map (item 71, below).
 
 To remove a guide, send a guide with the same `id`; there is no clear command yet.
 
@@ -134,5 +134,18 @@ To remove a guide, send a guide with the same `id`; there is no clear command ye
 | `/wow-ai guide tick` | Tick or untick the current step, like the **Tick** button. |
 | `/wow-ai guide list` | Print the stored guides with their number and id. |
 | `/wow-ai guide pick <n or id>` | Switch to that guide. |
+
+## On the map
+
+While the panel is open, the current step's `points` (item 71) show on the world map as the layer `guide`, and the navigator (`docs/MAP.md`) points at them with an arrow and the distance in yards. When the step changes (Next, Previous, a tick, a new guide) the layer changes with it; a step without points clears it, and closing the panel with **X** takes it off the map.
+
+- A step with several points is a numbered route. The navigator starts at point 1.
+- **Arriving ticks a point off** and the navigator moves to the step's next point. A point with a `radius` counts as reached anywhere inside it (the radius is map percent of the point's own map, measured across its width, and never less than 12 yards); a point without one needs 12 yards. After the last point the navigator stops for that step. Arriving never ticks the step itself: that stays with the quest log or the Tick button.
+- A route the agent draws takes the navigator over; `/wow-ai map nav guide` goes back to the step. The panel's step keeps its place in the navigator through `/reload`.
+- **In combat, during an encounter or a challenge run the guide pins and the navigator on the guide hide**, like the panel, and come back when the fight ends. A route the agent drew keeps its navigator in combat as before.
+- Point labels are plain text: control characters and `|` are removed, a point that is not a number on a real map is dropped, the radius is clamped to 0.5 to 25 and at most 8 points per step are kept.
+- `/wow-ai map hide guide` and `show guide` hide or show the pins, like any layer.
+
+Display only: the addon reads your position from the map API and draws. Nothing moves, targets or interacts for you.
 
 Anything else after `guide` (`/ai guide me to Goldshire`) is a message for the agent, as with the other command words. `/ai` works the same as `/wow-ai`.
