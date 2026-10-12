@@ -18,7 +18,7 @@ wow-ai must comply 100% with Blizzard's Terms of Service, EULA and UI add-on pol
 
 - Default branch is `forever`. Every change is a PR into it, one change per PR, on a `claude/` / `cursor/` / `exec/` branch matching the issue's owner label, verified by the **other division** before merge.
 - Work without check-ins (Pedro, 2026-10-03). Once CI is green and the required review returns PASS, merge the PR yourself and start the next backlog item; never ask Pedro to merge, approve or type "continue". The merge gate is the one in the `## Nercari HQ` block below: real `VERIFY.md` output in the PR body, green checks, not a draft, and for a risky PR `verify:grok` plus a signed `VERIFIER: PASS` from an agent that did not write it. Stop and ask only for: publishing or messaging outside GitHub, spending money, deleting data without a backup, force-push, or a goal/direction decision. Put those on nercari-control #114 and keep working on anything else.
-- `npm ci`, then `node tools/safety-ci.js` and `npm test` must pass (CI runs both on Windows and Linux). Add or extend a test for every behaviour change; update `CHANGELOG.md` and `docs/` when users would notice.
+- `npm ci`, then `node tools/safety-ci.js` and `npm test` must pass (CI runs both on Windows and Linux). Add or extend a test for every behaviour change; update `docs/` and add a `changes/<slug>.md` release-note fragment when users would notice; never edit `CHANGELOG.md` in a PR (`CONTRIBUTING.md`, "Release notes"). `VERIFY.md` holds commands only; results go in the PR body with the head SHA they ran at.
 - The bridge stays dependency-free; the addon uses only APIs in the Forever client.
 - Large work (several PRs or a new feature) starts as a numbered item in `docs/spec.md`.
 

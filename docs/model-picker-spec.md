@@ -105,7 +105,7 @@ Checked against `docs/COMPLIANCE.md`. Nothing here touches gameplay: the picker 
 
 ## Tickets
 
-Each ticket: one PR into `forever`, `node tools/safety-ci.js` and `npm test` green, a test for every behaviour change, `CHANGELOG.md` and `docs/CONFIGURATION.md` updated when a player would notice.
+Each ticket: one PR into `forever`, `node tools/safety-ci.js` and `npm test` green, a test for every behaviour change, a `changes/` fragment and `docs/CONFIGURATION.md` updated when a player would notice.
 
 ### 41. Confirm the CLIs on Pedro's PC
 

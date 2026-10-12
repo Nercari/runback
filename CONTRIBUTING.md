@@ -20,6 +20,8 @@ bridge/               the companion process (Node.js, no runtime dependencies)
   config.example.json   template setup.js copies to config.json
 setup.js              one-shot installer
 tests/                see below
+tools/changelog.js    builds CHANGELOG.md from changes/ at release time
+changes/              one release-note file per PR (see "Release notes" below)
 docs/                 ARCHITECTURE.md, AGENTS.md, CONFIGURATION.md, INSTALL-WINDOWS.md
 ```
 
@@ -42,7 +44,8 @@ To try changes in the game, run `node setup.js` (it re-copies the addon into `In
 
 | Command | What it checks |
 |---|---|
-| `node tests/order_check.js` | The addon parses as Lua 5.1 and no top-level `local` is used before it is declared. |
+| `node tests/run_all.js` | What `npm test` runs. It runs `order_check.js`, then every `tests/**/*.test.js` and `tests/*_test.js` in one `node --test` run, then `codec_test.js`. A new test file is found by its name, so there is no list to edit (`codec_test.js` and `inject_test.js` run on their own). |
+| `node tests/order_check.js` | Every Lua file listed in `WoWAI.toc` parses as Lua 5.1 and no top-level `local` is used before it is declared; a Lua file in the addon folder that the `.toc` does not list fails. |
 | `node --test tests/addon_test.js` | The real addon in a Lua VM with a stub client (`tests/wow_stub.lua`): login, hello, a message decoded off the strip, a slot reply, Allow and its plain tool names, `/wow-ai reset`, restore, chat commands, minimize, reload mode. |
 | `node --test tests/bridge_test.js` | `bridge/protocol.js`: strip records, flags (including `agent=`), the SavedVariables outbox, folder resolution, permission rules, dedup and pruning. |
 | `node --test tests/agents_test.js` | `bridge/agents.js`: the command line built for each agent and permission mode, the prompt delivery (stdin, prompt file, context block), a sample of each CLI's real stream (Claude stream-json, Codex `exec --json`, Grok streaming-json) read back into progress lines, session id, denials and reply, and the unwrapping of npm's Windows launchers. |
@@ -52,18 +55,20 @@ To try changes in the game, run `node setup.js` (it re-copies the addon into `In
 | `node --test tests/map_addon_test.js` | The real `Map.lua` (with `WoWAI.lua`) in a Lua VM: sync and versions, pin projection on zone and continent maps, the navigator's yards, bearing and auto-advance, herb/ore nodes filtered by skill, and `/wow-ai map`. |
 | `node --test tests/guide_channel_test.js` | The guide channel (backlog 67): `wowguide` blocks and guide files, validation (hostile input is not stored), `state.guides` and its limits, the versioned `guides` table in slot files, `WOW_AI_GUIDE_FILE` set on every run by the real bridge with a fake CLI, and one guide read back by the real `Guide.lua` and `WoWAI.lua`. |
 | `node --test tests/plain_reply_test.js` | The real bridge with a fake Claude CLI: the "working" list has at most three plain phrases, a quoted combat-log line becomes one `Evidence:` line, and no `[bridge]` or map-layer line reaches the reply. |
+| `node --test tests/tools/changelog.test.js` | `tools/changelog.js`: fragment parsing, the release build (entries, order, compare links), the release notes text, the CHANGELOG.md guard, and a real `npm version` run in a scratch repo. |
 | `node tests/codec_test.js` | `Codec.lua` in a Lua VM, rendered to PNG with noise and gamma, decoded by `capture.ps1` (Windows) or `capture_x11.py` (elsewhere). Writes scratch images to `tests/tmp/` (gitignored). |
 | `npm run test:live` | Not part of `npm test`. Builds a sandbox under `tests/tmp/inject/` with a 5-slot pool and runs the bridge with `--inject` against a real agent CLI: Claude by default, `-- --agent codex` or `-- --agent grok` for the others. Needs that CLI installed and logged in. |
 
-When you change behaviour, add or extend a test in the matching file. Pure logic belongs in `protocol.js` where `bridge_test.js` can reach it without spawning anything.
+Name a new test `tests/<area>/<name>.test.js` (or `tests/<name>_test.js` at the top level) and `npm test` runs it; do not add it to `package.json`. When you change behaviour, add or extend a test in the matching file. Pure logic belongs in `protocol.js` where `bridge_test.js` can reach it without spawning anything.
 
 ## Conventions
 
 - **Lua** uses tabs, `local` everything, and only APIs present in the Forever client. Check against the `forever` branch of [Gethe/wow-ui-source](https://github.com/Gethe/wow-ui-source) before using a new API.
 - **JavaScript** uses two-space indent, single quotes, `'use strict'`, CommonJS. The bridge must stay dependency-free: it is installed with `npm link` on machines that may never run `npm install`.
 - **Transport constants** (`slots`, `actMax`, `presenceMax`, strip cell size and row counts) live in three places that must agree: `config.example.json`, the top of `WoWAI.lua`, and `Codec.lua`. See [docs/CONFIGURATION.md](docs/CONFIGURATION.md).
-- **Compatibility:** the bridge accepts older strip record formats, older `state.json` layouts, a `config.json` with Claude's settings at the top level, and history with role `claude`. Keep that when changing a format, and note it in `CHANGELOG.md`.
+- **Compatibility:** the bridge accepts older strip record formats, older `state.json` layouts, a `config.json` with Claude's settings at the top level, and history with role `claude`. Keep that when changing a format, and note it in your `changes/` fragment.
 - **Agents:** everything an agent needs is its entry in `bridge/agents.js` (see "Adding an agent" in [docs/AGENTS.md](docs/AGENTS.md)); `bridge.js` must not know one agent from another. Permission rules are written in Claude Code's syntax everywhere and translated in the agent's `args`. A parser is fed each line of the CLI's stream as parsed JSON and must ignore what it doesn't know: the CLIs add event types between releases.
+- **Lists** (exports, config tables, lists in docs) have one entry per line with a trailing comma, so two PRs that each add an entry do not edit the same line. `docs/spec.md` has a blank line between items. The addon `.toc` is one file per line (the format has no commas); new modules go at the end of the load order.
 - Comments explain why, not what. Keep the section banners in `WoWAI.lua` and `bridge.js` in order.
 
 ## Pull requests
@@ -71,7 +76,22 @@ When you change behaviour, add or extend a test in the matching file. Pure logic
 1. Open an issue first for anything larger than a fix, so the approach can be discussed before you spend time on it.
 2. One change per PR. Include the test that shows it works.
 3. `npm test` must pass. Say in the PR whether you tried it in the game and on which client build.
-4. Update `README.md`, `docs/`, and `CHANGELOG.md` when user-visible behaviour changes.
+4. Update `README.md` and `docs/` when user-visible behaviour changes, and add a release-note fragment (below). Do not edit `CHANGELOG.md`.
+5. Evidence goes in the PR body. `VERIFY.md` lists the commands to run and never holds their output. Paste the real tails of `npm ci`, `node tools/safety-ci.js` and `npm test` in the body under `PROOF OUTPUT:`, with the full head SHA they ran at on the first line. After you push again, re-run and update the SHA and the output.
+
+## Release notes
+
+`CHANGELOG.md` is built at release time; a PR never edits it. A change a player would notice adds one file, `changes/<slug>.md`:
+
+```
+### Fixed
+
+- **Bag question no longer lists soulbound items as sellable (backlog 85).** The bags answer skips them.
+```
+
+Sections are `Added`, `Changed`, `Deprecated`, `Removed`, `Fixed`, `Security`; each entry is one `- ` line. `changes/README.md` has the details, and `npm test` fails on a fragment that does not parse. Two PRs then add two different files and cannot conflict.
+
+To cut a release, run `npm version minor` (or `patch`, `major`, or an exact version) on a clean `forever` checkout. npm bumps `package.json`, its `version` script runs `node tools/changelog.js release`, which folds every fragment and the old `[Unreleased]` text into a new `## [x.y.z] - date` section, moves the compare links and deletes the fragments, and npm then commits and tags `vX.Y.Z`. `node tools/changelog.js release 1.2.3 --dry-run` shows the section without writing, and `node tools/changelog.js notes 1.2.3` prints a version's text for a release page. CI (`changelog-guard` in `.github/workflows/test.yml`) fails a PR that changes `CHANGELOG.md` without a version bump. The addon's `## Version` in `WoWAI.toc` is not touched by the build; bump it by hand in the release.
 
 ## Reporting bugs
 
