@@ -205,7 +205,7 @@ The keys you are most likely to touch. Every key, flag and environment variable 
 - **Reply never appears but `bridge.log` says `done`** — `/wow-ai slots`; if the pool is empty, `/wow-ai reload` frees it and picks the reply up via the fallback path.
 - **"Reply slots not installed"** — `node bridge/install-slots.js`, then restart WoW.
 - **Chats vanished after a reload** — the beta client sometimes wipes addon saved data. The bridge keeps `transcripts.json` and sends your chats back automatically on the next message.
-- **`/wow-ai diag` says the sound channel is unusable** — the cheap readiness checks and heartbeat are off; everything still works through slot polls, just with coarser progress. If it says a valid file reports as unplayable, WoW hasn't been restarted since the files were created.
+- **`/wow-ai diag` says the sound channel is unusable** — the cheap readiness checks and heartbeat are off; everything still works through slot polls, just with coarser progress and a slower check after the first minute (about 2 minutes apart), and the light turns grey while idle instead of checking. The `slots used` line shows how many slots each reply cost. If it says a valid file reports as unplayable, WoW hasn't been restarted since the files were created.
 
 ## Documentation
 
