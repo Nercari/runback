@@ -2291,25 +2291,31 @@ function WoWAI.Render()
 			y = y + b:GetHeight() + 6
 		end
 		local last = #c.history
-		for i, m in ipairs(c.history) do
-			-- The Allow button only makes sense on the newest reply, and only while idle.
-			local denied = (i == last and not c.pendingId and type(m.denied) == "table" and #m.denied > 0) and m.denied or nil
-			local follow = i == last and not c.pendingId and m.role == "assistant" and not denied and m.followUps or nil
-			Place(m.role, m.text, m.t and date("%H:%M", m.t) or "", false, denied, m.agent, nil, follow)
-		end
-		if c.pendingId then
-			local p = c.progress
-			-- No timer or status text here: the bubble is drawn once, goes stale next to the
-			-- live status line, and its text read as part of the AI's own message.
-			local head = "working..."
-			Place("assistant", (p and p ~= "") and (head .. "\n\n" .. p) or head, "", true, nil, ChatAgent(c))
-		elseif #c.history == 0 then
-			if run.restoring then
-				Place("system", "Connecting to the bridge and restoring your chats...", "", true)
-			elseif not WoWAI.IsConnected() then
-				Place("system", "Not connected to the bridge. Start it (npm start in the wow-ai folder, or wow-ai in your project), then click Connect below.", "", true)
-			else
-				Place("system", "Click the box below and type to start. Shift-click an item, spell or quest to link it into your message. /wow-ai help lists the commands; /ai <text> and /r work from the game chat too.\n\nOr click a question to put it in the box:", "", true, nil, nil, WoWAI.StarterList(c))
+		-- No AI text on screen while the lockout is on (backlog 79): a window opened
+		-- by hand mid-fight shows this one line; Forever_Calm re-renders when it ends.
+		if WoWAIForever and WoWAIForever.Locked and WoWAIForever.Locked() then
+			Place("system", "Replies are hidden during combat", "", true)
+		else
+			for i, m in ipairs(c.history) do
+				-- The Allow button only makes sense on the newest reply, and only while idle.
+				local denied = (i == last and not c.pendingId and type(m.denied) == "table" and #m.denied > 0) and m.denied or nil
+				local follow = i == last and not c.pendingId and m.role == "assistant" and not denied and m.followUps or nil
+				Place(m.role, m.text, m.t and date("%H:%M", m.t) or "", false, denied, m.agent, nil, follow)
+			end
+			if c.pendingId then
+				local p = c.progress
+				-- No timer or status text here: the bubble is drawn once, goes stale next to the
+				-- live status line, and its text read as part of the AI's own message.
+				local head = "working..."
+				Place("assistant", (p and p ~= "") and (head .. "\n\n" .. p) or head, "", true, nil, ChatAgent(c))
+			elseif #c.history == 0 then
+				if run.restoring then
+					Place("system", "Connecting to the bridge and restoring your chats...", "", true)
+				elseif not WoWAI.IsConnected() then
+					Place("system", "Not connected to the bridge. Start it (npm start in the wow-ai folder, or wow-ai in your project), then click Connect below.", "", true)
+				else
+					Place("system", "Click the box below and type to start. Shift-click an item, spell or quest to link it into your message. /wow-ai help lists the commands; /ai <text> and /r work from the game chat too.\n\nOr click a question to put it in the box:", "", true, nil, nil, WoWAI.StarterList(c))
+				end
 			end
 		end
 		for i = n + 1, #ui.bubbles do
@@ -2334,6 +2340,7 @@ end
 
 -- Copy box (/wow-ai copy): a selectable EditBox with the last reply pre-highlighted for Ctrl+C.
 function WoWAI.ShowCopy(text)
+	if WoWAIForever and WoWAIForever.Locked and WoWAIForever.Locked() then return end
 	if not ui.copy then
 		local cf = CreateFrame("Frame", "WoWAICopy", UIParent, "BackdropTemplate")
 		cf:SetSize(560, 320)

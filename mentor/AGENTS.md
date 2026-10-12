@@ -129,7 +129,7 @@ Rules: at most 255 characters; only `/cast`, `/use`, `/target`-style commands an
 
 ## Auction house (F13)
 
-Scan results arrive as `bulk/ah.json` (item, price, quantity, time). Advice only: what to buy, sell or craft, citing the scanned prices and their scan time. Never suggest automated posting or bidding tools.
+Scan results arrive as `bulk/ah.json`: the auctions the player had on screen when they clicked Scan for AI (item, lowest price in copper, quantity on sale, time of the save). Advice only: what to buy, sell or craft, citing the scanned prices and their scan time. Never suggest automated posting or bidding tools.
 
 ## Leveling (F14)
 

@@ -149,8 +149,7 @@ test('journal records events, caps at 300, bumps version and sets the logout fla
   assert.equal(vm.num('WoWAI_Bulk.journal.version'), vBefore + 1);
 });
 
-test('AH scan does nothing without C_AuctionHouse and scans shopping list when present', () => {
-  // Without C_AuctionHouse
+test('Scan for AI saves the auctions the player searched for, and explains itself when there are none', () => {
   const vmNoAH = newVM('C_AuctionHouse = nil');
   login(vmNoAH);
   vmNoAH.run('STUB.FireEvent("AUCTION_HOUSE_SHOW")');
@@ -158,38 +157,47 @@ test('AH scan does nothing without C_AuctionHouse and scans shopping list when p
   assert.ok(vmNoAH.evaluate('table.concat(STUB.prints, "\\n")').includes('AH API not available; shift-click items into the chat instead.'));
   assert.equal(vmNoAH.num('#WoWAI_Bulk.ah.items'), 0);
 
-  // With C_AuctionHouse
   const vm = newVM(`
     C_AuctionHouse = {
-      searches = {},
-      SendSearchQuery = function(item) table.insert(C_AuctionHouse.searches, item) end,
-      GetNumCommoditySearchResults = function() return 1 end,
-      GetCommoditySearchResultInfo = function(i) return { itemID = 2589, name = "Linen Cloth", unitPrice = 150, quantity = 20 } end,
-      GetNumItemSearchResults = function() return 0 end,
+      results = {},
+      GetBrowseResults = function() return C_AuctionHouse.results end,
+      GetItemKeyInfo = function(key) if key.itemID == 2589 then return { itemName = "Linen Cloth" } end end,
     }
+    C_Item.GetItemInfo = function(id) if id == 2592 then return "Wool Cloth" end end
   `);
   login(vm);
-
-  vm.run('SlashCmdList.WOWAI("ah add Linen Cloth")');
-  assert.equal(vm.evaluate('WoWAIForeverDB.ahList[1]'), 'Linen Cloth');
-
   vm.run('STUB.FireEvent("AUCTION_HOUSE_SHOW")');
   assert.equal(vm.evaluate('WoWAIAHScanFrame.shown'), 'true');
 
   vm.run('WoWAIAHScanFrame.btn.scripts.OnClick()');
-  assert.equal(vm.num('#C_AuctionHouse.searches'), 1);
+  assert.equal(vm.evaluate('STUB.prints[#STUB.prints]'), 'Nothing to save yet: search for an item at the auction house, then press Scan for AI again.');
+  assert.equal(vm.num('WoWAI_Bulk.ah.version'), 0);
 
-  // Result event arrives
-  vm.run('STUB.FireEvent("COMMODITY_SEARCH_RESULTS_UPDATED")');
-  // Both result events re-read the same results: still one row.
-  vm.run('STUB.FireEvent("COMMODITY_SEARCH_RESULTS_RECEIVED")');
-  // Trigger ticker completion (scanIndex moves past shopping list)
-  vm.run('STUB.Tick()'); // ticker fires StepAHScan -> scan done
+  vm.run(`C_AuctionHouse.results = {
+    { itemKey = { itemID = 2589 }, minPrice = 150, totalQuantity = 20 },
+    { itemKey = { itemID = 2592 }, minPrice = 900, totalQuantity = 4 },
+  }`);
+  vm.run('WoWAIAHScanFrame.btn.scripts.OnClick()');
+  assert.equal(vm.evaluate('STUB.prints[#STUB.prints]'), 'Saved 2 auctions for the AI: /reload to send them.');
   assert.equal(vm.num('WoWAI_Bulk.ah.version'), 1);
-  assert.equal(vm.num('#WoWAI_Bulk.ah.items'), 1);
+  assert.equal(vm.num('#WoWAI_Bulk.ah.items'), 2);
+  assert.equal(vm.evaluate('WoWAI_Bulk.ah.items[1].id'), '2589');
   assert.equal(vm.evaluate('WoWAI_Bulk.ah.items[1].name'), 'Linen Cloth');
   assert.equal(vm.evaluate('WoWAI_Bulk.ah.items[1].price'), '150');
-  assert.ok(vm.evaluate('table.concat(STUB.prints, "\\n")').includes('Scan saved: /reload to send it to the AI.'));
+  assert.equal(vm.evaluate('WoWAI_Bulk.ah.items[1].qty'), '20');
+  assert.ok(vm.num('WoWAI_Bulk.ah.items[1].seen') > 0);
+  assert.equal(vm.evaluate('WoWAI_Bulk.ah.items[2].name'), 'Wool Cloth');
+  assert.equal(vm.evaluate('WoWAI_Bulk.ah.items[2].price'), '900');
+  assert.equal(vm.evaluate('WoWAI_Bulk.ah.items[2].qty'), '4');
+
+  vm.run('WoWAIAHScanFrame.btn.scripts.OnEnter(WoWAIAHScanFrame.btn)');
+  assert.equal(vm.evaluate('GameTooltip.text'), 'Scan for AI');
+  assert.equal(vm.evaluate('GameTooltip.shown'), 'true');
+  vm.run('WoWAIAHScanFrame.btn.scripts.OnLeave(WoWAIAHScanFrame.btn)');
+  assert.equal(vm.evaluate('GameTooltip.shown'), 'false');
+
+  vm.run('SlashCmdList.WOWAI("ah add Linen Cloth")');
+  assert.equal(vm.evaluate('STUB.prints[#STUB.prints]'), 'Search at the auction house, then click Scan for AI: it saves the auctions on screen for the AI.');
 });
 
 test('Scan for AI button sits below the auction house frame, not over its Search button', () => {
