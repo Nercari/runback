@@ -66,7 +66,7 @@ local function Summary(kind)
 		lines[#lines + 1] = "logging=" .. tostring(logging)
 		if kind == "review" then lines[#lines + 1] = "advLogging=" .. tostring(GetCVar and GetCVar("advancedCombatLogging") == "1" or false) end
 	else
-		if kind == "gear" or kind == "build" then
+		if kind == "gear" or kind == "build" or kind == "bags" then
 			lines[#lines + 1] = "gear=" .. Gear()
 		elseif kind == "quest" and quest then
 			lines[#lines + 1] = "questDetail=" .. quest

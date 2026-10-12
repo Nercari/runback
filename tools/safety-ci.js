@@ -94,6 +94,27 @@ const protectedNames = [
   "LearnTalent",
   "PickupMerchantItem",
   "DeleteCursorItem",
+  // Bag and item actions (backlog 62): the addon reads bags to advise; the player sells, drops, moves and equips.
+  // C_Container.PickupContainerItem, C_Item.DeleteItem and the rest are covered by the bare names.
+  "PickupContainerItem",
+  "SplitContainerItem",
+  "SocketContainerItem",
+  "SortBags",
+  "SortBankBags",
+  "SellAllJunkItems",
+  "BuybackItem",
+  "ContainerRefundItemPurchase",
+  "DeleteItem",
+  "ConfirmDeleteItem",
+  "PickupItem",
+  "PickupInventoryItem",
+  "PickupBagFromSlot",
+  "PutItemInBag",
+  "PutItemInBackpack",
+  "EquipCursorItem",
+  "AutoEquipCursorItem",
+  "EquipItemByName",
+  "DropItemOnUnit",
 ];
 // Namespaced actions whose bare member name is too generic to ban everywhere (SelectOption).
 const protectedQualified = [
