@@ -2173,6 +2173,23 @@ end
 -- `followUps`, at most two). A click types the question into the box; the player
 -- presses Enter. A reply without the tag shows no buttons.
 
+-- The player sees plain names on the Allow button, not rule syntax: "Bash(ls:*)" reads
+-- "ls", "mcp__claude_ai_Google_Drive__create_file" reads "Google Drive (create file)",
+-- and any other rule its first word ("Read(//c/x/**)" reads "Read").
+local function AllowName(rule)
+	rule = tostring(rule)
+	local bash = rule:match("^Bash%(([^:]+):%*%)$")
+	if bash then return bash end
+	local server, action = rule:match("^mcp__(.-)__(.+)$")
+	server = server or rule:match("^mcp__(.+)$")
+	if server then
+		server = server:gsub("^claude_ai_", ""):gsub("_", " ")
+		if not action then return server end
+		return server .. " (" .. action:gsub("_", " "):lower() .. ")"
+	end
+	return rule:match("^[%w_%-%.]+") or rule
+end
+
 function WoWAI.Render()
 	local c = ActiveChat()
 	if ui.content and c then
@@ -2207,11 +2224,8 @@ function WoWAI.Render()
 			if not h or h < 1 then h = 14 end
 			local extra = 0
 			if denied then
-				-- "Bash(ls:*)" reads as "ls": the player sees plain names, not rule syntax.
 				local names = {}
-				for _, rule in ipairs(denied) do
-					table.insert(names, rule:match("^Bash%(([^:]+):%*%)$") or rule)
-				end
+				for _, rule in ipairs(denied) do table.insert(names, AllowName(rule)) end
 				local label = "Allow " .. table.concat(names, ", ") .. " & retry"
 				b.allow:SetText(label)
 				b.allow:SetWidth(math.min(width - 24, math.max(160, b.allow:GetFontString():GetStringWidth() + 30)))
@@ -3433,7 +3447,7 @@ SlashCmdList["WOWAI"] = function(msg)
 	local s = db.settings
 	local c = ActiveChat()
 	if cmd == "help" and rest:lower() == "forever" then
-		AddHistory(c, "system", "Forever: review, death, build, gear, bags, quest, brief <what>, drill, practice, recap, level, look <question>, council <question>, phone, guide, off, on")
+		AddHistory(c, "system", "Forever: review, death, build, gear, bags, quest, brief <what>, drill, practice, recap, level, look [question], council <question>, phone, guide, off, on")
 		WoWAI.Render()
 		return
 	end

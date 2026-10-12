@@ -50,6 +50,9 @@ prints the suggested keys and says which are free: Ctrl+Shift+A (window),
 Ctrl+Shift+M (mentor), Ctrl+Shift+R (review), Ctrl+Shift+D (death),
 Ctrl+Shift+L (screen question), Ctrl+Shift+X (AI switch); focus and send have no
 suggestion. `/ai keys` lists the current bindings and repeats the suggestion.
+The screen question fills the box with `/ai look `; type a question or press
+Enter as is to ask "What's on my screen?" about your newest screenshot (take
+one with Print Screen first). `/ai look` typed alone does the same.
 Up/Down recall recent messages in the input; Tab and
 Shift+Tab switch chats.
 
