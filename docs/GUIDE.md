@@ -26,7 +26,7 @@ At most 12 guides are kept in a set. When more arrive, the newest (last) 12 stay
 | `kind` | string | yes | `accept`, `do`, `turnin`, `travel`, `train`, `buy`, `note` | What the player is asked to do. |
 | `text` | string | yes | 200 chars, non-empty after cleaning | The instruction. Plain text only. |
 | `quest` | string | no | 80 chars | Quest name the step is about. |
-| `questId` | integer | no | positive, at most 2147483647 | Quest id, for ticking the step off from the player's quest log (item 68). |
+| `questId` | integer | no | positive, at most 2147483647 | Quest id, for ticking the step off from the player's quest log (item 70). |
 | `points` | array of point | no | at most 8 per step; invalid points are dropped | Where on the map. |
 | `level` | `{ min, max }` | no | each 1 to 70, one bound alone is fine | Show the step only in this level range. |
 | `class` | array of string | no | at most 12 names, 24 chars each, letters, spaces, `'` and `-` | Show the step only to these classes (for example `["Mage","Druid"]`). |
@@ -98,7 +98,7 @@ Same route as map layers (`docs/MAP.md`); nothing new is invented.
 2. **The bridge validates when the run ends.** The file and the blocks go through `validateGuideSet` above; a block is taken out of the text the player reads, valid or not. A guide that does not validate is dropped and never stored (the reason goes to `bridge.log`). The reply gets one plain line: `I saved the guide "<title>".`, `I saved N guides.` or `I could not save that guide.`
 3. **The bridge keeps them in `state.json`** under `guides` as `{ epoch, version, guides }`. A guide with an `id` already held replaces it. At most 12 guides and 1500 steps in all are kept, the oldest dropped first (`GUIDE_STATE_STEPS` in `bridge/guide.js`); this keeps the slot files small. The version goes up only when something changed.
 4. **The slot files carry the whole set** as `guides = { epoch, version, list }` for three minutes after a change (on progress publishes only while it is small), and again after every hello, exactly as the map does. The field names inside each guide and step are the ones in this document. The addon replaces its copy when the version is newer or the epoch is another (the bridge's state was reset), so a guide is never applied twice and a client that lost its saved data gets its guides back on its next hello.
-5. **The addon only stores them.** `addon/WoWAI/Guide.lua` keeps the set in the `WoWAIGuideDB` saved variable and offers `WoWAIGuide.List()`, `Find(id)` and `Version()` for the guide panel (item 69). It shows nothing, prints nothing, reads no game state and calls no game action. The guide panel below reads from it. There is no progress tracking and no map point yet (items 70 and 71).
+5. **The addon only stores them.** `addon/WoWAI/Guide.lua` keeps the set in the `WoWAIGuideDB` saved variable and offers `WoWAIGuide.List()`, `Find(id)` and `Version()` for the guide panel (item 69). It shows nothing, prints nothing, reads no game state and calls no game action. The guide panel below reads from it. The panel ticks steps off from the quest log (item 70); there is no map point yet (item 71).
 
 To remove a guide, send a guide with the same `id`; there is no clear command yet.
 
@@ -106,7 +106,18 @@ To remove a guide, send a guide with the same `id`; there is no clear command ye
 
 `addon/WoWAI/Forever_Guide.lua` (backlog 69) is a small window with the current step of one guide and the next two. It only shows text: every step is still something you do by hand.
 
-- **Previous / Next** move one step. Nothing moves on its own yet (item 70 ticks steps off from the quest log).
+- **Previous / Next** move one step.
+- **Progress from your quest log (item 70).** A step with a `questId` ticks itself off when your own quest log shows it done, and the panel moves on to the next step that is not done:
+
+  | Step kind | Done when |
+  |---|---|
+  | `accept` | The quest is in your log, or already turned in. |
+  | `do` | The quest is complete in your log (every objective finished), or already turned in. |
+  | `turnin` | The game flags the quest completed, or you just turned it in. |
+
+  Other kinds, and steps without a `questId`, are ticked by hand. A step with a `level` filter shows once you reach that level; reaching it does not tick it, because the step still asks you to do something (visit your trainer, take the road). Done steps show `(done)`.
+- **Tick / Untick** marks the current step done or not done by hand, and ticking moves on. Your choice wins over the quest log until that quest's state changes (accepted, objectives complete, turned in, abandoned); then the log decides again. Previous onto a done step stays there.
+- The panel reads the log when a quest is accepted, turned in, removed or updated and when you level up, then once more a second later, because objective data can arrive after the event. It never polls, and it only reads: it never accepts, turns in, abandons, picks a gossip option, targets or moves anything.
 - **Pick guide** (or **Next guide (N)** when there are several) switches to the next stored guide; each guide remembers its own step. A new set opens on the newest guide until you pick one.
 - The **X** hides the window.
 - Steps whose filters (`level`, `class`, `race`, `faction`) do not fit your character are skipped. Text is shown as plain text: a `|` in it shows as `|`, never as a game escape code.
@@ -118,6 +129,7 @@ To remove a guide, send a guide with the same `id`; there is no clear command ye
 | `/wow-ai guide` | Show or hide the panel. |
 | `/wow-ai guide show` / `hide` | Show or hide it. |
 | `/wow-ai guide next` / `prev` | Next or previous step (`back` and `previous` work too). |
+| `/wow-ai guide tick` | Tick or untick the current step, like the **Tick** button. |
 | `/wow-ai guide list` | Print the stored guides with their number and id. |
 | `/wow-ai guide pick <n or id>` | Switch to that guide. |
 
