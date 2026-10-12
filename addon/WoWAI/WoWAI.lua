@@ -594,6 +594,9 @@ function WoWAI.UpdateDot()
 	if not signalAvailable and signalStats.selftest then
 		tip = tip .. "\n(sound-file channel unavailable: " .. signalStats.selftest .. "; using slot checks only)"
 	end
+	-- The chat's folder and the transport (backlog 82): details for the curious,
+	-- kept off the window's footer.
+	if run.detailTip then tip = tip .. "\n" .. run.detailTip end
 	for _, dot in ipairs({ ui.dot, ui.miniDot }) do
 		if dot then
 			dot:SetTexture(STATE_ICON[state] or STATE_ICON.unknown)
@@ -912,6 +915,7 @@ local function Tick()
 	RefreshStrip()
 	WoWAI.UpdateDot()
 	WoWAI.CheckConnection()
+	WoWAI.WatchCombatLog()
 	if db.settings.mode ~= "pixel" then return end
 	local changed = false
 	if run.helloPollAt and now >= run.helloPollAt then
@@ -2020,15 +2024,6 @@ function WoWAI.UpdateStatus()
 	ui.status:SetText(s)
 	WoWAI.UpdateStallButtons(c)
 	run.statusText = s
-	WoWAI.UpdateDot()
-	WoWAI.UpdateConnect()
-	if ui.title then
-		local t = c and Display(c.name) or "WoW AI"
-		local folder = FolderName(ChatFolder(c))
-		if folder ~= "" then t = t .. "  |cff888888" .. Display(folder) .. "|r" end
-		if c and c.agent and c.agent ~= "" then t = t .. "  |cff888888" .. PoolName(c.agent, ChatModel(c)) .. "|r" end
-		ui.title:SetText(t)
-	end
 	local cwdText
 	if c and c.cwd ~= "" then
 		cwdText = Display(c.cwd)
@@ -2041,17 +2036,31 @@ function WoWAI.UpdateStatus()
 	if c and c.agent and c.agent ~= "" then
 		agentText = PoolName(c.agent, ChatModel(c))
 	elseif run.bridgeAgent then
-		agentText = AgentName(run.bridgeAgent) .. " (bridge default)"
+		agentText = AgentName(run.bridgeAgent)
 	else
-		agentText = "(bridge default)"
+		agentText = "default"
 	end
-	ui.cwd:SetText("cwd: " .. cwdText .. "   agent: " .. agentText .. "   mode: " .. mode)
+	-- Footer: the agent's name only. Folder and mode go to the light's tooltip (backlog 82).
+	run.detailTip = "cwd: " .. cwdText .. "\nmode: " .. mode
+	ui.cwd:SetText("Agent: " .. agentText)
+	WoWAI.UpdateDot()
+	WoWAI.UpdateConnect()
+	if ui.title then
+		local t = c and Display(c.name) or "WoW AI"
+		local folder = FolderName(ChatFolder(c))
+		if folder ~= "" then t = t .. "  |cff888888" .. Display(folder) .. "|r" end
+		if c and c.agent and c.agent ~= "" then t = t .. "  |cff888888" .. PoolName(c.agent, ChatModel(c)) .. "|r" end
+		ui.title:SetText(t)
+	end
 	if ui.pool then ui.pool:SetText("AI: " .. ((c and c.agent and c.agent ~= "") and PoolName(c.agent, ChatModel(c)) or (run.bridgeAgent and AgentName(run.bridgeAgent) or "default"))) end
-	if ui.resend then ui.resend:SetShown(c and c.pendingId ~= nil and mode == "pixel") end
+	-- Reload and Resend share one place on the bottom row (backlog 82): when a
+	-- reload is the way forward, Reload (or Get reply) shows and Resend does not.
+	local reloadShown = mode ~= "pixel" or run.slotsExhausted or run.slotsMissing or run.pixelFailed or false
 	if ui.refresh then
 		ui.refresh:SetText((mode == "pixel" and run.slotsExhausted and c and c.pendingId) and "Get reply" or "Reload")
-		ui.refresh:SetShown(mode ~= "pixel" or run.slotsExhausted or run.slotsMissing or run.pixelFailed or false)
+		ui.refresh:SetShown(reloadShown)
 	end
+	if ui.resend then ui.resend:SetShown(c and c.pendingId ~= nil and mode == "pixel" and not reloadShown) end
 	WoWAI.UpdateLogButton()
 	WoWAI.UpdateMini()
 end
@@ -3041,10 +3050,9 @@ local function BuildUI()
 	connect:Hide()
 	ui.connect = connect
 
-	-- Reload is the fallback transport's button; it sits apart on the right and
-	-- only shows when a reload would do something (see UpdateStatus).
+	-- Reload is the fallback transport's button; it only shows when a reload
+	-- would do something (see UpdateStatus), in Resend's place on the bottom row.
 	local refresh = MakeButton(f, "Reload", 70, function() SafeReload() end)
-	refresh:SetPoint("BOTTOMRIGHT", f, "BOTTOMRIGHT", -24, 26)
 	refresh:Hide()
 	ui.refresh = refresh
 
@@ -3142,6 +3150,8 @@ local function BuildUI()
 	resend:SetPoint("LEFT", logBtn, "RIGHT", 6, 0)
 	resend:Hide()
 	ui.resend = resend
+	-- Same place as Resend; UpdateStatus never shows both (backlog 82).
+	refresh:SetPoint("LEFT", logBtn, "RIGHT", 6, 0)
 
 	-- A named, always-present button so a keybinding can click it (see /wow-ai bind).
 	local hotkey = CreateFrame("Button", "WoWAIRefreshButton", UIParent)
@@ -3269,10 +3279,42 @@ end
 function WoWAI.SetCombatLog(on)
 	if InCombatLockdown() or type(LoggingCombat) ~= "function" then return false end
 	LoggingCombat(on)
+	WoWAI.WatchCombatLog(true)
 	if on then WoWAI.unloggedFight = false end
 	WoWAI.UpdateLogButton()
 	WoWAI.UpdateMini()
 	return true
+end
+
+-- Combat log watch (backlog 83): the button once read "off" for a moment with no
+-- click. Each change of LoggingCombat() is kept with its time (the last
+-- LOG_CHANGES_KEPT, shown by /wow-ai diag), and a switch to off that was not the
+-- player's click says so once in chat. Read-only: this only reads LoggingCombat().
+-- Runs on the existing 2 s tick and on each button refresh, no polling of its own.
+local LOG_CHANGES_KEPT = 10
+local logWatch = { changes = {} }
+function WoWAI.WatchCombatLog(clicked)
+	if type(LoggingCombat) ~= "function" then return end
+	local now = LoggingCombat() and true or false
+	if logWatch.last == nil then logWatch.last = now return end
+	if now == logWatch.last then return end
+	logWatch.last = now
+	local at = date("%H:%M:%S")
+	table.insert(logWatch.changes, { at = at, on = now, clicked = clicked and true or false })
+	while #logWatch.changes > LOG_CHANGES_KEPT do table.remove(logWatch.changes, 1) end
+	if not now and not clicked then
+		print("|cff7ec8ff[WoW AI]|r The combat log turned off at " .. at .. " without a click on the Combat log button. "
+			.. "Something else switched it (another addon, a /combatlog command, or the game). /wow-ai diag lists each change.")
+	end
+end
+
+-- One line per recorded change for /wow-ai diag, oldest first.
+function WoWAI.CombatLogChanges()
+	local out = {}
+	for _, ch in ipairs(logWatch.changes) do
+		out[#out + 1] = ch.at .. " " .. (ch.on and "on" or "off") .. (ch.clicked and " (your click)" or " (no click)")
+	end
+	return out
 end
 
 -- A click on [turn on combat log] (Forever_CombatLog.lua prints it).
@@ -3288,6 +3330,7 @@ function WoWAI.UpdateLogButton()
 	local b = ui.logBtn
 	if not b then return end
 	local known = type(LoggingCombat) == "function"
+	WoWAI.WatchCombatLog()
 	b:SetText("Combat log: " .. (known and (LoggingCombat() and "on" or "off") or "?"))
 	if known and not InCombatLockdown() then b:Enable() else b:Disable() end
 end
@@ -3595,6 +3638,9 @@ SlashCmdList["WOWAI"] = function(msg)
 			select(5, WoWAI.BridgeState()),
 			"mode: " .. s.mode .. ", session token: " .. tostring(db.session),
 		}
+		local logChanges = WoWAI.CombatLogChanges()
+		table.insert(lines, "combat log now: " .. (type(LoggingCombat) == "function" and (LoggingCombat() and "on" or "off") or "?")
+			.. ", changes this session: " .. (#logChanges == 0 and "none" or table.concat(logChanges, "; ")))
 		for _, ch in ipairs(db.chats) do
 			local a = run.act and run.act[ch.id]
 			if ch.pendingId then

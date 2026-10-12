@@ -511,7 +511,7 @@ test('a chat can pick its agent: the strip says so, replies are labelled by thei
   vm.run('STUB.now = STUB.now + 6; STUB.Tick()');
   assert.equal(vm.evaluate('WoWAI.IsConnected()'), 'true');
   const texts = () => vm.evaluate('table.concat(STUB.texts, "|")');
-  assert.ok(texts().includes('agent: Claude (bridge default)'), 'the cwd line names the bridge default');
+  assert.ok(texts().includes('Agent: Claude'), 'the footer names the bridge default agent');
   // Without an agent of its own the chat sends no agent flag, and the reply is labelled Claude.
   vm.run('WoWAI.Send("hello")');
   const chatId = vm.evaluate('WoWAIDB.chats[1].id');
@@ -533,7 +533,7 @@ test('a chat can pick its agent: the strip says so, replies are labelled by thei
   rec = stripRecords(vm).find(r => r.text === 'now with codex');
   assert.equal(rec.flags, 'agent=codex');
   assert.equal(vm.evaluate('WoWAIDB.outbox.agent'), 'codex');
-  assert.ok(texts().includes('agent: Codex   mode: pixel'));
+  assert.ok(texts().split('|').includes('Agent: Codex'), 'the footer names the chat\'s agent');
   const id2 = vm.num('WoWAIDB.chats[1].pendingId');
   vm.run('WoWAI.Toggle(false)');
   nextSlot(vm, slot(`{ chat = "${chatId}", id = ${id2}, status = "done", text = "codex here", agent = "codex" }`));
