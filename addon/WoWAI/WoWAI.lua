@@ -1622,6 +1622,13 @@ function WoWAI.AskClaude(c)
 	WoWAI.Send(text)
 end
 
+-- Exactly these, any case, trailing . ! ? allowed; "look at the boss in Deadmines" stays a message.
+local LONE_LOOK = { ["look"] = true, ["look at this"] = true, ["look at my screen"] = true }
+local function IsLoneLook(text)
+	local s = Trim(text):lower():gsub("[%.!%?]+$", ""):gsub("%s+", " ")
+	return LONE_LOOK[s] == true
+end
+
 function WoWAI.SendFromInput()
 	if not ui.input then return end
 	WindowUsed()
@@ -1630,6 +1637,8 @@ function WoWAI.SendFromInput()
 	ui.input:ClearFocus() -- hand the keyboard back to the game after sending
 	-- A lone "review" typed in the box is the review command, not a plain message.
 	if Trim(text):lower():match("^review[%.!]*$") then return SlashCmdList["WOWAI"]("review") end
+	-- So is a lone "look" (backlog 84): the player pressed Print Screen and typed "look!".
+	if IsLoneLook(text) then return SlashCmdList["WOWAI"]("look") end
 	-- A line starting with "/" is a command: it runs here or is called unknown,
 	-- and never reaches the agent (backlog 55).
 	if Trim(text):sub(1, 1) == "/" then return WoWAI.BoxCommand(text) end
@@ -1638,7 +1647,7 @@ end
 
 -- The commands the box understands. Each maps onto the addon's own logic (the
 -- AI picker's model switch, new chat, review); none runs a game command.
-local BOX_HELP = "The box understands: /model [name] (this chat's model), /agent [name [model]] (which AI), /new [name] (new chat), /review (review your last fight), /help. Anything else starting with / is not sent; type it in the game chat instead, or drop the / to ask the agent."
+local BOX_HELP = "The box understands: /model [name] (this chat's model), /agent [name [model]] (which AI), /new [name] (new chat), /review (review your last fight), /look [question] (ask about your newest screenshot: press Print Screen first), /help. Anything else starting with / is not sent; type it in the game chat instead, or drop the / to ask the agent."
 
 function WoWAI.BoxCommand(text)
 	local c = ActiveChat()
@@ -1653,6 +1662,8 @@ function WoWAI.BoxCommand(text)
 		WoWAI.NewChat(rest)
 	elseif word == "review" and rest == "" then
 		return SlashCmdList["WOWAI"]("review")
+	elseif word == "look" then
+		return SlashCmdList["WOWAI"](rest == "" and "look" or "look " .. rest)
 	elseif word == "help" and rest == "" then
 		AddHistory(c, "system", BOX_HELP)
 		WoWAI.Render()

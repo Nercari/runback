@@ -1,6 +1,7 @@
 'use strict';
 const fs = require('fs');
 const path = require('path');
+const A = require('../../agents');
 function latest(dir) {
   try { return fs.readdirSync(dir).filter(f => /\.(png|jpg|tga)$/i.test(f)).map(f => path.join(dir, f))
     .map(file => ({ file, mtime: fs.statSync(file).mtimeMs })).sort((a, b) => b.mtime - a.mtime)[0]?.file || ''; } catch { return ''; }
@@ -25,7 +26,11 @@ module.exports = {
   intercept(job, ctx) {
     if (job.cmd !== 'look') return false;
     const agent = job.agent || (ctx.state.chatAgents && ctx.state.chatAgents[job.chat]) || ctx.cfg.agent;
-    if (agent === 'agy') { ctx.finish(job, 'error', 'Antigravity chats can\'t take images yet; switch this chat to claude, codex or hermes.'); return true; }
+    const known = A.AGENTS[A.normalizeAgent(agent)];
+    if (known && !known.takesImages) {
+      ctx.finish(job, 'error', `${known.name} can't see screenshots. To ask about your screen, pick ${A.imageAgentNames()} with the AI button, then press Print Screen and type look.`);
+      return true;
+    }
     this.newest = latest(this.dir);
     // Only a screenshot taken for this question; an old one may show something unrelated.
     let fresh = false;
