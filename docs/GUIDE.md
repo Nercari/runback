@@ -35,10 +35,14 @@ At most 12 guides are kept in a set. When more arrive, the newest (last) 12 stay
 | `optional` | boolean | no | only `true` is kept | The player may skip it. |
 | `sticky` | boolean | no | only `true` is kept | Stays shown until done, even when later steps come up. |
 | `completewith` | integer | no | position of a later step | Closes this step when that step is reached. |
+| `requires` | array of integer | no | at most 12 quest ids, positive, no repeats | Show the step only once every listed quest is turned in (prerequisites). A quest chain is `requires` with the previous quest of the chain. |
+| `exclusive` | array of integer | no | same as `requires` | Close the step once any listed quest is turned in (quests that rule each other out). |
+| `rep` | `{ faction, standing }` | no | `faction` a faction id 1 to 99999; `standing` 1 (Hated) to 8 (Exalted), or the name (`"Friendly"`), clamped | Show the step only at this reputation or better. An invalid `rep` is dropped with a reason. |
+| `profession` | `{ name, skill }` | no | `name` as `class` (24 chars, letters); `skill` 1 to 450, 1 when not given | Show the step only with this profession at this rank or higher. An invalid `profession` is dropped with a reason. |
 
 `completewith` is the 1-based position of a **later** step in the `steps` list as written. A value that is not later, is past the end, or points at a step that was dropped as invalid is removed (with a reason). After cleaning, the stored value is the target's position in the cleaned list.
 
-Filters (`level`, `class`, `race`, `faction`) say who sees a step; a step without them is for everyone. Matching is the job of the panel (item 69), not of this module.
+Filters (`level`, `class`, `race`, `faction`) and availability rules (`requires`, `exclusive`, `rep`, `profession`) say who sees a step; a step without them is for everyone. Matching is the job of the panel (items 69 and 76), not of this module.
 
 ## Point
 
@@ -122,7 +126,20 @@ To remove a guide, send a guide with the same `id`; there is no clear command ye
 - **Re-plan** in the header (item 73) puts a request in the same box and opens the chat window: "Re-plan my leveling guide from here: I skipped steps or took another route", the current guide, its current step and how many steps are done. With no guide it asks for a new one instead. Level, zone and quest log are not repeated: every message already carries them in the game context. The mentor (rule 13) skips what the log shows done and writes the new chunk under a **new `id`**, so the old guide stays and nothing is replaced behind your back; choose the new one with **Pick guide**. Nothing is sent by itself and the button does nothing in a fight.
 - **Pick guide** (or **Next guide (N)** when there are several) switches to the next stored guide; each guide remembers its own step. A new set opens on the newest guide until you pick one.
 - The **X** hides the window.
-- Steps whose filters (`level`, `class`, `race`, `faction`) do not fit your character are skipped. Text is shown as plain text: a `|` in it shows as `|`, never as a game escape code.
+- **The guide fits your log (item 76).** When the panel loads and after every quest event it skips steps that are done and steps you cannot take. Next passes over done steps, and the two rows under the current step show the next steps that are not done. A step you cannot take is left out until that changes:
+
+  | Rule | The step is left out while |
+  |---|---|
+  | `level`, `class`, `race`, `faction` | Your character does not fit. |
+  | `requires` | A listed quest is not turned in. |
+  | `exclusive` | A listed quest is turned in. |
+  | `rep` | Your standing with that faction is lower (`GetFactionInfoByID`, or `C_Reputation.GetFactionDataByID` where the client has it). |
+  | `profession` | Your rank is lower, or you do not have it (`GetProfessions` / `GetProfessionInfo`, else the skill lines `GetSkillLineInfo`). |
+
+  The rules apply only while the step's own quest is neither in your log nor turned in. **Unknown never hides a step:** a missing API, a call that fails, an answer that is not a plain yes or no, a faction the client does not know or a collapsed skill header all count as "can take it". A step that becomes available behind the current one is not pulled back; Previous reaches it.
+- **XP pace (item 76).** Under the steps one line says `About N min to level, from your last M minutes`, from the game's own `UnitXP` and `UnitXPMax`, read on `PLAYER_XP_UPDATE`. It shows once there are five minutes of readings from the last ten and some XP was gained in them, and counts XP across a level up. It hides with the panel in a fight.
+- **Time per level (item 76).** The addon counts the minutes you play at each level (between XP, level-up and logout events, so also on `/reload`) and when you reached it, per character, in `WoWAIGuideDB.levels["Name-Realm"][level] = { at, sec }`. A session recap (`/ai recap`, item 40) carries `levelMinutes=24:38,25:12`: minutes at each of the last five levels the addon saw you reach, the last one still counting. A level reached before this version is not listed.
+- Text is shown as plain text: a `|` in it shows as `|`, never as a game escape code. Text is shown as plain text: a `|` in it shows as `|`, never as a game escape code.
 - **In combat, during an encounter or a challenge run the window hides**, and it comes back when the fight ends, like the chat window (item 31). Guide commands typed mid-fight only print "The guide shows when the fight ends."
 - The window can be dragged. Its position, whether it is open, the chosen guide and the step in each guide are kept in `WoWAIGuideDB.panel`.
 

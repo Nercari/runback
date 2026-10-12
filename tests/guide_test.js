@@ -111,6 +111,44 @@ test('level, class, race and faction filters', () => {
   assert.equal(G.validateGuide(guide([note('x', { class: many })])).steps[0].class.length, 12);
 });
 
+test('requires and exclusive: quest id lists, deduplicated, capped at 12, junk dropped', () => {
+  const s = G.validateGuide(guide([note('x', { requires: [101, 101, 0, -3, 1.5, '102', 2 ** 31, 102], exclusive: [7, null, { id: 8 }] })])).steps[0];
+  assert.deepEqual(s.requires, [101, 102]);
+  assert.deepEqual(s.exclusive, [7]);
+  const many = Array.from({ length: 40 }, (_, i) => i + 1);
+  assert.equal(G.validateGuide(guide([note('x', { requires: many })])).steps[0].requires.length, 12);
+  for (const bad of [101, 'x', {}, [], [0, 'a'], { __proto__: [1] }]) {
+    const t = G.validateGuide(guide([note('x', { requires: bad, exclusive: bad })])).steps[0];
+    assert.equal(t.requires, undefined, JSON.stringify(bad));
+    assert.equal(t.exclusive, undefined, JSON.stringify(bad));
+  }
+});
+
+test('rep: faction id and a standing written as a number or a name, clamped to 1..8', () => {
+  const rep = v => G.validateGuide(guide([note('x', { rep: v })])).steps[0].rep;
+  assert.deepEqual(rep({ faction: 72, standing: 5 }), { faction: 72, standing: 5 });
+  assert.deepEqual(rep({ faction: 72, standing: ' Honored ' }), { faction: 72, standing: 6 });
+  assert.deepEqual(rep({ faction: 72, standing: 99, extra: '|cff' }), { faction: 72, standing: 8 });
+  assert.deepEqual(rep({ faction: 72, standing: -4 }), { faction: 72, standing: 1 });
+  const why = [];
+  for (const bad of [{ faction: 'Stormwind', standing: 5 }, { faction: 0, standing: 5 }, { faction: 100000, standing: 5 },
+    { faction: 72 }, { faction: 72, standing: 'Best friends' }, { faction: 72, standing: NaN }, 'Exalted', [72, 5]]) {
+    assert.equal(G.validateGuide(guide([note('x', { rep: bad })]), why).steps[0].rep, undefined, JSON.stringify(bad));
+  }
+  assert.match(why[0], /step 1: dropped invalid rep/);
+});
+
+test('profession: a name and the rank needed, 1 when not given, clamped to 1..450', () => {
+  const prof = v => G.validateGuide(guide([note('x', { profession: v })])).steps[0].profession;
+  assert.deepEqual(prof({ name: 'First Aid', skill: 40 }), { name: 'First Aid', skill: 40 });
+  assert.deepEqual(prof({ name: 'Herbalism' }), { name: 'Herbalism', skill: 1 });
+  assert.deepEqual(prof({ name: 'Mining', skill: 9000 }), { name: 'Mining', skill: 450 });
+  assert.deepEqual(prof({ name: 'Mining', skill: 0.2 }), { name: 'Mining', skill: 1 });
+  for (const bad of [{ name: '|cffff0000Mining' }, { name: '' }, { name: 5 }, { name: 'Mining2' }, 'Mining', null]) {
+    assert.equal(prof(bad), undefined, JSON.stringify(bad));
+  }
+});
+
 test('flags are true or absent; completewith points at a later step', () => {
   const g = G.validateGuide(guide([
     note('a', { optional: true, sticky: 1, completewith: 3 }),
