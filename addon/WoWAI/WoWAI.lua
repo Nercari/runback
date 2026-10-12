@@ -1622,6 +1622,13 @@ function WoWAI.AskClaude(c)
 	WoWAI.Send(text)
 end
 
+-- Exactly these, any case, trailing . ! ? allowed; "look at the boss in Deadmines" stays a message.
+local LONE_LOOK = { ["look"] = true, ["look at this"] = true, ["look at my screen"] = true }
+local function IsLoneLook(text)
+	local s = Trim(text):lower():gsub("[%.!%?]+$", ""):gsub("%s+", " ")
+	return LONE_LOOK[s] == true
+end
+
 function WoWAI.SendFromInput()
 	if not ui.input then return end
 	WindowUsed()
@@ -1630,6 +1637,8 @@ function WoWAI.SendFromInput()
 	ui.input:ClearFocus() -- hand the keyboard back to the game after sending
 	-- A lone "review" typed in the box is the review command, not a plain message.
 	if Trim(text):lower():match("^review[%.!]*$") then return SlashCmdList["WOWAI"]("review") end
+	-- So is a lone "look" (backlog 84): the player pressed Print Screen and typed "look!".
+	if IsLoneLook(text) then return SlashCmdList["WOWAI"]("look") end
 	-- A line starting with "/" is a command: it runs here or is called unknown,
 	-- and never reaches the agent (backlog 55).
 	if Trim(text):sub(1, 1) == "/" then return WoWAI.BoxCommand(text) end
@@ -1638,7 +1647,7 @@ end
 
 -- The commands the box understands. Each maps onto the addon's own logic (the
 -- AI picker's model switch, new chat, review); none runs a game command.
-local BOX_HELP = "The box understands: /model [name] (this chat's model), /agent [name [model]] (which AI), /new [name] (new chat), /review (review your last fight), /help. Anything else starting with / is not sent; type it in the game chat instead, or drop the / to ask the agent."
+local BOX_HELP = "The box understands: /model [name] (this chat's model), /agent [name [model]] (which AI), /new [name] (new chat), /review (review your last fight), /look [question] (ask about your newest screenshot: press Print Screen first), /help. Anything else starting with / is not sent; type it in the game chat instead, or drop the / to ask the agent."
 
 function WoWAI.BoxCommand(text)
 	local c = ActiveChat()
@@ -1653,6 +1662,8 @@ function WoWAI.BoxCommand(text)
 		WoWAI.NewChat(rest)
 	elseif word == "review" and rest == "" then
 		return SlashCmdList["WOWAI"]("review")
+	elseif word == "look" then
+		return SlashCmdList["WOWAI"](rest == "" and "look" or "look " .. rest)
 	elseif word == "help" and rest == "" then
 		AddHistory(c, "system", BOX_HELP)
 		WoWAI.Render()
@@ -2213,6 +2224,23 @@ end
 -- `followUps`, at most two). A click types the question into the box; the player
 -- presses Enter. A reply without the tag shows no buttons.
 
+-- The player sees plain names on the Allow button, not rule syntax: "Bash(ls:*)" reads
+-- "ls", "mcp__claude_ai_Google_Drive__create_file" reads "Google Drive (create file)",
+-- and any other rule its first word ("Read(//c/x/**)" reads "Read").
+local function AllowName(rule)
+	rule = tostring(rule)
+	local bash = rule:match("^Bash%(([^:]+):%*%)$")
+	if bash then return bash end
+	local server, action = rule:match("^mcp__(.-)__(.+)$")
+	server = server or rule:match("^mcp__(.+)$")
+	if server then
+		server = server:gsub("^claude_ai_", ""):gsub("_", " ")
+		if not action then return server end
+		return server .. " (" .. action:gsub("_", " "):lower() .. ")"
+	end
+	return rule:match("^[%w_%-%.]+") or rule
+end
+
 function WoWAI.Render()
 	local c = ActiveChat()
 	if ui.content and c then
@@ -2247,11 +2275,8 @@ function WoWAI.Render()
 			if not h or h < 1 then h = 14 end
 			local extra = 0
 			if denied then
-				-- "Bash(ls:*)" reads as "ls": the player sees plain names, not rule syntax.
 				local names = {}
-				for _, rule in ipairs(denied) do
-					table.insert(names, rule:match("^Bash%(([^:]+):%*%)$") or rule)
-				end
+				for _, rule in ipairs(denied) do table.insert(names, AllowName(rule)) end
 				local label = "Allow " .. table.concat(names, ", ") .. " & retry"
 				b.allow:SetText(label)
 				b.allow:SetWidth(math.min(width - 24, math.max(160, b.allow:GetFontString():GetStringWidth() + 30)))
@@ -3507,7 +3532,7 @@ SlashCmdList["WOWAI"] = function(msg)
 	local s = db.settings
 	local c = ActiveChat()
 	if cmd == "help" and rest:lower() == "forever" then
-		AddHistory(c, "system", "Forever: review, death, build, gear, bags, quest, brief <what>, drill, practice, recap, level, look <question>, council <question>, phone, guide, off, on")
+		AddHistory(c, "system", "Forever: review, death, build, gear, bags, quest, brief <what>, drill, practice, recap, level, look [question], council <question>, phone, guide, off, on")
 		WoWAI.Render()
 		return
 	end

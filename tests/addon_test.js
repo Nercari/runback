@@ -419,6 +419,21 @@ test('a denied reply shows Allow, and Allow resends with the rules as flags', ()
   assert.equal(rec.id, id + 1);
 });
 
+test('the Allow button names tools plainly, connector tools included (backlog 81)', () => {
+  const vm = newVM();
+  login(vm);
+  connect(vm);
+  vm.run('WoWAI.Toggle(true); WoWAI.Send("save it to my drive")');
+  const chatId = vm.evaluate('WoWAIDB.chats[1].id');
+  const id = vm.num('WoWAIDB.chats[1].pendingId');
+  const denied = '{ "PowerShell", "Bash(node:*)", "mcp__claude_ai_Google_Drive__create_file", "mcp__playwright__Browser_Click", "Read(//c/Users/x/**)" }';
+  nextSlot(vm, `{ now = time(), cwd = "", replies = { { chat = "${chatId}", id = ${id}, status = "done", text = "need permission", denied = ${denied} } } }`);
+  vm.run('STUB.texts = {}; STUB.now = STUB.now + 6; STUB.Tick(); WoWAI.Render()');
+  const texts = vm.evaluate('table.concat(STUB.texts, "|")').split('|');
+  assert.ok(texts.includes('Allow PowerShell, node, Google Drive (create file), playwright (browser click), Read & retry'),
+    texts.filter(t => t.startsWith('Allow')).join(' / ') || 'no Allow label');
+});
+
 test('the window opens at the top centre on a fresh install and where it was left afterwards', () => {
   let vm = newVM();
   login(vm);

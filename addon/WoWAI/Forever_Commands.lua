@@ -6,6 +6,7 @@ local defaults = {
 	practice = "Compare my last two target-dummy sessions.",
 	recap = "Give me a short recap of this session.",
 	bags = "What can I sell or drop?",
+	look = "What's on my screen?",
 }
 
 local function TargetChat()
@@ -33,7 +34,7 @@ local commands = { "review", "death", "build", "gear", "quest", "brief", "drill"
 local handlers = {}
 for _, cmd in ipairs(commands) do
 	handlers[cmd] = function(rest)
-		if (cmd == "look" or cmd == "council" or cmd == "brief") and rest == "" then
+		if (cmd == "council" or cmd == "brief") and rest == "" then
 			print("Usage: /ai " .. cmd .. " <text>")
 			return
 		end

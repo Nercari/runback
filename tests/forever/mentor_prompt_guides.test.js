@@ -31,3 +31,9 @@ test('the mentor never copies a licensed guide and never writes automation or co
     'accepts, turns in, clicks gossip, targets or travels for the player', 'No guide text during combat', 'rule 1']) assert.ok(rule.includes(word), word);
   assert.ok(/^9\. \*\*No scripts to paste\.\*\*/m.test(fs.readFileSync(path.join(__dirname, '..', '..', 'mentor', 'AGENTS.md'), 'utf8')), 'rule 9 is still the no-scripts rule');
 });
+
+test('a re-plan starts from the current step and log and goes under a new id', () => {
+  const rule = hardRule('**Leveling guides.**');
+  for (const word of ['**A re-plan**', 'Re-plan button', 'current step and the quest log', 'skip what the log shows done',
+    'under a new `id`', 'Pick guide']) assert.ok(rule.includes(word), word);
+});
