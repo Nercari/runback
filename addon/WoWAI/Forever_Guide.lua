@@ -6,7 +6,8 @@
 -- challenge run) and comes back after, like the chat window (Forever_Calm.lua).
 -- A step ticks itself off when the quest log shows it done (backlog 70), or by
 -- hand with the Tick button. A Why? button by each step puts a question about it
--- in the chat box (backlog 75); the player sends it.
+-- in the chat box (backlog 75); the player sends it. The Re-plan button does the
+-- same with a request for a new guide from the player's current point (backlog 73).
 -- State lives in WoWAIGuideDB.panel = { shown, guide = id, step = { [id] = n }, pos,
 -- ticks = { [id] = { [n] = { done, at } } } }.
 local M = {}
@@ -245,6 +246,30 @@ function M.Explain(i)
 	WoWAI.AskInBox(c.id, M.Question(step))
 end
 
+-- Re-plan from here (backlog 73): level, zone and quest log already travel with every
+-- message (the game context), so the question adds only the guide, its current step
+-- and how many steps are done. With no guide it asks for a new one.
+function M.ReplanQuestion()
+	local g = Current()
+	local text = "Re-plan my leveling guide from here: I skipped steps or took another route. Use my level, zone and quest log from the game context and write a new guide for what comes next, under a new id."
+	if not g then return "Make me a leveling guide from here. Use my level, zone and quest log from the game context." end
+	local order = M.Order(g, Who())
+	local state, done = M.Snapshot(), 0
+	for _, i in ipairs(order) do if IsDone(g, i, state) then done = done + 1 end end
+	text = text .. " Current guide: \"" .. Clean(g.title or g.id) .. "\" (" .. Clean(g.id) .. ")."
+	local cur = g.steps[order[Place(order, Panel().step[g.id])] or 0]
+	if cur then text = text .. " Current step: \"" .. (KIND[cur.kind] or "Step") .. ": " .. Clean(cur.text) .. "\"." end
+	return text .. " Steps done: " .. done .. " of " .. #order .. "."
+end
+
+-- Out of combat only, it types the request in the box and sends nothing.
+function M.Replan()
+	if Locked() then return end
+	local c = WoWAI and WoWAI.internal and WoWAI.internal.ActiveChat()
+	if not (c and WoWAI.AskInBox) then return end
+	WoWAI.AskInBox(c.id, M.ReplanQuestion())
+end
+
 -- Frame ----------------------------------------------------------------------
 
 local frame, rows, asks, header, picker
@@ -280,7 +305,7 @@ local function Build()
 	end
 	header = f:CreateFontString(nil, "OVERLAY", "GameFontNormal")
 	header:SetPoint("TOPLEFT", f, "TOPLEFT", 10, -9)
-	header:SetPoint("RIGHT", f, "RIGHT", -28, 0)
+	header:SetPoint("RIGHT", f, "RIGHT", -100, 0)
 	header:SetJustifyH("LEFT")
 	rows = {}
 	for i = 1, SHOWN_STEPS do
@@ -314,6 +339,11 @@ local function Build()
 	f.prev = Btn("Previous", 72, 8, function() M.Step(-1) end)
 	f.next = Btn("Next", 60, 82, function() M.Step(1) end)
 	f.tick = Btn("Tick", 64, 144, function() M.Tick() end)
+	local replan = CreateFrame("Button", nil, f, "UIPanelButtonTemplate")
+	replan:SetSize(66, 18)
+	replan:SetPoint("TOPRIGHT", f, "TOPRIGHT", -30, -6)
+	replan:SetText("Re-plan")
+	replan:SetScript("OnClick", function() M.Replan() end)
 	picker = Btn("Pick guide", 140, 210, function() M.Cycle() end)
 	f:Hide()
 	frame = f

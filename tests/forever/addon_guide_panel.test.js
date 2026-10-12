@@ -192,3 +192,36 @@ test('Why? button: does nothing in combat, and strips quotes and escape codes fr
   assert.equal(v.get('WoWAIGuidePanel.Question({ kind = "note", text = "Say \\"hi\\" |cffff0000now|r", quest = "A\\nB" })'),
     'Why this step, and what do I need? Guide step: "Note: Say hi cffff0000nowr" Quest: "AB".');
 });
+
+// Re-plan from here (backlog 73): one header button, created before the picker.
+const replan = 'WoWAIGuideFrame.children[#WoWAIGuideFrame.children - 1]';
+
+test('Re-plan button: types the request with the guide, current step and done count, sends nothing', () => {
+  const v = vm();
+  seed(v);
+  v.run('SlashCmdList.WOWAI("guide show"); SlashCmdList.WOWAI("guide pick b")');
+  assert.equal(v.get(`${replan}:GetText()`), 'Re-plan');
+  v.run(`${replan}.scripts.OnClick(${replan})`);
+  assert.equal(v.get('WoWAIFrame.shown'), 'true', 'the chat window opens');
+  assert.ok(typed(v).includes('Re-plan my leveling guide from here: I skipped steps or took another route. Use my level, zone and quest log from the game context and write a new guide for what comes next, under a new id. Current guide: "Guide B" (b). Current step: "Accept: Talk to the officer.". Steps done: 0 of 2.'));
+  assert.equal(v.get('WoWAIDB.chats[1].pendingId'), 'nil', 'the player still has to press Enter');
+  // After a step is ticked by hand the question moves on and counts it.
+  v.run('SlashCmdList.WOWAI("guide tick"); STUB.texts = {}');
+  v.run(`${replan}.scripts.OnClick(${replan})`);
+  assert.ok(typed(v).includes('Current step: "Turn in: b2". Steps done: 1 of 2.'));
+});
+
+test('Re-plan button: does nothing in combat, asks for a new guide when none is loaded, strips escape codes', () => {
+  const v = vm();
+  seed(v);
+  v.run('SlashCmdList.WOWAI("guide show")');
+  v.run(`STUB.combat = true; STUB.FireEvent("PLAYER_REGEN_DISABLED"); STUB.texts = {}; ${replan}.scripts.OnClick(${replan})`);
+  assert.equal(typed(v).includes('Re-plan'), false, 'nothing typed in combat');
+  assert.equal(v.get('WoWAIDB.chats[1].pendingId'), 'nil');
+  v.run('STUB.combat = false; STUB.FireEvent("PLAYER_REGEN_ENABLED")');
+  v.run('WoWAIGuide.Sync({ epoch = 3, version = 1, list = {} })');
+  v.run(`${replan}.scripts.OnClick(${replan})`);
+  assert.ok(typed(v).includes('Make me a leveling guide from here. Use my level, zone and quest log from the game context.'));
+  v.run('WoWAIGuide.Sync({ epoch = 2, version = 1, list = { { id = "x|y", title = "Say \\"hi\\" |cffff0000now|r", steps = { { kind = "note", text = "Go" } } } } })');
+  assert.ok(v.get('WoWAIGuidePanel.ReplanQuestion()').includes('Current guide: "Say hi cffff0000nowr" (xy).'));
+});
