@@ -38,6 +38,21 @@ npm test                  -> exit 0
 >>> CODEC ROUND-TRIP PASS
 ```
 
+## Output (2026-10-12, `forever` 7f46990 plus branch `claude/project-thread-2fgwx6`, backlog 78 fewer slots per reply, Linux)
+
+```
+npm ci                    -> exit 0
+node tools/safety-ci.js   -> exit 0
+npm test                  -> exit 0
+>>> ORDER PASS
+# slot budget (sound channel unusable): {"login":1,"short":5,"idle1":0,"long":11,"idle2":0,"total":17,"perReply":8.5} baseline {"total":38,"perReply":19}
+# tests 546
+# pass 543
+# fail 0
+# skipped 3
+>>> CODEC ROUND-TRIP PASS
+```
+
 ## Output (2026-10-12, `forever` afeb62f plus branch `claude/project-thread-z0ud4i`, backlog 70 quest-log progress, Linux)
 
 ```
