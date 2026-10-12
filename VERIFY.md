@@ -10,15 +10,29 @@ Merge evidence for wow-ai. Run these from the repo root and paste their real out
 
 In-game behavior cannot be verified by an agent. Only Pedro can run the game; a PR that changes the addon gives him a short checklist and says the in-game part is unverified.
 
-## Output (2026-10-12, `forever` cca0a5d plus branch `claude/project-thread-5se70i`, backlog 71 guide step on the map, Linux)
+## Output (2026-10-12, `forever` 7f46990 plus branch `claude/project-thread-5se70i`, backlog 71 guide step on the map, Linux)
 
 ```
 npm ci                    -> exit 0
 node tools/safety-ci.js   -> exit 0
 npm test                  -> exit 0
 >>> ORDER PASS
-# tests 542
-# pass 539
+# tests 550
+# pass 547
+# fail 0
+# skipped 3
+>>> CODEC ROUND-TRIP PASS
+```
+
+## Output (2026-10-12, `forever` cca0a5d plus branch `claude/project-thread-vq10xp`, backlog 82 bottom row and footer, 83 combat log flips, Linux)
+
+```
+npm ci                    -> exit 0
+node tools/safety-ci.js   -> exit 0
+npm test                  -> exit 0
+>>> ORDER PASS
+# tests 543
+# pass 540
 # fail 0
 # skipped 3
 >>> CODEC ROUND-TRIP PASS
