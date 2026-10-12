@@ -42,13 +42,19 @@ function format(r) {
     r.top ? `repeat: "${r.top}"${r.topCount > 1 ? ` (${r.topCount} times)` : " (once)"}` : "repeat: none noted",
   ].join("\n");
 }
+// Backlog 63: the addon counts today's fights that started below half health and the
+// mentor passes that count in; nothing in the notebook rows says it.
+const LOW_HEALTH_TIP = "tip: before the next pull, rest, eat or drink until you are above half health.";
+function lowStartLines(n) {
+  return n > 0 ? [`fights started below 50% health: ${n}`, LOW_HEALTH_TIP] : [];
+}
 if (require.main === module) {
   const arg = (name) => {
     const i = process.argv.indexOf(name);
     return i >= 0 ? process.argv[i + 1] : undefined;
   };
   if (!arg("--notebook")) {
-    console.error("usage: node tools/session-recap.js --notebook <characters/Realm-Name.md> [--date YYYY-MM-DD] [--json]");
+    console.error("usage: node tools/session-recap.js --notebook <characters/Realm-Name.md> [--date YYYY-MM-DD] [--low-start N] [--json]");
     process.exit(2);
   }
   let text;
@@ -58,8 +64,13 @@ if (require.main === module) {
     console.error(`cannot read notebook: ${e.message}`);
     process.exit(2);
   }
+  const low = arg("--low-start") === undefined ? 0 : Number(arg("--low-start"));
+  if (!Number.isInteger(low) || low < 0) {
+    console.error("--low-start takes a whole number of fights");
+    process.exit(2);
+  }
   const r = recap(text, arg("--date") || today());
-  console.log(process.argv.includes("--json") ? JSON.stringify(r) : format(r));
+  console.log(process.argv.includes("--json") ? JSON.stringify({ ...r, lowStart: low }) : [format(r), ...lowStartLines(low)].join("\n"));
   process.exitCode = r.ok ? 0 : 1;
 }
-module.exports = { recap, format };
+module.exports = { recap, format, lowStartLines, LOW_HEALTH_TIP };

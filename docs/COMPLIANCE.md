@@ -41,6 +41,7 @@ Checked and compliant:
 - Translation reads chat only on channels the player turns on (none by default) and pre-fills the reply box; the player presses Enter to send.
 - Screenshots: only the game's own `Screenshot()` behind a button the player clicks.
 - Bags (backlog 62): the bags question only reads bag contents (`C_Container.GetContainerItemInfo`, `GetContainerItemQuestInfo`, `C_Item.GetItemInfo`) to send them as advice. The addon never picks up, sells, drops, moves or equips an item; the player does every action, and `tools/safety-ci.js` rejects the item actions (`PickupContainerItem`, `SellAllJunkItems`, `DeleteItem`, `EquipItemByName` and the rest).
+- Low-health starts (backlog 63): at combat start the addon reads the player's own health (`UnitHealth`, `UnitHealthMax`) once and keeps a count of the day's fights started below 50%. The count and its tip only leave with a recap or review the player asks for, which the addon never sends in combat; nothing warns at the start of a pull.
 - Combat log: `LoggingCombat(true)` runs only from the player's click on the **Combat log** button or the **[turn on combat log]** chat link, out of combat. The login reminder and the "This fight wasn't logged" note only read `LoggingCombat()` (backlog 58).
 
 Decisions and open questions for Pedro (nercari-control #114):
