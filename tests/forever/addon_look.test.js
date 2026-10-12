@@ -62,3 +62,32 @@ test('/ai council alone still asks for its question', () => {
   assert.match(sent(v).prints, /Usage: \/ai council <text>/);
   assert.equal(sent(v).cmd, 'nil');
 });
+
+// Backlog 84: Pedro pressed Print Screen, typed "look!" in the box and pressed Send; it went to
+// the agent as a plain message. A lone "look" in the box is the look command.
+// A fresh client per line: one message in flight blocks the next send.
+const typed = (v, line) => {
+  v.run(`WoWAIInput:SetText(${JSON.stringify(line)}); WoWAI.SendFromInput()`);
+  const out = sent(v);
+  return [out.cmd, out.text];
+};
+
+test('a lone "look" typed in the box asks about the screen', () => {
+  for (const line of ['look', 'look!', 'Look.', '  LOOK?! ', 'look at this', 'Look at my screen!', 'look  at  my  screen']) {
+    assert.deepEqual(typed(vm(), line), ['look', "What's on my screen?"], line);
+  }
+});
+
+test('a message that only starts with "look" stays a message', () => {
+  for (const line of ['look at the boss mechanics in Deadmines', 'looking for group', 'look at this mob?', 'lookup', 'where should I look for copper?']) {
+    assert.deepEqual(typed(vm(), line), ['nil', line], line);
+  }
+});
+
+test('/look in the box runs look, with or without a question', () => {
+  assert.deepEqual(typed(vm(), '/look'), ['look', "What's on my screen?"]);
+  assert.deepEqual(typed(vm(), '/LOOK what is this mob?'), ['look', 'what is this mob?']);
+  const v = vm();
+  typed(v, '/help');
+  assert.match(v.get('WoWAI.internal.ActiveChat().history[#WoWAI.internal.ActiveChat().history].text'), /\/look \[question\]/);
+});

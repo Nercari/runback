@@ -10,6 +10,22 @@ Merge evidence for wow-ai. Run these from the repo root and paste their real out
 
 In-game behavior cannot be verified by an agent. Only Pedro can run the game; a PR that changes the addon gives him a short checklist and says the in-game part is unverified.
 
+## Output (2026-10-12, `forever` f027195 plus branch `claude/project-thread-3hecvs`, backlog 84 look from the box and no false look in Antigravity, Linux)
+
+```
+npm ci                    -> exit 0
+node tools/safety-ci.js   -> exit 0
+npm test                  -> exit 0
+>>> ORDER PASS
+# tests 561
+# pass 558
+# fail 0
+# skipped 3
+>>> CODEC ROUND-TRIP PASS
+```
+
+In game (Pedro): in a Claude chat, press Print Screen, type `look!` in the box and press Send: the reply is about the screenshot. Type `look at the boss mechanics in Deadmines`: it goes as a normal message. In an Antigravity chat, `/ai look` says "Antigravity can't see screenshots" and names Claude, Codex, Grok or Hermes.
+
 ## Output (2026-10-12, `forever` 5320515 plus branch `claude/project-thread-6r9sq3`, backlog 80 real controls and 81 plain Allow names, Linux)
 
 ```

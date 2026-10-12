@@ -355,6 +355,7 @@ const AGENTS = {
     command: 'claude',
     install: 'https://claude.com/claude-code, then run `claude` once and log in',
     takesEffort: true, // --effort, confirmed on Pedro's PC 2026-10-09 (docs/model-picker-spec.md)
+    takesImages: true, // a screenshot path it reads with its Read tool
     windowsPaths: () => [path.join(os.homedir(), '.local', 'bin', 'claude.exe')],
     posixPaths: () => [path.join(os.homedir(), '.local', 'bin', 'claude')],
     args({ cfg, resume, system }) {
@@ -384,6 +385,7 @@ const AGENTS = {
     posixPaths: () => [],
     envPath: 'CODEX_BIN',
     npmPackage: '@openai/codex',
+    takesImages: true, // exec -i <image>
     args({ cfg, resume, cwd, images }) {
       const a = [];
       if (cfg.networkAccess) a.push('-c', 'sandbox_workspace_write.network_access=true');
@@ -415,6 +417,7 @@ const AGENTS = {
     ],
     posixPaths: () => [path.join(process.env.GROK_HOME || path.join(os.homedir(), '.grok'), 'bin', 'grok')],
     npmPackage: '@xai-official/grok',
+    takesImages: true, // a screenshot path it reads with its Read tool
     args({ cfg, resume, cwd, system, promptFile }) {
       const a = ['--no-auto-update', '--output-format', 'streaming-json', '--cwd', cwd, '--prompt-file', promptFile];
       const mode = cfg.permissionMode || 'acceptEdits';
@@ -470,6 +473,7 @@ const AGENTS = {
     name: 'Hermes', command: 'hermes',
     install: 'Install Hermes Agent and run `hermes setup` once.',
     takesEffort: true, // chat --reasoning, confirmed on Pedro's PC 2026-10-09
+    takesImages: true, // chat --image <image>
     windowsPaths: () => [], posixPaths: () => [],
     stream: 'text',
     args({ cfg, resume, cwd, images }) {
@@ -500,6 +504,19 @@ function agentIds() { return Object.keys(AGENTS); }
 function normalizeAgent(id) {
   const s = String(id || '').trim().toLowerCase();
   return AGENTS[s] ? s : null;
+}
+
+// The agents that can see a screenshot (/ai look), as the player reads them:
+// "Claude, Codex, Grok or Hermes". agy has no image input yet.
+function imageAgentNames() {
+  const names = Object.values(AGENTS).filter(a => a.takesImages).map(a => a.name);
+  return names.length > 1 ? `${names.slice(0, -1).join(', ')} or ${names[names.length - 1]}` : names.join('');
+}
+
+// What the game prompt says about /ai look for this agent (protocol.systemPrompt).
+function lookFor(id) {
+  const a = AGENTS[normalizeAgent(id)];
+  return { seesImages: !a || !!a.takesImages, imageAgents: imageAgentNames() };
 }
 
 function displayName(id) {
@@ -632,7 +649,7 @@ function resolveCommand(id, cfg = {}) {
 }
 
 module.exports = {
-  AGENTS, DEFAULT_AGENT, agentIds, normalizeAgent, displayName, agentConfig, modelChoices, modelEntries: M.entries, effortProblem,
+  AGENTS, DEFAULT_AGENT, agentIds, normalizeAgent, displayName, imageAgentNames, lookFor, agentConfig, modelChoices, modelEntries: M.entries, effortProblem,
   grokRules, snippet, contextBlock,
   claudeParser, codexParser, grokParser, agyParser, hermesParser, codexItemLine, grokCall, grokRefusal, shellInner,
   resolveCommand, unwrapShim, nativeNextTo,
