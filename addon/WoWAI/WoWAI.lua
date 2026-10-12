@@ -41,17 +41,26 @@ local PRESENCE_MAX = 2000 -- presence/0001..2000.wav, one flipped by the bridge 
 local STRIP_TRIES = 3 -- re-show an unacknowledged message this many times before falling back
 local CELL, CELLS_PER_ROW, MAX_ROWS = 4, 200, 48
 local STRIP_SECONDS = 40 -- max per message; it leaves the strip as soon as the bridge acknowledges
+-- Seconds after a send at which a slot is read. With the sound channel the
+-- readiness signal brings most replies in early, so polls are cheap insurance;
+-- without it every check costs one of the SLOT_COUNT slots, so they thin out
+-- after the first minute.
 local POLL_SCHEDULE = { 5, 10, 16, 24, 34, 46, 60, 80, 100, 130, 160, 200, 240, 300 }
 local POLL_TAIL = 60
+local SLOT_ONLY_SCHEDULE = { 5, 15, 30, 60, 120, 180, 300 }
+local SLOT_ONLY_TAIL = 120
 local TICK_SECONDS = 2
 local CONNECT_WAIT = 15 -- seconds the Connect button waits for the bridge before giving up
-local IDLE_POLL_SECONDS = 600 -- without the sound channel, spend one slot this often while idle to check the bridge
+-- Without the sound channel the bridge is heard from only on a slot read, and
+-- its clock in the slot is when it last wrote one (a reply, progress, a hello).
+local SLOT_ONLY_OK, SLOT_ONLY_STALE = 720, 1320
 local RS, US = "\30", "\31" -- record / unit separators in the strip payload
 
 local db
 local ui = {}
 -- Transport state for this UI session. outbound[id] = { chat, cwd, flags, text, sentAt, acked }
-local run = { outbound = {} }
+-- slotsUsed counts slot reads by reason; startedAt is when this UI session (and its slot pool) began.
+local run = { outbound = {}, slotsUsed = {}, startedAt = 0 }
 
 -- Shared window backdrop. Declared up here because ShowCopy (rendering section)
 -- uses it too: a later `local` would be invisible there and resolve to a nil global.
@@ -552,16 +561,17 @@ end
 
 -- Whether the 30-second presence beats can reach us at all. When they can't
 -- (self-test failed, or signal checks turned off), the only evidence of the
--- bridge is a slot read: the idle poll below and the replies themselves.
+-- bridge is a slot read, and slots are read only while a reply is pending.
 local function PresenceWorks()
 	return signalAvailable and db ~= nil and db.settings.signal
 end
 
--- Returns state ("ok" | "stale" | "down" | "unknown"), a color and a description.
+-- Returns state ("ok" | "idle" | "stale" | "down" | "unknown"), a color and a description.
 -- With presence beats the bridge is heard from every 30 s, so 90 s of silence is
--- suspicious. Without them the addon only hears from it every IDLE_POLL_SECONDS,
--- so the windows have to be wider or the light could never stay green between
--- messages and every reply would be followed by a Reconnect.
+-- suspicious. Without them it is heard from only on a slot read: while a reply
+-- is pending the wider SLOT_ONLY windows apply; while idle nothing is read (it
+-- would cost a slot and only repeat the bridge's last write), so past the ok
+-- window the light says "idle" (not checked) instead of stale or down.
 function WoWAI.BridgeState()
 	local seen = run.bridgeSeen
 	if not seen then
@@ -570,7 +580,10 @@ function WoWAI.BridgeState()
 	local age = GetTime() - seen
 	local okFor, staleFor = 90, 300
 	if not PresenceWorks() then
-		okFor, staleFor = IDLE_POLL_SECONDS + 120, IDLE_POLL_SECONDS * 2 + 120
+		okFor, staleFor = SLOT_ONLY_OK, SLOT_ONLY_STALE
+		if age >= okFor and not AnyPending() then
+			return "idle", 0.6, 0.6, 0.6, "Bridge: last heard from " .. FmtDur(age) .. " ago; not checked while idle, to save reply slots (sending checks it)"
+		end
 	end
 	if age < okFor then
 		return "ok", 0.2, 0.9, 0.3, "Bridge: connected (seen " .. FmtDur(age) .. " ago)"
@@ -586,6 +599,7 @@ local STATE_ICON = {
 	stale = "Interface\\FriendsFrame\\StatusIcon-Away",
 	down = "Interface\\FriendsFrame\\StatusIcon-DnD",
 	unknown = "Interface\\FriendsFrame\\StatusIcon-Offline",
+	idle = "Interface\\FriendsFrame\\StatusIcon-Offline",
 }
 
 function WoWAI.UpdateDot()
@@ -605,12 +619,14 @@ function WoWAI.UpdateDot()
 	end
 end
 
--- Connected = the bridge has been seen recently. In pixel mode, sending needs this;
+-- Connected = the bridge has been seen recently, or the light is "idle" (the
+-- first poll after sending checks it). In pixel mode, sending needs this;
 -- until then the Connect button takes the Send button's place. The reload
 -- transport has no idea whether the bridge is there, so it never gates.
 function WoWAI.IsConnected()
 	if not db or db.settings.mode ~= "pixel" then return true end
-	return WoWAI.BridgeState() == "ok" and not run.pixelFailed
+	local state = WoWAI.BridgeState()
+	return (state == "ok" or state == "idle") and not run.pixelFailed
 end
 
 -- Connect button: say hello to the bridge (it acks, refreshes the slots and
@@ -736,10 +752,12 @@ local function FreeSlot()
 end
 
 local function ScheduleNextPoll()
+	local schedule, tail = POLL_SCHEDULE, POLL_TAIL
+	if not PresenceWorks() or run.signalUnreliable then schedule, tail = SLOT_ONLY_SCHEDULE, SLOT_ONLY_TAIL end
 	local idx = (run.polls or 0) + 1
-	local t = POLL_SCHEDULE[idx]
+	local t = schedule[idx]
 	if not t then
-		t = POLL_SCHEDULE[#POLL_SCHEDULE] + POLL_TAIL * (idx - #POLL_SCHEDULE)
+		t = schedule[#schedule] + tail * (idx - #schedule)
 	end
 	run.nextPollAt = (run.sentAt or GetTime()) + t
 end
@@ -795,6 +813,7 @@ ApplyReplies = function(replies)
 		if c and c.pendingId and r.id == c.pendingId then
 			matched = true
 			MarkAcked(r.id)
+			if r.status == "done" or r.status == "error" then run.repliesIn = (run.repliesIn or 0) + 1 end
 			local denied = type(r.denied) == "table" and #r.denied > 0 and r.denied or nil
 			if (r.status == "done" or r.status == "error") and ForeverBlocked() then
 				HoldReply(c, r)
@@ -878,6 +897,7 @@ local function TryLoadSlot(why)
 		return
 	end
 	run.polls = (run.polls or 0) + 1
+	run.slotsUsed[why] = (run.slotsUsed[why] or 0) + 1
 	ScheduleNextPoll()
 	local data = WoWAI_SlotData
 	if type(data) == "table" and type(data.now) == "number" then
@@ -900,18 +920,25 @@ local function TryLoadSlot(why)
 	WoWAI.Render()
 end
 
+-- "slots used this session: 17 (hello 1, schedule 16), replies 2, 8.5 per reply, 6.2 per hour"
+local function SlotUsageLine()
+	local total, parts = 0, {}
+	for _, why in ipairs({ "hello", "schedule", "signal", "manual" }) do
+		local n = run.slotsUsed[why]
+		if n then total = total + n; table.insert(parts, why .. " " .. n) end
+	end
+	local replies = run.repliesIn or 0
+	local hours = math.max(GetTime() - run.startedAt, 60) / 3600
+	local function one(x) return (string.format("%.1f", x):gsub("%.0$", "")) end
+	return "slots used this session: " .. total .. (#parts > 0 and (" (" .. table.concat(parts, ", ") .. ")") or "")
+		.. ", replies " .. replies .. (replies > 0 and (", " .. one(total / replies) .. " per reply") or "")
+		.. ", " .. one(total / hours) .. " per hour"
+end
+
 local function Tick()
 	if not db then return end
 	local now = GetTime()
 	PollPresence()
-	-- Without presence beats, the only evidence is a slot read; spend one every
-	-- IDLE_POLL_SECONDS while idle so the light still reflects reality (and stays
-	-- green while the bridge is up: BridgeState allows for this interval).
-	if not PresenceWorks() and db.settings.mode == "pixel" and not AnyPending()
-		and now - (run.lastIdlePoll or -1e9) >= IDLE_POLL_SECONDS then
-		run.lastIdlePoll = now
-		TryLoadSlot("idle")
-	end
 	RefreshStrip()
 	WoWAI.UpdateDot()
 	WoWAI.CheckConnection()
@@ -921,6 +948,8 @@ local function Tick()
 	if run.helloPollAt and now >= run.helloPollAt then
 		run.helloPollAt = nil
 		TryLoadSlot("hello")
+		-- A message queued behind Connect goes out now, not a tick later.
+		WoWAI.CheckConnection()
 		-- Whatever that slot held, the wait is over.
 		if run.restoring then
 			run.restoring = nil
@@ -3643,7 +3672,7 @@ SlashCmdList["WOWAI"] = function(msg)
 			"sound channel: " .. (signalAvailable and "usable" or "UNUSABLE") .. " (self-test: " .. tostring(signalStats.selftest) .. ")" .. (signalStats.error and (" error: " .. signalStats.error) or ""),
 			"signal setting: " .. tostring(s.signal) .. ", marked unreliable this session: " .. tostring(run.signalUnreliable or false),
 			"sound checks: " .. signalStats.checks .. ", valid hits: " .. signalStats.hits .. (signalStats.lastHit and (", last hit " .. FmtDur(GetTime() - signalStats.lastHit) .. " ago") or ""),
-			"slot polls this session: " .. (run.polls or 0) .. ", free slots: " .. free .. "/" .. SLOT_COUNT,
+			SlotUsageLine() .. ", free slots: " .. free .. "/" .. SLOT_COUNT,
 			"presence: head at " .. tostring(run.presence and run.presence.last or "?") .. ", beats seen: " .. tostring(run.presence and run.presence.beats or 0),
 			select(5, WoWAI.BridgeState()),
 			"mode: " .. s.mode .. ", session token: " .. tostring(db.session),
@@ -3699,7 +3728,7 @@ ev:SetScript("OnEvent", function(self, event, arg1)
 	elseif event == "PLAYER_LOGIN" then
 		if not db then InitDB() end
 		BuildUI()
-		run = { outbound = {} }
+		run = { outbound = {}, slotsUsed = {}, startedAt = GetTime() }
 		SelfTestSignals()
 		ProcessInbox()
 		if AnyPending() then

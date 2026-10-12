@@ -297,7 +297,7 @@ test('a message sent while disconnected goes out by itself once the bridge answe
   assert.equal(stripRecords(vm).filter(r => r.text === 'fix the bug').length, 1);
 });
 
-test('without the sound channel, the light stays green between idle slot polls', () => {
+test('without the sound channel, idle time costs no slots and the light says it is not checking', () => {
   // The stub has no ctl/valid.wav, so the login self-test disables the sound
   // channel: the addon is in "slot checks only" mode, like a client whose
   // PlaySoundFile reports every file as playable.
@@ -306,19 +306,20 @@ test('without the sound channel, the light stays green between idle slot polls',
   connect(vm);
   assert.equal(vm.evaluate('WoWAI.BridgeState()'), 'ok');
   // 90 s of silence used to mean "stale"; with no beats to hear that is normal.
+  vm.run('STUB.loadCount = 0; STUB.onLoadAddOn = function(name) STUB.loadCount = STUB.loadCount + 1; WoWAI_SlotData = { now = time(), cwd = "", replies = {} } end');
   vm.run('STUB.now = STUB.now + 200; STUB.Tick()');
   assert.equal(vm.evaluate('WoWAI.BridgeState()'), 'ok', 'still green after 200 s');
   assert.equal(vm.evaluate('WoWAI.IsConnected()'), 'true');
-  // 10 minutes in, the idle poll spends a slot; the bridge's clock in it keeps the light green.
-  vm.run('STUB.loadCount = 0; STUB.onLoadAddOn = function(name) STUB.loadCount = STUB.loadCount + 1; WoWAI_SlotData = { now = time(), cwd = "", replies = {} } end');
-  vm.run('STUB.now = STUB.now + 410; STUB.Tick()');
-  assert.equal(vm.num('STUB.loadCount'), 1, 'one idle poll');
-  assert.equal(vm.evaluate('WoWAI.BridgeState()'), 'ok', 'green again after the idle poll');
-  // A bridge that really is gone still shows: no slot answers, and the light drops.
+  // Past the 12-minute window, idle: no slot is read (the bridge's clock in it
+  // would only repeat its last write), so the light says "not checked", not stale.
+  vm.run('STUB.now = STUB.now + 1800; STUB.Tick()');
+  assert.equal(vm.num('STUB.loadCount'), 0, 'no idle slot polls');
+  assert.equal(vm.evaluate('WoWAI.BridgeState()'), 'idle');
+  assert.equal(vm.evaluate('WoWAI.IsConnected()'), 'true', 'Send stays; no Reconnect click');
+  // A bridge that really is gone still shows once a message waits: no slot answers, and the light drops.
   vm.run('STUB.onLoadAddOn = function(name) WoWAI_SlotData = nil end');
-  vm.run('STUB.now = STUB.now + 800; STUB.Tick()');
-  assert.equal(vm.evaluate('WoWAI.BridgeState()'), 'stale');
-  vm.run('STUB.now = STUB.now + 700; STUB.Tick()');
+  vm.run('WoWAI.Send("anyone there?")');
+  vm.run('STUB.now = STUB.now + 6; STUB.Tick()');
   assert.equal(vm.evaluate('WoWAI.BridgeState()'), 'down');
 });
 

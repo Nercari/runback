@@ -155,3 +155,40 @@ test('empty and hostile data: no guide shows a hint, escape codes are shown as t
   assert.equal(rows(v)[0], 'Do: ||Hitem:1||h[x]||h');
   assert.match(header(v), /^\|\|cffff0000Red/);
 });
+
+// Explain this step (backlog 75): the Why? buttons are children 5 to 7, one per step row.
+const why = (v, row) => `WoWAIGuideFrame.children[${4 + row}]`;
+const typed = v => v.get('table.concat(STUB.texts, "|")');
+
+test('Why? button: types the question, the step and its quest name in the box, sends nothing', () => {
+  const v = vm();
+  seed(v);
+  v.run('SlashCmdList.WOWAI("guide show")');
+  assert.deepEqual(rows(v), ['Accept: Talk to the officer. (Sample Task)', 'Turn in: b2', '']);
+  assert.equal(v.get(`${why(v, 1)}:IsShown()`), 'true');
+  assert.equal(v.get(`${why(v, 2)}:IsShown()`), 'true');
+  assert.equal(v.get(`${why(v, 3)}:IsShown()`), 'false', 'no button on an empty row');
+  assert.equal(v.get(`${why(v, 1)}:GetText()`), 'Why?');
+  v.run(`${why(v, 1)}.scripts.OnClick(${why(v, 1)})`);
+  assert.equal(v.get('WoWAIFrame.shown'), 'true', 'the chat window opens');
+  assert.ok(typed(v).includes('Why this step, and what do I need? Guide step: "Accept: Talk to the officer." Quest: "Sample Task".'));
+  assert.equal(v.get('WoWAIDB.chats[1].pendingId'), 'nil', 'the player still has to press Enter');
+  // The second row explains its own step, and a step with no quest has no quest part.
+  v.run(`${why(v, 2)}.scripts.OnClick(${why(v, 2)})`);
+  assert.ok(typed(v).includes('Why this step, and what do I need? Guide step: "Turn in: b2".'));
+  assert.equal(v.get('WoWAIDB.chats[1].pendingId'), 'nil');
+});
+
+test('Why? button: does nothing in combat, and strips quotes and escape codes from guide text', () => {
+  const v = vm();
+  seed(v);
+  v.run('SlashCmdList.WOWAI("guide show"); SlashCmdList.WOWAI("guide pick a")');
+  v.run(`STUB.combat = true; STUB.FireEvent("PLAYER_REGEN_DISABLED"); STUB.texts = {}; ${why(v, 1)}.scripts.OnClick(${why(v, 1)})`);
+  assert.equal(typed(v).includes('Why this step'), false, 'nothing typed in combat');
+  assert.equal(v.get('WoWAIDB.chats[1].pendingId'), 'nil', 'nothing sent in combat');
+  v.run('STUB.combat = false; STUB.FireEvent("PLAYER_REGEN_ENABLED")');
+  v.run(`${why(v, 1)}.scripts.OnClick(${why(v, 1)})`);
+  assert.ok(typed(v).includes('Why this step, and what do I need? Guide step: "Do: s1".'), 'works after the fight');
+  assert.equal(v.get('WoWAIGuidePanel.Question({ kind = "note", text = "Say \\"hi\\" |cffff0000now|r", quest = "A\\nB" })'),
+    'Why this step, and what do I need? Guide step: "Note: Say hi cffff0000nowr" Quest: "AB".');
+});
