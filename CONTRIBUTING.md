@@ -43,7 +43,7 @@ To try changes in the game, run `node setup.js` (it re-copies the addon into `In
 | Command | What it checks |
 |---|---|
 | `node tests/order_check.js` | The addon parses as Lua 5.1 and no top-level `local` is used before it is declared. |
-| `node --test tests/addon_test.js` | The real addon in a Lua VM with a stub client (`tests/wow_stub.lua`): login, hello, a message decoded off the strip, a slot reply, Allow, `/wow-ai reset`, restore, chat commands, minimize, reload mode. |
+| `node --test tests/addon_test.js` | The real addon in a Lua VM with a stub client (`tests/wow_stub.lua`): login, hello, a message decoded off the strip, a slot reply, Allow and its plain tool names, `/wow-ai reset`, restore, chat commands, minimize, reload mode. |
 | `node --test tests/bridge_test.js` | `bridge/protocol.js`: strip records, flags (including `agent=`), the SavedVariables outbox, folder resolution, permission rules, dedup and pruning. |
 | `node --test tests/agents_test.js` | `bridge/agents.js`: the command line built for each agent and permission mode, the prompt delivery (stdin, prompt file, context block), a sample of each CLI's real stream (Claude stream-json, Codex `exec --json`, Grok streaming-json) read back into progress lines, session id, denials and reply, and the unwrapping of npm's Windows launchers. |
 | `node --test tests/restore_test.js` | Slot files are valid Lua and read back field by field, including a restore bundle. |
