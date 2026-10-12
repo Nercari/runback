@@ -256,6 +256,58 @@ const GUIDE_HINT = [
   'Every step is something the player does by hand: never a macro, a script or a /run line. Say in the reply what the guide covers.',
 ];
 
+// The addon's real controls (backlog 80). An agent once told the player to "click Look in
+// the addon window"; there is no such button. tests/forever/game_controls.test.js checks
+// these names against the addon's Lua so the list cannot drift.
+// Command arguments: <x> required, [x] optional (the addon then asks a default question).
+const GAME_CONTROLS = {
+  buttons: [
+    ['Send', 'sends what is typed in the box'],
+    ['Stop', 'stops the running reply'],
+    ['Resend', 'shows the message again if the PC missed it'],
+    ['Reload', 'reloads the game UI; reads "Get reply" when the reply slots ran out'],
+    ['Clear', 'clears this chat'],
+    ['Review last fight', 'same as /ai review'],
+    ['Why did I die?', 'same as /ai death'],
+    ['Combat log', 'turns the game\'s combat log on or off'],
+    ['AI', 'switches this chat\'s agent or model'],
+    ['+ New chat', 'in the left panel: starts a new chat'],
+    ['Allow', 'under a reply that needed a permission: allows it and retries'],
+    ['Ask WoW AI', 'in the quest log: asks about the selected quest'],
+  ],
+  commands: [
+    ['review', '[question]', 'reviews the last fight'],
+    ['death', '[question]', 'why the player died'],
+    ['build', '[question]', 'a talent build for their level'],
+    ['gear', '[question]', 'gear audit and upgrades'],
+    ['bags', '[question]', 'what to sell or drop'],
+    ['quest', '[question]', 'explains a quest'],
+    ['level', '[question]', 'leveling route'],
+    ['drill', '[question]', 'what to practice'],
+    ['practice', '[question]', 'compares the last two target-dummy sessions'],
+    ['recap', '[question]', 'recap of this session'],
+    ['look', '[question]', 'asks about the newest screenshot (press Print Screen first)'],
+    ['brief', '<what>', 'a short briefing on <what>'],
+    ['council', '<question>', 'several agents answer, then one summary'],
+    ['phone', '', 'continues this chat on the phone, when set up'],
+    ['guide', '[show|hide|next|prev]', 'the guide panel'],
+    ['map', '', 'map layers and the route navigator'],
+    ['new', '[name]', 'starts a new chat'],
+    ['copy', '', 'opens the last reply in a box for Ctrl+C'],
+    ['context', '[on|off]', 'shows what the agent is told about the character'],
+    ['off', '', 'turns the AI off'],
+    ['on', '', 'turns the AI back on'],
+    ['help', '', 'lists every command'],
+  ],
+};
+const CONTROLS_HINT = [
+  'When you tell the player what to click or type in the addon, use only these exact names; never invent a button, menu or command. If none fits, tell them to type the question in the box.',
+  'Buttons: ' + GAME_CONTROLS.buttons.map(([label, what]) => `${label} (${what})`).join('; ') + '.',
+  'Commands, typed in the game chat (<x> is required, [x] optional):',
+  ...GAME_CONTROLS.commands.map(([name, arg, what]) => `/ai ${name}${arg ? ' ' + arg : ''}: ${what}`),
+  '/ai <text>: sends <text> as a message.',
+];
+
 function systemPrompt(ctx, primer) {
   const lines = [...REPLY_FORMAT];
   const text = String(ctx || '').trim();
@@ -265,6 +317,8 @@ function systemPrompt(ctx, primer) {
       text,
       '',
       'Use this when the request is about the game or the character (questions, macros, addon code, gear advice); ignore it when the task is unrelated. Never give the player /run, /script, /console or /dump lines to paste, for settings, key bindings or anything else: give the game menu path and the value instead, one setting per line ("Options > Controls > Auto Loot: on"). Items, spells or quests the player shift-clicked into a message appear as [Name] in the text, with their tooltip in a "Linked from the game" block at the end of the message.',
+      '',
+      ...CONTROLS_HINT,
       '',
       ...MAP_HINT,
       '',
@@ -834,7 +888,7 @@ module.exports = {
   fromHex, pad3, slotNumber, chatKey, sessKey,
   alreadyHandled, markHandled, pruneStale, MONTH_MS,
   resolveCwd, isBroadFolder, pickDefaultCwd, sameFolder, baseName,
-  parseFlags, validModel, validEffort, jobsFromStrip, parseOutbox, systemPrompt, splitSummary, splitFollowUps, isSlashLine, SLASH_REFUSAL,
+  parseFlags, validModel, validEffort, jobsFromStrip, parseOutbox, systemPrompt, GAME_CONTROLS, splitSummary, splitFollowUps, isSlashLine, SLASH_REFUSAL,
   ruleFor, rulesFor, describeToolUse,
   PROGRESS_SHOWN, PROGRESS_PHRASES, plainProgress, addProgress, plainLogLine, plainEvidence, replyNotes, mapNote,
   luaStr, luaTable, SILENT_WAV,
