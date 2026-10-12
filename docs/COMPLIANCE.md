@@ -35,7 +35,7 @@ Fixed in the PR that added this page:
 
 Checked and compliant:
 
-- Auction house: the addon only reads search results (`SendSearchQuery` on a 1.5 s timer while the player has the auction house open, at most 50 items). It never bids, buys or posts. Whether the Forever client accepts `SendSearchQuery` from a timer is unverified in game.
+- Auction house: the addon sends no search queries of its own. When the player clicks **Scan for AI**, it reads the results the player's own search already shows (`C_AuctionHouse.GetBrowseResults`, at most 500 items) and saves them; nothing runs on a timer or on its own. It never bids, buys or posts. Whether the Forever client has `GetBrowseResults` is unverified in game; without it the button only prints a short message.
 - Key bindings: the addon never binds keys on its own. `/wow-ai bind <key>` binds one key to the addon's own button when the player types it, out of combat.
 - Keypress reload: the hidden key catcher lets every key through to the game and only reloads the UI; it never acts in the world.
 - Translation reads chat only on channels the player turns on (none by default) and pre-fills the reply box; the player presses Enter to send.
