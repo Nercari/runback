@@ -5,14 +5,11 @@
 -- is AI-written, so the panel hides while the lockout is on (combat, encounter,
 -- challenge run) and comes back after, like the chat window (Forever_Calm.lua).
 -- A step ticks itself off when the quest log shows it done (backlog 70), or by
-<<<<<<< HEAD
--- hand with the Tick button. Steps the player's own data shows closed (prerequisite
--- not turned in, an exclusive quest turned in, reputation or profession too low)
--- are skipped, and an XP pace line shows under the steps (backlog 76).
-=======
 -- hand with the Tick button. A Why? button by each step puts a question about it
--- in the chat box (backlog 75); the player sends it.
->>>>>>> origin/forever
+-- in the chat box (backlog 75); the player sends it. Steps the player's own data
+-- shows closed (prerequisite not turned in, an exclusive quest turned in,
+-- reputation or profession too low) are skipped, and an XP pace line shows under
+-- the steps (backlog 76).
 -- State lives in WoWAIGuideDB.panel = { shown, guide = id, step = { [id] = n }, pos,
 -- ticks = { [id] = { [n] = { done, at } } } }, and time per level in
 -- WoWAIGuideDB.levels = { ["Name-Realm"] = { [level] = { at, sec } } }.
@@ -303,7 +300,6 @@ end
 
 local function IsDone(g, i, state) return M.Done(g.steps[i], state, Marks(g)[i]) end
 
-<<<<<<< HEAD
 -- The current guide, this player's view of it, the steps they see and a done(i) test.
 local function View()
 	local g = Current()
@@ -312,20 +308,11 @@ local function View()
 	return g, who, M.Order(g, who), function(i) return IsDone(g, i, who.quest) end
 end
 
--- What the panel shows: a header and up to three step lines.
-function M.Lines()
-	local g, _, order, done = View()
-	if not g then return "Guide", { "No guide yet. Ask the mentor: /ai make me a leveling guide" } end
-	local list, k, total = M.Window(order, Panel().step[g.id], SHOWN_STEPS, done)
-=======
 -- What the panel shows: a header, up to three step lines and their step positions.
 function M.Lines()
-	local g = Current()
+	local g, _, order, done = View()
 	if not g then return "Guide", { "No guide yet. Ask the mentor: /ai make me a leveling guide" }, {} end
-	local order = M.Order(g, Who())
-	local list, k, total = M.Window(order, Panel().step[g.id], SHOWN_STEPS)
-	local state = M.Snapshot()
->>>>>>> origin/forever
+	local list, k, total = M.Window(order, Panel().step[g.id], SHOWN_STEPS, done)
 	local lines = {}
 	for _, i in ipairs(list) do lines[#lines + 1] = StepLine(g.steps[i], done(i)) end
 	if #lines == 0 then lines[1] = "No step in this guide fits your character." end
@@ -396,12 +383,6 @@ local function Build()
 		r:SetWordWrap(false)
 		rows[i] = r
 	end
-<<<<<<< HEAD
-	f.pace = f:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
-	f.pace:SetPoint("TOPLEFT", f, "TOPLEFT", 10, -12 - (SHOWN_STEPS + 1) * 18)
-	f.pace:SetPoint("RIGHT", f, "RIGHT", -10, 0)
-	f.pace:SetJustifyH("LEFT")
-=======
 	asks = {}
 	for i = 1, SHOWN_STEPS do
 		local b = CreateFrame("Button", nil, f, "UIPanelButtonTemplate")
@@ -411,7 +392,10 @@ local function Build()
 		b:SetScript("OnClick", function(self) M.Explain(self.step) end)
 		asks[i] = b
 	end
->>>>>>> origin/forever
+	f.pace = f:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
+	f.pace:SetPoint("TOPLEFT", f, "TOPLEFT", 10, -12 - (SHOWN_STEPS + 1) * 18)
+	f.pace:SetPoint("RIGHT", f, "RIGHT", -10, 0)
+	f.pace:SetJustifyH("LEFT")
 	local close = CreateFrame("Button", nil, f, "UIPanelCloseButton")
 	close:SetPoint("TOPRIGHT", f, "TOPRIGHT", -2, -2)
 	close:SetScript("OnClick", function() M.SetShown(false) end)
@@ -443,21 +427,14 @@ function M.Refresh()
 	local title, lines, list = M.Lines()
 	header:SetText(title)
 	for i, r in ipairs(rows) do r:SetText(lines[i] or "") end
-<<<<<<< HEAD
-	frame.pace:SetText(M.PaceLine() or "")
-	local g, _, order, done = View()
-	local cur = g and order[Place(order, p.step[g.id])]
-	frame.tick:SetText(cur and done(cur) and "Untick" or "Tick")
-=======
 	for i, b in ipairs(asks) do
 		b.step = list[i]
 		b:SetShown(list[i] ~= nil)
 	end
-	local g = Current()
-	local order = g and M.Order(g, Who()) or {}
-	local cur = order[Place(order, g and p.step[g.id])]
-	frame.tick:SetText(cur and IsDone(g, cur, M.Snapshot()) and "Untick" or "Tick")
->>>>>>> origin/forever
+	frame.pace:SetText(M.PaceLine() or "")
+	local g, _, order, done = View()
+	local cur = g and order[Place(order, p.step[g.id])]
+	frame.tick:SetText(cur and done(cur) and "Untick" or "Tick")
 	local count = #Guides()
 	picker:SetText(count > 1 and ("Next guide (" .. count .. ")") or "Pick guide")
 	frame:Show()
