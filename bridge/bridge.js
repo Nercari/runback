@@ -718,8 +718,9 @@ function runJob(job) {
   const resume = state.sessions[skey] || state.sessions[key];
 
   const ctx = gameContext();
-  const system = P.systemPrompt(ctx, primer());
-  const systemShort = P.systemPrompt(ctx, '');
+  const look = A.lookFor(agentId);
+  const system = P.systemPrompt(ctx, primer(), look);
+  const systemShort = P.systemPrompt(ctx, '', look);
   const promptFile = path.join(TMP_DIR, `prompt-${job.id}-${Date.now().toString(36)}.txt`);
   const input = agent.input({ prompt: job.text, system, systemShort, resume, images: job.images, cfg: acfg });
   if (input.promptFile !== undefined) {

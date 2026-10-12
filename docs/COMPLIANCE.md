@@ -40,6 +40,7 @@ Checked and compliant:
 - Keypress reload: the hidden key catcher lets every key through to the game and only reloads the UI; it never acts in the world.
 - Translation reads chat only on channels the player turns on (none by default) and pre-fills the reply box; the player presses Enter to send.
 - Screenshots: only the game's own `Screenshot()` behind a button the player clicks.
+- Look from the box (backlog 84): a lone "look" or `/look` in the window box runs the same `/ai look` the player can type, which only reads the newest screenshot the player took with Print Screen. The addon never calls `Screenshot()` on this path.
 - Reply slots (backlog 78): fewer `C_AddOns.LoadAddOn` calls on the addon's own slot addons and a grey status light while idle. No gameplay, targeting, input or protected API is touched.
 - Bags (backlog 62): the bags question only reads bag contents (`C_Container.GetContainerItemInfo`, `GetContainerItemQuestInfo`, `C_Item.GetItemInfo`) to send them as advice. The addon never picks up, sells, drops, moves or equips an item; the player does every action, and `tools/safety-ci.js` rejects the item actions (`PickupContainerItem`, `SellAllJunkItems`, `DeleteItem`, `EquipItemByName` and the rest).
 - Low-health starts (backlog 63): at combat start the addon reads the player's own health (`UnitHealth`, `UnitHealthMax`) once and keeps a count of the day's fights started below 50%. The count and its tip only leave with a recap or review the player asks for, which the addon never sends in combat; nothing warns at the start of a pull.
