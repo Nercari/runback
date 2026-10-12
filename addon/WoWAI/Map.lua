@@ -6,12 +6,19 @@
 -- map percent. The bridge owns them; a newer version (or another epoch) replaces
 -- our copy wholesale. Everything here reads positions and draws; nothing moves,
 -- targets or acts for the player.
+--
+-- One more layer, `guide`, is the addon's own: the guide panel (Forever_Guide.lua)
+-- hands it the current step's points with M.SetGuideStep (backlog 71). It lives
+-- in memory only, so a bridge sync never replaces it. Its points carry a sixth
+-- field, a radius in map percent; arriving inside it ticks that point off.
 
 local ADDON_NAME = ...
 local M = {}
 WoWAIMap = M
 
 local ARRIVE_YARDS = 12
+local GUIDE = "guide"
+local GUIDE_POINTS = 8
 local NODE_SIZE, PIN_SIZE = 9, 16
 local CIRCLE = "Interface\\CHARACTERFRAME\\TempPortraitAlphaMask"
 local ARROW = "Interface\\Minimap\\MinimapArrow"
@@ -25,7 +32,8 @@ local KIND_COLOR = {
 	flight = { 0.55, 0.75, 1 }, poi = { 1, 1, 1 },
 }
 
-local mdb -- WoWAIMapDB: { map, hidden = { [layer] = true }, nodes = { ore, herb, filter }, nav = { layer, index }, navPos }
+local mdb -- WoWAIMapDB: { map, hidden = { [layer] = true }, nodes = { ore, herb, filter }, nav = { layer, index }, navPos, guideKey }
+local guide -- the guide step's layer, { name = GUIDE, title, ordered, points }, or nil
 
 local function Try(fn, ...)
 	if type(fn) ~= "function" then return nil end
@@ -53,9 +61,17 @@ local function Layers()
 end
 
 local function FindLayer(name)
+	if name == GUIDE and guide then return guide end
 	for i, l in ipairs(Layers()) do
 		if l.name == name then return l, i end
 	end
+end
+
+-- Guide text is AI-written: none of it shows during the lockout (combat, encounter,
+-- challenge run). Forever_Lockout.lua loads after this file, hence the late lookup.
+local function Locked()
+	local f = WoWAIForever
+	return type(f) == "table" and type(f.Locked) == "function" and f.Locked() ~= nil
 end
 
 ---------------------------------------------------------------------------
@@ -277,7 +293,9 @@ function M.Refresh()
 	overlay.drawnScale = CanvasScale()
 	DrawNodes(mapID, scale)
 	local nav = DB().nav
-	for _, l in ipairs(Layers()) do
+	local drawn = { unpack(Layers()) }
+	if guide and not Locked() then drawn[#drawn + 1] = guide end
+	for _, l in ipairs(drawn) do
 		if not mdb.hidden[l.name] then
 			local prev, first
 			for i, p in ipairs(l.points) do
@@ -391,9 +409,25 @@ local function BuildNavigator()
 	nav:Hide()
 end
 
+-- Yards that count as arrived at p: its radius (map percent of its own map, measured
+-- across the map's width) when it has one, never less than ARRIVE_YARDS.
+local function ArriveYards(p)
+	local r = p[6]
+	if type(r) ~= "number" then return ARRIVE_YARDS end
+	local cont = ContinentOf(p[1])
+	local w = cont and ContinentYards(cont)
+	if not w then return ARRIVE_YARDS end
+	local minX, maxX = 0, 1
+	if p[1] ~= cont then minX, maxX = Try(C_Map.GetMapRectOnMap, p[1], cont) end
+	if type(minX) ~= "number" or type(maxX) ~= "number" or maxX <= minX then return ARRIVE_YARDS end
+	return math.max(ARRIVE_YARDS, r / 100 * (maxX - minX) * w)
+end
+
 function M.UpdateNavigator()
 	local l, p, i = NavPoint()
-	if not l then if nav then nav:Hide() end return end
+	-- On the guide layer the navigator shows guide text, so it hides during the lockout;
+	-- the guide panel calls SetGuideStep again when the lockout ends.
+	if not l or (l == guide and Locked()) then if nav then nav:Hide() end return end
 	if not nav then BuildNavigator() end
 	nav:Show()
 	nav.title:SetText(string.format("%d/%d  %s", i, #l.points, p[4] ~= "" and p[4] or l.title))
@@ -408,7 +442,7 @@ function M.UpdateNavigator()
 	if facing and bearing then nav.arrow:SetRotation(bearing - facing) else nav.arrow:SetRotation(0) end
 	if dist then
 		nav.text:SetText(string.format("%d yd  |cff888888%s|r", math.floor(dist + 0.5), l.title))
-		if dist <= ARRIVE_YARDS then
+		if dist <= ArriveYards(p) then
 			Try(PlaySound, SOUNDKIT and SOUNDKIT.MAP_PING or 3175)
 			M.Step(1, true)
 		end
@@ -432,7 +466,8 @@ function M.Step(delta, arrived)
 	local nexti = i + delta
 	if nexti > #l.points then
 		if l.loop then nexti = 1 else
-			Print("route finished: " .. l.title)
+			-- The guide step's last point: the navigator stops; the panel says what's next.
+			if l ~= guide then Print("route finished: " .. l.title) end
 			mdb.nav = nil
 			M.UpdateNavigator()
 			M.Refresh()
@@ -477,7 +512,8 @@ function M.Sync(m)
 	end
 	mdb.map = { epoch = m.epoch, version = tonumber(m.version) or 0, layers = layers }
 	-- Drop navigation that points at a layer that is gone.
-	if mdb.nav and not FindLayer(mdb.nav.layer) then mdb.nav = nil end
+	-- The guide layer is not the bridge's; SetGuideStep looks after it.
+	if mdb.nav and mdb.nav.layer ~= GUIDE and not FindLayer(mdb.nav.layer) then mdb.nav = nil end
 	-- One plain line for the player, whatever the layer names and counts (backlog 54).
 	local placed = 0
 	for _, l in ipairs(changed) do placed = placed + #l.points end
@@ -487,11 +523,66 @@ function M.Sync(m)
 	for _, l in ipairs(changed) do
 		mdb.hidden[l.name] = nil
 		-- A new or changed route on the player's continent starts navigation at its first
-		-- stop, unless the player is already following another route.
+		-- stop, unless the player is already following another route. A route the
+		-- agent just drew wins over the guide step (/wow-ai map nav guide goes back).
 		local here = PlayerOnContinent()
-		local free = not mdb.nav or mdb.nav.layer == l.name
+		local free = not mdb.nav or mdb.nav.layer == l.name or mdb.nav.layer == GUIDE
 		if l.ordered and #l.points > 0 and free and (not here or ContinentOf(l.points[1][1]) == here) then
 			mdb.nav = { layer = l.name, index = 1 }
+		end
+	end
+	M.UpdateNavigator()
+	M.Refresh()
+end
+
+---------------------------------------------------------------------------
+-- The guide step's points (backlog 71)
+---------------------------------------------------------------------------
+
+local function Num(v, lo, hi)
+	v = tonumber(v)
+	if not v or v ~= v or v < lo or v > hi then return nil end
+	return v
+end
+
+-- A guide point { m, x, y, radius?, label? } (docs/GUIDE.md) as a layer point, or nil.
+local function GuidePoint(g)
+	if type(g) ~= "table" then return nil end
+	local m, x, y = Num(g.m, 1, 99999), Num(g.x, 0, 100), Num(g.y, 0, 100)
+	if not (m and x and y) or m ~= math.floor(m) then return nil end
+	local r = Num(g.radius, 0, 1e9)
+	if r then r = math.max(0.5, math.min(25, r)) end
+	local label = type(g.label) == "string" and g.label:gsub("[%c|]", ""):sub(1, 60) or ""
+	return { m, x, y, label, "quest", r }
+end
+
+-- Show the guide's current step on the map: key names the step (guide and
+-- position), title is its text, points its points. nil, or a step without valid
+-- points, clears the layer. The navigator follows the step unless the player is
+-- on a bridge route; the same step again keeps the navigator where it is.
+function M.SetGuideStep(key, title, points)
+	DB()
+	local pts = {}
+	if key ~= nil and type(points) == "table" then
+		for _, g in ipairs(points) do
+			local p = GuidePoint(g)
+			if p and #pts < GUIDE_POINTS then pts[#pts + 1] = p end
+		end
+	end
+	if #pts == 0 then
+		guide = nil
+		mdb.guideKey = nil
+		if mdb.nav and mdb.nav.layer == GUIDE then mdb.nav = nil end
+	else
+		local l = { name = GUIDE, title = type(title) == "string" and title or "Guide", ordered = #pts > 1, loop = false, points = pts }
+		local full = tostring(key) .. "|" .. LayerKey(l)
+		guide = l
+		if full ~= mdb.guideKey then
+			mdb.guideKey = full
+			local n = mdb.nav
+			if not n or n.layer == GUIDE or not FindLayer(n.layer) then mdb.nav = { layer = GUIDE, index = 1 } end
+		elseif mdb.nav and mdb.nav.layer == GUIDE and not pts[mdb.nav.index] then
+			mdb.nav = nil
 		end
 	end
 	M.UpdateNavigator()
@@ -504,9 +595,12 @@ end
 
 local function Status()
 	local layers = Layers()
-	if #layers == 0 then Print("no layers yet. Ask the agent for a route, e.g. /ai route me through copper veins in Loch Modan") end
+	if #layers == 0 and not guide then Print("no layers yet. Ask the agent for a route, e.g. /ai route me through copper veins in Loch Modan") end
 	for _, l in ipairs(layers) do
 		Print(string.format("%s%s|r  %s (%d point(s))%s", mdb.hidden[l.name] and "|cff888888" or "|cffffffff", l.name, l.title or "", #l.points, (mdb.nav and mdb.nav.layer == l.name) and string.format("  navigating %d/%d", mdb.nav.index, #l.points) or ""))
+	end
+	if guide and not Locked() then
+		Print(string.format("%s%s|r  guide step (%d point(s))%s", mdb.hidden[GUIDE] and "|cff888888" or "|cffffffff", GUIDE, #guide.points, (mdb.nav and mdb.nav.layer == GUIDE) and string.format("  navigating %d/%d", mdb.nav.index, #guide.points) or ""))
 	end
 	local n = mdb.nodes
 	Print(string.format("nodes: ore %s, herb %s, filter %s%s", n.ore and "on" or "off", n.herb and "on" or "off", n.filter, WoWAINodes and "" or "  (WoWAI_Nodes data addon not installed)"))
