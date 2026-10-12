@@ -294,6 +294,58 @@ for (const name of questAutomationPlain.filter((n) => !n.includes("."))) {
   });
 }
 
+// Backlog 62: the addon reads bags to advise. Selling, dropping, moving and equipping are the player's clicks.
+const itemActionPlain = [
+  "PickupContainerItem", "SplitContainerItem", "SocketContainerItem", "SortBags", "SortBankBags",
+  "SellAllJunkItems", "BuybackItem", "ContainerRefundItemPurchase", "DeleteItem", "ConfirmDeleteItem",
+  "PickupItem", "PickupInventoryItem", "PickupBagFromSlot", "PutItemInBag", "PutItemInBackpack",
+  "EquipCursorItem", "AutoEquipCursorItem", "EquipItemByName", "DropItemOnUnit",
+];
+const itemActionQualified = [
+  "C_Container.PickupContainerItem", "C_Container.SplitContainerItem", "C_Container.UseContainerItem",
+  "C_Container.SortBags", "C_MerchantFrame.SellAllJunkItems", "C_Item.DeleteItem", "C_Item.PickupItem",
+  "C_Item.EquipItemByName", "C_Item.DropItemOnUnit",
+];
+
+for (const name of [...itemActionPlain, ...itemActionQualified]) {
+  test(`repo mode rejects the item action ${name}`, async (t) => {
+    const dir = await fixture(t);
+    await fs.writeFile(path.join(dir, "bad.lua"), `${name}(0, 1)\n`);
+    const result = scan([dir]);
+    assert.equal(result.ok, false);
+    assert.ok(
+      result.findings.some((item) => item.rule === "LUA-PROTECTED-AUTOMATION"),
+      JSON.stringify(result.findings),
+    );
+  });
+}
+
+for (const name of itemActionPlain) {
+  test(`untrusted mode rejects the item action ${name} called, aliased and as a method`, async (t) => {
+    for (const source of [`${name}(0, 1)`, `local f = ${name}`, `obj:${name}(1)`, `C_Container.${name}(0, 1)`]) {
+      const result = await untrusted(t, { "Bad.lua": source });
+      assert.equal(result.ok, false, source);
+      assert.ok(result.findings.some((item) => item.rule === "LUA-RESTRICTED"), source);
+    }
+  });
+}
+
+test("read-only bag and item APIs stay allowed", async (t) => {
+  const dir = await fixture(t);
+  await fs.writeFile(path.join(dir, "ok.lua"), [
+    "local n = C_Container.GetContainerNumSlots(0)",
+    "local info = C_Container.GetContainerItemInfo(0, 1)",
+    "local quest = C_Container.GetContainerItemQuestInfo(0, 1)",
+    "local free = C_Container.GetContainerNumFreeSlots(0)",
+    "local name, _, quality, _, _, _, _, _, _, _, price = C_Item.GetItemInfo(2589)",
+    "local legacy = GetContainerItemInfo(0, 1)",
+    "local q = GetContainerItemQuestInfo(0, 1)",
+    "",
+  ].join("\n"));
+  const result = scan([dir]);
+  assert.equal(result.ok, true, JSON.stringify(result.findings, null, 2));
+});
+
 test("repo mode rejects the bracket form of a banned C_GossipInfo member", async (t) => {
   const dir = await fixture(t);
   await fs.writeFile(path.join(dir, "bad.lua"), 'C_GossipInfo["SelectOption"](1)\n');
