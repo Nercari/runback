@@ -10,15 +10,15 @@ Merge evidence for wow-ai. Run these from the repo root and paste their real out
 
 In-game behavior cannot be verified by an agent. Only Pedro can run the game; a PR that changes the addon gives him a short checklist and says the in-game part is unverified.
 
-## Output (2026-10-12, `forever` 7f46990 plus branch `claude/project-thread-5se70i`, backlog 71 guide step on the map, Linux)
+## Output (2026-10-12, `forever` 5320515 plus branch `claude/project-thread-5se70i`, backlog 71 guide step on the map, Linux)
 
 ```
 npm ci                    -> exit 0
 node tools/safety-ci.js   -> exit 0
 npm test                  -> exit 0
 >>> ORDER PASS
-# tests 550
-# pass 547
+# tests 555
+# pass 552
 # fail 0
 # skipped 3
 >>> CODEC ROUND-TRIP PASS
@@ -47,6 +47,21 @@ npm test                  -> exit 0
 >>> ORDER PASS
 # tests 535
 # pass 532
+# fail 0
+# skipped 3
+>>> CODEC ROUND-TRIP PASS
+```
+
+## Output (2026-10-12, `forever` 7f46990 plus branch `claude/project-thread-2fgwx6`, backlog 78 fewer slots per reply, Linux)
+
+```
+npm ci                    -> exit 0
+node tools/safety-ci.js   -> exit 0
+npm test                  -> exit 0
+>>> ORDER PASS
+# slot budget (sound channel unusable): {"login":1,"short":5,"idle1":0,"long":11,"idle2":0,"total":17,"perReply":8.5} baseline {"total":38,"perReply":19}
+# tests 546
+# pass 543
 # fail 0
 # skipped 3
 >>> CODEC ROUND-TRIP PASS

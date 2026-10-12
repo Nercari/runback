@@ -7,6 +7,8 @@
 -- A step ticks itself off when the quest log shows it done (backlog 70), or by
 -- hand with the Tick button. While the panel is open, the current step's points go
 -- to the map's `guide` layer and navigator (backlog 71, WoWAIMap.SetGuideStep).
+-- A Why? button by each step puts a question about it in the chat box (backlog 75);
+-- the player sends it.
 -- State lives in WoWAIGuideDB.panel = { shown, guide = id, step = { [id] = n }, pos,
 -- ticks = { [id] = { [n] = { done, at } } } }.
 local M = {}
@@ -214,22 +216,40 @@ end
 
 local function IsDone(g, i, state) return M.Done(g.steps[i], state, Marks(g)[i]) end
 
--- What the panel shows: a header and up to three step lines.
+-- What the panel shows: a header, up to three step lines and their step positions.
 function M.Lines()
 	local g = Current()
-	if not g then return "Guide", { "No guide yet. Ask the mentor: /ai make me a leveling guide" } end
+	if not g then return "Guide", { "No guide yet. Ask the mentor: /ai make me a leveling guide" }, {} end
 	local order = M.Order(g, Who())
 	local list, k, total = M.Window(order, Panel().step[g.id], SHOWN_STEPS)
 	local state = M.Snapshot()
 	local lines = {}
 	for _, i in ipairs(list) do lines[#lines + 1] = StepLine(g.steps[i], IsDone(g, i, state)) end
 	if #lines == 0 then lines[1] = "No step in this guide fits your character." end
-	return Plain(g.title or g.id) .. "  " .. (total > 0 and (k .. "/" .. total) or ""), lines
+	return Plain(g.title or g.id) .. "  " .. (total > 0 and (k .. "/" .. total) or ""), lines, list
+end
+
+-- Explain this step (backlog 75): the question about step i of the current guide.
+local function Clean(s) return (tostring(s):gsub("[%c\"|]", "")) end
+function M.Question(step)
+	local text = "Why this step, and what do I need? Guide step: \"" .. (KIND[step.kind] or "Step") .. ": " .. Clean(step.text) .. "\""
+	if type(step.quest) == "string" and step.quest ~= "" then text = text .. " Quest: \"" .. Clean(step.quest) .. "\"" end
+	return text .. "."
+end
+
+-- Out of combat only, it types the question in the box and sends nothing.
+function M.Explain(i)
+	if Locked() then return end
+	local g = Current()
+	local step = g and g.steps[tonumber(i) or 0]
+	local c = WoWAI and WoWAI.internal and WoWAI.internal.ActiveChat()
+	if not (step and c and WoWAI.AskInBox) then return end
+	WoWAI.AskInBox(c.id, M.Question(step))
 end
 
 -- Frame ----------------------------------------------------------------------
 
-local frame, rows, header, picker
+local frame, rows, asks, header, picker
 
 local function Build()
 	if frame then return frame end
@@ -268,10 +288,19 @@ local function Build()
 	for i = 1, SHOWN_STEPS do
 		local r = f:CreateFontString(nil, "OVERLAY", i == 1 and "GameFontHighlight" or "GameFontDisableSmall")
 		r:SetPoint("TOPLEFT", f, "TOPLEFT", 10, -12 - i * 18)
-		r:SetPoint("RIGHT", f, "RIGHT", -10, 0)
+		r:SetPoint("RIGHT", f, "RIGHT", -54, 0)
 		r:SetJustifyH("LEFT")
 		r:SetWordWrap(false)
 		rows[i] = r
+	end
+	asks = {}
+	for i = 1, SHOWN_STEPS do
+		local b = CreateFrame("Button", nil, f, "UIPanelButtonTemplate")
+		b:SetSize(40, 18)
+		b:SetPoint("TOPRIGHT", f, "TOPRIGHT", -10, -10 - i * 18)
+		b:SetText("Why?")
+		b:SetScript("OnClick", function(self) M.Explain(self.step) end)
+		asks[i] = b
 	end
 	local close = CreateFrame("Button", nil, f, "UIPanelCloseButton")
 	close:SetPoint("TOPRIGHT", f, "TOPRIGHT", -2, -2)
@@ -318,9 +347,13 @@ function M.Refresh()
 		return
 	end
 	Build()
-	local title, lines = M.Lines()
+	local title, lines, list = M.Lines()
 	header:SetText(title)
 	for i, r in ipairs(rows) do r:SetText(lines[i] or "") end
+	for i, b in ipairs(asks) do
+		b.step = list[i]
+		b:SetShown(list[i] ~= nil)
+	end
 	local g = Current()
 	local order = g and M.Order(g, Who()) or {}
 	local cur = order[Place(order, g and p.step[g.id])]
