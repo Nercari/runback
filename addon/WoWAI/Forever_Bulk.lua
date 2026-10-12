@@ -1,17 +1,5 @@
 local ahFrame = nil
-local scanTicker = nil
-local scannedItems = {}
-local scannedKeys = {}
-local scanIndex = 1
-local MAX_SCANNED = 500
-local MAX_AH_LIST = 50
-
-local function AddScanned(row)
-	local key = tostring(row.id) .. ":" .. tostring(row.price)
-	if scannedKeys[key] or #scannedItems >= MAX_SCANNED then return end
-	scannedKeys[key] = true
-	table.insert(scannedItems, row)
-end
+local MAX_AH_ITEMS = 500
 
 local function EnsureBulk()
 	WoWAI_Bulk = WoWAI_Bulk or {}
@@ -109,86 +97,40 @@ local function CollectGear()
 	return slots
 end
 
-local function CollectAHResults()
-	if type(C_AuctionHouse) ~= "table" then return end
-	if type(C_AuctionHouse.GetNumCommoditySearchResults) == "function" and type(C_AuctionHouse.GetCommoditySearchResultInfo) == "function" then
-		local ok, count = pcall(C_AuctionHouse.GetNumCommoditySearchResults)
-		if ok and type(count) == "number" then
-			for i = 1, count do
-				local ok2, info = pcall(C_AuctionHouse.GetCommoditySearchResultInfo, i)
-				if ok2 and type(info) == "table" then
-					AddScanned({
-						id = info.itemID or info.id,
-						name = info.name or info.itemName or "",
-						price = info.unitPrice or info.price or 0,
-						qty = info.quantity or info.count or 1,
-						seen = time(),
-					})
-				end
-			end
-		end
-	end
-	if type(C_AuctionHouse.GetNumItemSearchResults) == "function" and type(C_AuctionHouse.GetItemSearchResultInfo) == "function" then
-		local ok, count = pcall(C_AuctionHouse.GetNumItemSearchResults)
-		if ok and type(count) == "number" then
-			for i = 1, count do
-				local ok2, info = pcall(C_AuctionHouse.GetItemSearchResultInfo, i)
-				if ok2 and type(info) == "table" then
-					AddScanned({
-						id = info.itemID or info.id,
-						name = info.name or info.itemName or "",
-						price = info.buyoutAmount or info.unitPrice or info.price or 0,
-						qty = info.quantity or info.count or 1,
-						seen = time(),
-					})
-				end
-			end
-		end
-	end
+local function AuctionItemName(itemKey)
+	local ok, info = pcall(C_AuctionHouse.GetItemKeyInfo, itemKey)
+	if ok and type(info) == "table" and info.itemName then return info.itemName end
+	local ok2, name = pcall((C_Item and C_Item.GetItemInfo) or GetItemInfo, itemKey.itemID)
+	return ok2 and name or ""
 end
 
-local function StopAHScan()
-	if scanTicker then
-		scanTicker:Cancel()
-		scanTicker = nil
-	end
-end
-
-local function StepAHScan()
-	local list = (WoWAIForeverDB and WoWAIForeverDB.ahList) or {}
-	if scanIndex > #list then
-		StopAHScan()
-		UpdateBulk("ah", { items = scannedItems })
-		print("Scan saved: /reload to send it to the AI.")
-		return
-	end
-	local item = list[scanIndex]
-	scanIndex = scanIndex + 1
-	if type(C_AuctionHouse) == "table" and type(C_AuctionHouse.SendSearchQuery) == "function" then
-		pcall(C_AuctionHouse.SendSearchQuery, item)
-	end
-end
-
-local function StartAHScan()
-	if type(C_AuctionHouse) ~= "table" then
+local function SaveBrowseResults()
+	if type(C_AuctionHouse) ~= "table" or type(C_AuctionHouse.GetBrowseResults) ~= "function" then
 		print("AH API not available; shift-click items into the chat instead.")
 		return
 	end
-	WoWAIForeverDB = WoWAIForeverDB or {}
-	WoWAIForeverDB.ahList = WoWAIForeverDB.ahList or {}
-	local list = WoWAIForeverDB.ahList
-	if #list == 0 then
-		print("AH scan list is empty (/ai ah add <item>)")
+	local items = {}
+	local ok, results = pcall(C_AuctionHouse.GetBrowseResults)
+	if ok and type(results) == "table" then
+		for _, r in ipairs(results) do
+			if #items >= MAX_AH_ITEMS then break end
+			if type(r) == "table" and type(r.itemKey) == "table" then
+				items[#items + 1] = {
+					id = r.itemKey.itemID,
+					name = AuctionItemName(r.itemKey),
+					price = r.minPrice or 0,
+					qty = r.totalQuantity or 0,
+					seen = time(),
+				}
+			end
+		end
+	end
+	if #items == 0 then
+		print("Nothing to save yet: search for an item at the auction house, then press Scan for AI again.")
 		return
 	end
-	StopAHScan()
-	scannedItems = {}
-	scannedKeys = {}
-	scanIndex = 1
-	StepAHScan()
-	if C_Timer and type(C_Timer.NewTicker) == "function" then
-		scanTicker = C_Timer.NewTicker(1.5, StepAHScan)
-	end
+	UpdateBulk("ah", { items = items })
+	print("Saved " .. #items .. " auctions for the AI: /reload to send them.")
 end
 
 local function EnsureAHFrame()
@@ -202,38 +144,21 @@ local function EnsureAHFrame()
 	btn:SetSize(110, 24)
 	btn:SetPoint("CENTER", ahFrame, "CENTER", 0, 0)
 	btn:SetText("Scan for AI")
-	btn:SetScript("OnClick", StartAHScan)
+	btn:SetScript("OnClick", SaveBrowseResults)
+	btn:SetScript("OnEnter", function(self)
+		GameTooltip:SetOwner(self, "ANCHOR_TOP")
+		GameTooltip:SetText("Scan for AI", 1, 0.82, 0)
+		GameTooltip:AddLine("Saves the auctions in the list for the AI. Search for an item first, then click. /reload sends them.", 1, 1, 1, true)
+		GameTooltip:Show()
+	end)
+	btn:SetScript("OnLeave", function() GameTooltip:Hide() end)
 	ahFrame.btn = btn
 	ahFrame:Hide()
 	return ahFrame
 end
 
-local function HandleAH(rest)
-	WoWAIForeverDB = WoWAIForeverDB or {}
-	WoWAIForeverDB.ahList = WoWAIForeverDB.ahList or {}
-	local sub, arg = (rest or ""):match("^(%S+)%s*(.-)$")
-	sub = sub and sub:lower() or ""
-	if sub == "add" and arg ~= "" then
-		if #WoWAIForeverDB.ahList >= MAX_AH_LIST then
-			print("AH scan list is full (" .. MAX_AH_LIST .. "): /ai ah clear first")
-			return
-		end
-		table.insert(WoWAIForeverDB.ahList, arg)
-		print("Added to AH scan list: " .. arg)
-	elseif sub == "list" then
-		if #WoWAIForeverDB.ahList == 0 then
-			print("AH scan list is empty")
-		else
-			for i, item in ipairs(WoWAIForeverDB.ahList) do
-				print(i .. ". " .. item)
-			end
-		end
-	elseif sub == "clear" then
-		WoWAIForeverDB.ahList = {}
-		print("AH scan list cleared")
-	else
-		print("Usage: /ai ah add <item> | /ai ah list | /ai ah clear")
-	end
+local function HandleAH()
+	print("Search at the auction house, then click Scan for AI: it saves the auctions on screen for the AI.")
 end
 
 local function HandleQuests()
@@ -273,11 +198,7 @@ local function OnEvent(event, ...)
 		local f = EnsureAHFrame()
 		f:Show()
 	elseif event == "AUCTION_HOUSE_CLOSED" then
-		StopAHScan()
 		if ahFrame then ahFrame:Hide() end
-	elseif event == "COMMODITY_SEARCH_RESULTS_UPDATED" or event == "ITEM_SEARCH_RESULTS_UPDATED" or
-		event == "COMMODITY_SEARCH_RESULTS_RECEIVED" or event == "ITEM_SEARCH_RESULTS_RECEIVED" then
-		CollectAHResults()
 	elseif event == "PLAYER_LOGOUT" then
 		local bulk = EnsureBulk()
 		bulk.journal.logout = true
@@ -307,10 +228,6 @@ WoWAIForever.Register({
 		ENCOUNTER_END = true,
 		AUCTION_HOUSE_SHOW = true,
 		AUCTION_HOUSE_CLOSED = true,
-		COMMODITY_SEARCH_RESULTS_UPDATED = true,
-		ITEM_SEARCH_RESULTS_UPDATED = true,
-		COMMODITY_SEARCH_RESULTS_RECEIVED = true,
-		ITEM_SEARCH_RESULTS_RECEIVED = true,
 		PLAYER_LOGOUT = true,
 	},
 	onEvent = OnEvent,

@@ -21,7 +21,7 @@ Permanent rule (Pedro, 2026-10-03): wow-ai must comply 100% with Blizzard's Term
 | Input | No generated keystrokes or clicks, no window focusing, no global keyboard hooks. The push-to-talk helper uses `RegisterHotKey` and never touches the game window. | `FORBIDDEN-API` |
 | Memory and client | No reading or writing game memory, no code injection, no client modification. The addon is plain Lua in `Interface/AddOns`. | `FORBIDDEN-API` |
 | Secure UI code | No replacing Blizzard functions or methods on Blizzard frames; react with `hooksecurefunc` or `HookScript`. Replacing them taints the game's secure code, and the game then blocks the player's own typed `/cast`, `/run` or settings changes and blames the addon. Protected and hardware-event calls (`ReloadUI` among them) run only from a real keypress or click, never from a timer or event. | `LUA-TAINT`; `tests/addon_test.js`, `tests/forever/addon_slot_pool.test.js` |
-| Combat | No AI output or advice during combat or encounters: sends are blocked and replies are held until the fight ends. | `Forever_Lockout.lua`; tests in `tests/forever/` |
+| Combat | No AI output or advice during combat or encounters: sends are blocked, replies are held until the fight ends, and a window opened by hand mid-fight shows "Replies are hidden during combat" instead of earlier replies, with the copy box closed (backlog 79). | `Forever_Lockout.lua`, `Forever_Calm.lua`; tests in `tests/forever/` |
 | Code and money | Code stays readable (no obfuscation), free, with no advertising or donation requests. | `OBFUSCATION`, `POLICY-SOLICIT` |
 | Agent advice | The mentor gives settings as menu paths, not `/run` scripts, and never suggests anything that automates play. | `mentor/AGENTS.md` hard rule 9 and the game system prompt in `bridge/protocol.js`; `tests/bridge_test.js` |
 | Agent-built addons | Addons the agent writes go through the untrusted lint before they can be loaded, and the player loads them by hand. | `tools/safety-ci.js --untrusted`; `bridge/forever/modules/60-builder.js` |
@@ -35,7 +35,7 @@ Fixed in the PR that added this page:
 
 Checked and compliant:
 
-- Auction house: the addon only reads search results (`SendSearchQuery` on a 1.5 s timer while the player has the auction house open, at most 50 items). It never bids, buys or posts. Whether the Forever client accepts `SendSearchQuery` from a timer is unverified in game.
+- Auction house: the addon sends no search queries of its own. When the player clicks **Scan for AI**, it reads the results the player's own search already shows (`C_AuctionHouse.GetBrowseResults`, at most 500 items) and saves them; nothing runs on a timer or on its own. It never bids, buys or posts. Whether the Forever client has `GetBrowseResults` is unverified in game; without it the button only prints a short message.
 - Key bindings: the addon never binds keys on its own. `/wow-ai bind <key>` binds one key to the addon's own button when the player types it, out of combat.
 - Keypress reload: the hidden key catcher lets every key through to the game and only reloads the UI; it never acts in the world.
 - Translation reads chat only on channels the player turns on (none by default) and pre-fills the reply box; the player presses Enter to send.
