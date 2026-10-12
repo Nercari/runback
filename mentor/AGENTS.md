@@ -26,7 +26,7 @@ The addon attaches a context block (character, level, zone, target, and so on) a
 
 | Command (`cmd=`) | Extra fields |
 |---|---|
-| `review` | `lastFight` (start, end, encounter, success), `deaths[]`, `meter`, `logging`, `advLogging`, `Spellbook` |
+| `review` | `lastFight` (start, end, encounter, success, `hp` = health % when the fight started), `deaths[]`, `meter`, `logging`, `advLogging`, `Spellbook`, `lowStart` |
 | `death` | `deaths[]` (time, killer, spell), `lastFight`, `logging` |
 | `build`, `gear` | `talents`, compact `gear` (slot:itemID:enchant:gems); `build` also `Spellbook` |
 | `quest` | `questDetail` (quest id and title) |
@@ -60,6 +60,7 @@ When the player asks to review a fight (`cmd=review`, or "review my last fight")
 5. **Positions (F03).** If advanced logging is on and the slice has position fields, you may report "stood in X for N seconds" findings. Cite the coordinates and time. If positions are missing, say the review has no positional data.
 6. **Compare with the notebook.** Say whether a previous mistake came back or improved.
 7. **One drill** for the next session (see Drills).
+   **Low-health starts.** When the context has `lowStart=N` (fights today that started below 50% health, counted by the addon), end the review with these two lines, N filled in: "fights started below 50% health: N" and "tip: before the next pull, rest, eat or drink until you are above half health." No `lowStart` line means none: say nothing about it.
 8. **Update the notebook**: recurring-mistakes table (count, last seen, improving?), lessons taught, and append one scorecard row (F05).
 9. **Report (F08), only if asked** ("report", "relatório"): write `reports/<date>-<time>.html`, a single self-contained HTML file with inline SVG, no external scripts or images: a timeline of the fight (casts, damage taken spikes, deaths), the position path if positions exist, and the scorecard trend. Tell the player the file path.
 
@@ -87,7 +88,7 @@ Only include numbers you computed from the slice (`activeTimePct` = share of the
 
 ## Session recap (`cmd=recap`)
 
-`cmd=recap`, or "recap my session". Run `node <repo>/tools/session-recap.js --notebook characters/<realm>-<name>.md`. It counts today's scorecard rows and prints five lines: fights, deaths, time, and the mistake that repeated most. Send those five lines as printed, in plain words, then one next thing to practice from the notebook's drills. Do not add or estimate anything the tool leaves out: "not in the rows" stays as is. Exit 1 means no row for today: say so and offer `cmd=review` on the last fight so a row gets written. A recap is out of combat only; the addon already blocks it in a fight.
+`cmd=recap`, or "recap my session". Run `node <repo>/tools/session-recap.js --notebook characters/<realm>-<name>.md`, adding `--low-start N` when the context has `lowStart=N` (fights today that started below 50% health). It counts today's scorecard rows and prints five lines: fights, deaths, time, and the mistake that repeated most; with `--low-start` above 0 it adds "fights started below 50% health: N" and one tip. Send those lines as printed, in plain words, then one next thing to practice from the notebook's drills. Do not add or estimate anything the tool leaves out: "not in the rows" stays as is. Exit 1 means no row for today: say so and offer `cmd=review` on the last fight so a row gets written. A recap is out of combat only; the addon already blocks it in a fight.
 
 ## Drills (F06)
 
