@@ -104,3 +104,78 @@ test('the Combat log button still toggles through the shared switch', () => {
   end`);
   assert.equal(logSets(v), 'true');
 });
+
+// Backlog 83: the button read "off" for a moment with no click. Each change of
+// LoggingCombat() is recorded with its time for /wow-ai diag; an off without the
+// player's click says so once in chat; nothing here switches the log.
+const flipNotes = v => prints(v).filter(line => line.includes('without a click on the Combat log button'));
+const diag = v => {
+  v.run('SlashCmdList["WOWAI"]("diag")');
+  const h = 'WoWAIDB.chats[1].history';
+  return v.get(`${h}[#${h}].text`);
+};
+const clickButton = v => v.run(`for _, f in ipairs(STUB.frames) do
+  if f.kind == "Button" and f.text and f.text:find("^Combat log: ") then f.scripts.OnClick(f) end
+end`);
+
+test('a flip to off with no click is recorded for diag and said once in chat', () => {
+  const v = vm(true);
+  v.run('STUB.Tick()');
+  v.run('STUB.logging = false; STUB.Tick(); STUB.Tick(); STUB.Tick()');
+  const notes = flipNotes(v);
+  assert.equal(notes.length, 1, 'one line, not one per tick');
+  assert.match(notes[0], /^\|cff7ec8ff\[WoW AI\]\|r The combat log turned off at 12:00 without a click/);
+  // It comes back on (by something else), then flips off again: a second flip, a second line.
+  v.run('STUB.logging = true; STUB.Tick(); STUB.logging = false; STUB.Tick()');
+  assert.equal(flipNotes(v).length, 2);
+  const text = diag(v);
+  assert.match(text, /combat log now: off, changes this session: 12:00 off \(no click\); 12:00 on \(no click\); 12:00 off \(no click\)/);
+  assert.equal(logSets(v), '', 'the watch only reads the log');
+});
+
+test('the diag list keeps only the last 10 changes', () => {
+  const v = vm(true);
+  v.run('STUB.Tick(); for i = 1, 15 do STUB.logging = not STUB.logging; STUB.Tick() end');
+  const list = diag(v).match(/changes this session: (.*)/)[1].split('; ');
+  assert.equal(list.length, 10);
+});
+
+test('the player\'s click on the Combat log button is recorded as a click and prints no flip line', () => {
+  const v = vm(true);
+  v.run('STUB.Tick()');
+  clickButton(v);
+  v.run('STUB.Tick()');
+  assert.equal(logSets(v), 'false', 'the click switched it off');
+  assert.deepEqual(flipNotes(v), []);
+  assert.match(diag(v), /changes this session: 12:00 off \(your click\)/);
+});
+
+test('no diag change and no line while the log stays as it is', () => {
+  const v = vm(true);
+  for (let i = 0; i < 5; i++) v.run('STUB.Tick()');
+  assert.deepEqual(flipNotes(v), []);
+  assert.match(diag(v), /combat log now: on, changes this session: none/);
+});
+
+test('only the player-click switch calls LoggingCombat with an argument', () => {
+  // Every LoggingCombat( call in the addon either reads it (no argument) or is the one in WoWAI.SetCombatLog.
+  const writes = [];
+  for (const file of fs.readdirSync(addon).filter(f => f.endsWith('.lua'))) {
+    read(file).split('\n').forEach((line, i) => {
+      if (/^\s*--/.test(line)) return;
+      for (const m of line.matchAll(/LoggingCombat\(([^)]*)\)/g)) if (m[1].trim() !== '') writes.push(`${file}:${i + 1}: ${line.trim()}`);
+    });
+  }
+  assert.deepEqual(writes, ['WoWAI.lua:' + (read('WoWAI.lua').split('\n').findIndex(l => l.trim() === 'LoggingCombat(on)') + 1) + ': LoggingCombat(on)']);
+  const fn = read('WoWAI.lua').match(/function WoWAI\.SetCombatLog\(on\)\n([\s\S]*?)\nend/)[1];
+  assert.match(fn, /if InCombatLockdown\(\) or type\(LoggingCombat\) ~= "function" then return false end\n\tLoggingCombat\(on\)/);
+  // SetCombatLog is reached only from the button's OnClick and the chat link click.
+  const callers = [];
+  for (const file of fs.readdirSync(addon).filter(f => f.endsWith('.lua'))) {
+    read(file).split('\n').forEach(line => { if (/SetCombatLog\(/.test(line) && !/function WoWAI\.SetCombatLog/.test(line)) callers.push(line.trim()); });
+  }
+  assert.deepEqual(callers, [
+    'if type(LoggingCombat) == "function" then WoWAI.SetCombatLog(not LoggingCombat()) end',
+    'elseif WoWAI.SetCombatLog(true) then',
+  ]);
+});
