@@ -243,7 +243,13 @@ function weights(scenario) {
   }
   return out;
 }
-module.exports = { evaluate, weights, armorReduction, attackTable, values };
+module.exports = {
+  evaluate,
+  weights,
+  armorReduction,
+  attackTable,
+  values,
+};
 const { cli, report } = require("./theorycraft-cli");
 module.exports.cli = cli;
 module.exports.report = report;

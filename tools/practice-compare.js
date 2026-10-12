@@ -64,4 +64,8 @@ if (require.main === module) {
   console.log(process.argv.includes("--json") ? JSON.stringify(r) : format(r));
   process.exitCode = r.ok ? 0 : 1;
 }
-module.exports = { compare, format, rowsOf };
+module.exports = {
+  compare,
+  format,
+  rowsOf,
+};

@@ -69,4 +69,8 @@ function entries(acfg, id) {
   return out;
 }
 
-module.exports = { CATALOG, entries, validEffort };
+module.exports = {
+  CATALOG,
+  entries,
+  validEffort,
+};

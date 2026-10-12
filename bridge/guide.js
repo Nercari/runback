@@ -304,6 +304,15 @@ function guideNote({ titles = [], failed = false } = {}) {
 }
 
 module.exports = {
-  GUIDE_LIMITS, GUIDE_KINDS, GUIDE_STATE_STEPS, validateGuide, validateGuideSet, parseGuideText,
-  newGuides, applyGuides, extractGuideBlocks, readGuideFile, guideNote,
+  GUIDE_LIMITS,
+  GUIDE_KINDS,
+  GUIDE_STATE_STEPS,
+  validateGuide,
+  validateGuideSet,
+  parseGuideText,
+  newGuides,
+  applyGuides,
+  extractGuideBlocks,
+  readGuideFile,
+  guideNote,
 };

@@ -73,4 +73,9 @@ if (require.main === module) {
   console.log(process.argv.includes("--json") ? JSON.stringify({ ...r, lowStart: low }) : [format(r), ...lowStartLines(low)].join("\n"));
   process.exitCode = r.ok ? 0 : 1;
 }
-module.exports = { recap, format, lowStartLines, LOW_HEALTH_TIP };
+module.exports = {
+  recap,
+  format,
+  lowStartLines,
+  LOW_HEALTH_TIP,
+};

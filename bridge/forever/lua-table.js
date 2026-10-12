@@ -83,4 +83,7 @@ function parseGlobal(src, name) {
   const m = re.exec(String(src));
   return m ? parse(String(src).slice(m.index + m[0].length)) : undefined;
 }
-module.exports = { parseGlobal, LuaParseError };
+module.exports = {
+  parseGlobal,
+  LuaParseError,
+};
