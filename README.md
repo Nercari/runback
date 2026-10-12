@@ -107,7 +107,7 @@ cd C:\path\to\realms
 wow-ai
 ```
 
-Every chat that hasn't picked its own folder now works in `realms`, and the panel's cwd line shows it. `wow-ai --project <dir>` names the folder explicitly; `npm start` inside this repo falls back to `defaultCwd` in the config, and to the mentor workspace (`wow-mentor`, next to this repo) when that is empty. A broad start or configured folder (Documents, Desktop, Downloads, your home folder, a drive root) is skipped in favour of the mentor workspace, because the agent would read unrelated files there. Only one bridge can run at a time (two would fight over the screen and the slot files), so this sets the default folder rather than giving you one bridge per project.
+Every chat that hasn't picked its own folder now works in `realms`, and the status light's tooltip shows it (hover the light at the top left of the window). `wow-ai --project <dir>` names the folder explicitly; `npm start` inside this repo falls back to `defaultCwd` in the config, and to the mentor workspace (`wow-mentor`, next to this repo) when that is empty. A broad start or configured folder (Documents, Desktop, Downloads, your home folder, a drive root) is skipped in favour of the mentor workspace, because the agent would read unrelated files there. Only one bridge can run at a time (two would fight over the screen and the slot files), so this sets the default folder rather than giving you one bridge per project.
 
 ## Use
 
@@ -133,7 +133,7 @@ Right-clicking a chat in the left panel opens a small menu with **Rename...**, *
 | `/wow-ai resend` | show the strip again if the bridge missed it |
 | `/wow-ai reload` | reload the UI now (also frees the slot pool) |
 | `/wow-ai mode reload` | fallback transport that costs a `/reload` per step, if pixels or slots can't work |
-| `/wow-ai diag`, `/wow-ai slots` | transport diagnostics |
+| `/wow-ai diag`, `/wow-ai slots` | transport diagnostics, and each change of the combat log this session |
 | `/wow-ai help` | the full list |
 
 Click any message, or `/wow-ai copy` for the last reply, to open it in a selectable box for Ctrl+C.
