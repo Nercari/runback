@@ -38,4 +38,4 @@ The bridge ships no game data: the agent has to know where things are. With just
 
 The optional `WoWAI_Nodes` addon is the same idea for the in-game node pins: a separate addon that sets the global `WoWAINodes = { kinds = { { name, "mining"|"herbalism", requiredSkill }, ... }, maps = { [uiMapID] = { [kindIndex] = "xxxyyyxxxyyy..." } } }`, where each point is x and y in tenths of a percent, three digits each. `Map.lua` reads it if it is there and says so in `/wow-ai map` if it is not.
 
-Step-by-step leveling guides use the same map coordinates (`m`, `x`, `y`); their file format is in `docs/GUIDE.md`.
+Step-by-step leveling guides use the same map coordinates (`m`, `x`, `y`); their file format is in `docs/GUIDE.md`. The guide panel's current step shows as one more layer, `guide`, which the addon keeps itself: a sync from the bridge never replaces it, and while it is set it takes the name `guide` over a bridge layer of that name. Its points can carry a radius that counts as arrived (see "On the map" in `docs/GUIDE.md`); during combat its pins and its navigator hide.

@@ -5,9 +5,11 @@
 -- is AI-written, so the panel hides while the lockout is on (combat, encounter,
 -- challenge run) and comes back after, like the chat window (Forever_Calm.lua).
 -- A step ticks itself off when the quest log shows it done (backlog 70), or by
--- hand with the Tick button. A Why? button by each step puts a question about it
--- in the chat box (backlog 75); the player sends it. The Re-plan button does the
--- same with a request for a new guide from the player's current point (backlog 73).
+-- hand with the Tick button. While the panel is open, the current step's points go
+-- to the map's `guide` layer and navigator (backlog 71, WoWAIMap.SetGuideStep).
+-- A Why? button by each step puts a question about it in the chat box (backlog 75);
+-- the player sends it. The Re-plan button does the same with a request for a new
+-- guide from the player's current point (backlog 73).
 -- Steps the player's own data shows closed (prerequisite not turned in, an
 -- exclusive quest turned in, reputation or profession too low) are skipped, and
 -- an XP pace line shows under the steps (backlog 76).
@@ -446,7 +448,24 @@ local function Build()
 	return f
 end
 
+-- The current step's points on the map, or nothing when the panel is closed or the
+-- step has none. Map.lua hides them during the lockout.
+local function ShowOnMap()
+	local map = WoWAIMap
+	if type(map) ~= "table" or type(map.SetGuideStep) ~= "function" then return end
+	local g = Panel().shown and Current()
+	local order = g and M.Order(g, Who()) or {}
+	local i = order[Place(order, g and Panel().step[g.id])]
+	local s = i and g.steps[i]
+	if s and type(s.points) == "table" then
+		map.SetGuideStep(g.id .. ":" .. i, StepLine(s), s.points)
+	else
+		map.SetGuideStep(nil)
+	end
+end
+
 function M.Refresh()
+	ShowOnMap()
 	local p = Panel()
 	local want = p.shown and not Locked()
 	if not want then
