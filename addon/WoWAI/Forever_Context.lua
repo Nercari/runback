@@ -10,6 +10,28 @@ local function AddFight(started, stopped)
 	return f
 end
 
+-- Backlog 63: health when combat starts, read once at PLAYER_REGEN_DISABLED. Today's
+-- count of fights started below half health lives in saved data so a /reload keeps it;
+-- it only goes out with a recap or review, which the addon never sends in combat.
+local function StartHealth()
+	if type(UnitHealth) ~= "function" or type(UnitHealthMax) ~= "function" then return nil end
+	local hp, max = tonumber(UnitHealth("player")), tonumber(UnitHealthMax("player"))
+	if not hp or not max or max <= 0 then return nil end
+	return math.floor(hp * 100 / max)
+end
+
+local function LowStarts(add)
+	WoWAIForeverDB = WoWAIForeverDB or {}
+	local day = date("%Y-%m-%d")
+	local rec = WoWAIForeverDB.lowStart
+	if type(rec) ~= "table" or rec.day ~= day then
+		rec = { day = day, n = 0 }
+		WoWAIForeverDB.lowStart = rec
+	end
+	if add then rec.n = rec.n + 1 end
+	return rec.n
+end
+
 local function Gear()
 	local parts = {}
 	for slot = 1, 19 do
@@ -33,6 +55,7 @@ local function Summary(kind)
 		if last.stop then s = s .. ",end=" .. date("%Y-%m-%dT%H:%M:%S", last.stop) end
 		if last.enc then s = s .. ",enc=" .. last.enc end
 		if last.ok ~= nil then s = s .. ",ok=" .. (last.ok and "1" or "0") end
+		if last.hp then s = s .. ",hp=" .. last.hp end
 		return s
 	end
 	local function deathsLine()
@@ -82,6 +105,10 @@ local function Summary(kind)
 			if f then lines[#lines + 1] = f end
 		end
 	end
+	if kind == "review" or kind == "recap" then
+		local low = LowStarts()
+		if low > 0 then lines[#lines + 1] = "lowStart=" .. low end
+	end
 	return table.concat(lines, "\n")
 end
 
@@ -92,7 +119,11 @@ WoWAIForever.Register({
 		PLAYER_LEVEL_UP = true, TIME_PLAYED_MSG = true },
 	context = Summary,
 	onEvent = function(event, ...)
-		if event == "PLAYER_REGEN_DISABLED" then current = AddFight(time()) end
+		if event == "PLAYER_REGEN_DISABLED" then
+			current = AddFight(time())
+			current.hp = StartHealth()
+			if current.hp and current.hp < 50 then LowStarts(true) end
+		end
 		if event == "PLAYER_REGEN_ENABLED" and current then
 			current.stop = time()
 			current = nil
