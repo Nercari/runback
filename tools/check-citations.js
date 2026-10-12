@@ -257,4 +257,8 @@ if (require.main === module) {
   }
 }
 
-module.exports = { check, argsOf, run };
+module.exports = {
+  check,
+  argsOf,
+  run,
+};

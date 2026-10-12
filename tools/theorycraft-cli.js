@@ -63,4 +63,7 @@ function cli(argv = process.argv.slice(2)) {
 }
 
 
-module.exports = { cli, report };
+module.exports = {
+  cli,
+  report,
+};

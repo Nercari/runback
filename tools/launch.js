@@ -309,4 +309,15 @@ function main(argv) {
 
 if (require.main === module) main(process.argv.slice(2));
 
-module.exports = { update, addonDiffers, slotsCreated, plan, GAME_TEXT, bridgeRunning, startBridge, stopBridge, gameRunning, makeShortcut };
+module.exports = {
+  update,
+  addonDiffers,
+  slotsCreated,
+  plan,
+  GAME_TEXT,
+  bridgeRunning,
+  startBridge,
+  stopBridge,
+  gameRunning,
+  makeShortcut,
+};

@@ -168,4 +168,9 @@ if (require.main === module)
       console.error(e.message);
       process.exitCode = 1;
     });
-module.exports = { watch, fetchText, htmlText, diff };
+module.exports = {
+  watch,
+  fetchText,
+  htmlText,
+  diff,
+};
