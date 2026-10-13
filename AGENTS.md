@@ -1,12 +1,12 @@
-# runback (WoW: Forever mentor)
+# Runback (WoW: Forever mentor)
 
-Nercari's fork of `chelinho139/runback` (MIT): chat with local coding agents from inside World of Warcraft: Forever, plus an after-combat mentor. Goals and backlog: `docs/spec.md`. How it works: `docs/ARCHITECTURE.md`, `docs/FOREVER.md`. Conventions and the test table: `CONTRIBUTING.md`.
+Nercari's fork of `chelinho139/wow-ai` (MIT): chat with local coding agents from inside World of Warcraft: Forever, plus an after-combat mentor. Goals and backlog: `docs/spec.md`. How it works: `docs/ARCHITECTURE.md`, `docs/FOREVER.md`. Conventions and the test table: `CONTRIBUTING.md`.
 
 `mentor/AGENTS.md` and `docs/AGENTS.md` are product files (the in-game coach's prompt and the agent-CLI guide), not instructions for working on this repo.
 
 ## Blizzard policy (permanent rule, Nercari, 2026-10-03)
 
-runback must comply 100% with Blizzard's Terms of Service, EULA and UI add-on policy at all times. Any feature, change or idea that could breach them is rejected, however useful. When in doubt, don't ship it and ask Nercari on nercari-control #114.
+Runback must comply 100% with Blizzard's Terms of Service, EULA and UI add-on policy at all times. Any feature, change or idea that could breach them is rejected, however useful. When in doubt, don't ship it and ask Nercari on nercari-control #114.
 
 - Check every PR against `docs/COMPLIANCE.md` and say in the PR that you did. It lists the sources, what each clause means for this repo, and the open questions waiting on Nercari.
 - The addon only uses the game's own UI API, never replaces Blizzard functions or frame methods (hook them with `hooksecurefunc`), never calls protected or hardware-event actions outside a real keypress or click, and never performs gameplay, economy or targeting actions for the player.
