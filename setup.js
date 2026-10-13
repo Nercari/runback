@@ -19,7 +19,7 @@ const path = require('path');
 const { spawnSync } = require('child_process');
 
 const ROOT = __dirname;
-const ADDON_SRC = path.join(ROOT, 'addon', 'WoWAI');
+const ADDON_SRC = path.join(ROOT, 'addon', 'Runback');
 const BRIDGE = path.join(ROOT, 'bridge');
 const CONFIG = path.join(BRIDGE, 'config.json');
 const EXAMPLE = path.join(BRIDGE, 'config.example.json');
@@ -78,24 +78,30 @@ function migrateOldInstall(client, account) {
   const addons = path.join(client, 'Interface', 'AddOns');
   const savedDir = path.join(client, 'WTF', 'Account', account, 'SavedVariables');
   const oldSaved = path.join(savedDir, 'WoWClaude.lua');
-  const newSaved = path.join(savedDir, 'WoWAI.lua');
+  const wowaiSaved = path.join(savedDir, 'WoWAI.lua');
+  const newSaved = path.join(savedDir, 'Runback.lua');
   if (fs.existsSync(oldSaved) && !fs.existsSync(newSaved)) {
-    const src = fs.readFileSync(oldSaved, 'utf8').replace(/^WoWClaudeDB\s*=/m, 'WoWAIDB =');
+    const src = fs.readFileSync(oldSaved, 'utf8').replace(/^WoWClaudeDB\s*=/m, 'RunbackDB =');
     fs.writeFileSync(newSaved, src);
     console.log(`migrate  : chats and settings copied from ${path.basename(oldSaved)} to ${path.basename(newSaved)}`);
   }
+  if (fs.existsSync(wowaiSaved) && !fs.existsSync(newSaved)) {
+    const src = fs.readFileSync(wowaiSaved, 'utf8').replace(/^WoWAIDB\s*=/m, 'RunbackDB =');
+    fs.writeFileSync(newSaved, src);
+    console.log(`migrate  : chats and settings copied from ${path.basename(wowaiSaved)} to ${path.basename(newSaved)}`);
+  }
   let removed = 0;
   for (const name of fs.existsSync(addons) ? fs.readdirSync(addons) : []) {
-    if (name === 'WoWClaude' || /^WoWClaude_S\d{3}$/.test(name)) {
+    if (name === 'WoWClaude' || /^WoWClaude_S\d{3}$/.test(name) || name === 'WoWAI' || /^WoWAI_S\d{3}$/.test(name)) {
       fs.rmSync(path.join(addons, name), { recursive: true, force: true });
       removed++;
     }
   }
-  if (removed) console.log(`migrate  : removed the old WoWClaude addon and slot folders (${removed} folder(s))`);
+  if (removed) console.log(`migrate  : removed legacy addon and slot folders (${removed} folder(s))`);
 }
 
 function copyAddon(client) {
-  const dest = path.join(client, 'Interface', 'AddOns', 'WoWAI');
+  const dest = path.join(client, 'Interface', 'AddOns', 'Runback');
   fs.mkdirSync(dest, { recursive: true });
   let copied = 0;
   for (const f of fs.readdirSync(ADDON_SRC)) {
@@ -113,12 +119,20 @@ function copyAddon(client) {
 function upgradeConfig(cfg, example) {
   const notes = [];
   if (/WoWClaude/.test(cfg.inboxFile || '')) {
-    cfg.inboxFile = path.join(cfg.addonDir, 'WoWAI', 'Inbox.lua');
+    cfg.inboxFile = path.join(cfg.addonDir, 'Runback', 'Inbox.lua');
     notes.push('inboxFile');
   }
   if (/WoWClaude\.lua$/.test(cfg.savedVariablesFile || '')) {
-    cfg.savedVariablesFile = cfg.savedVariablesFile.replace(/WoWClaude\.lua$/, 'WoWAI.lua');
+    cfg.savedVariablesFile = cfg.savedVariablesFile.replace(/WoWClaude\.lua$/, 'Runback.lua');
     notes.push('savedVariablesFile');
+  }
+  if (/WoWAI\.lua$/.test(cfg.savedVariablesFile || '')) {
+    cfg.savedVariablesFile = cfg.savedVariablesFile.replace(/WoWAI\.lua$/, 'Runback.lua');
+    notes.push('savedVariablesFile');
+  }
+  if (/\/WoWAI\//.test(cfg.inboxFile || '')) {
+    cfg.inboxFile = cfg.inboxFile.replace(/\/WoWAI\//g, '/Runback/').replace(/\\WoWAI\\/g, '\\Runback\\');
+    notes.push('inboxFile');
   }
   if (!cfg.agents) {
     const claude = { ...example.agents.claude };
@@ -149,8 +163,8 @@ function writeConfig(client, account) {
   }
   const cfg = example;
   cfg.addonDir = path.join(client, 'Interface', 'AddOns');
-  cfg.inboxFile = path.join(cfg.addonDir, 'WoWAI', 'Inbox.lua');
-  cfg.savedVariablesFile = path.join(client, 'WTF', 'Account', account, 'SavedVariables', 'WoWAI.lua');
+  cfg.inboxFile = path.join(cfg.addonDir, 'Runback', 'Inbox.lua');
+  cfg.savedVariablesFile = path.join(client, 'WTF', 'Account', account, 'SavedVariables', 'Runback.lua');
   cfg.defaultCwd = args.project ? path.resolve(args.project) : ''; // empty: the bridge uses the mentor workspace
   const exe = fs.readdirSync(client).find(f => /^Wow.*\.exe$/i.test(f));
   if (exe) cfg.capture.processName = exe.replace(/\.exe$/i, '');
@@ -179,8 +193,8 @@ try {
   const { dest, copied } = copyAddon(client);
   console.log(`addon    : ${copied} file(s) -> ${dest}`);
   const cfg = writeConfig(client, account);
-  console.log(`project  : ${cfg.defaultCwd || 'the mentor workspace'}  (change with /wow-ai cd in game, or defaultCwd in config.json)`);
-  console.log(`agent    : ${cfg.agent} by default (change with /wow-ai agent in game, or "agent" in config.json)`);
+  console.log(`project  : ${cfg.defaultCwd || 'the mentor workspace'}  (change with /runback cd in game, or defaultCwd in config.json)`);
+  console.log(`agent    : ${cfg.agent} by default (change with /runback agent in game, or "agent" in config.json)`);
   console.log(agentReport(cfg));
   console.log('slots    : building the reply-slot pool and signal files...');
   const r = spawnSync(process.execPath, [path.join(BRIDGE, 'install-slots.js')], { stdio: 'inherit' });
@@ -188,9 +202,9 @@ try {
   console.log(`
 Done. Next:
   1. Fully quit and relaunch World of Warcraft (it only discovers new addon files at launch).
-  2. Enable "WoW AI" at the character select AddOns screen (the WoW AI slot ### entries stay enabled).
+  2. Enable "Runback" at the character select AddOns screen (the Runback slot ### entries stay enabled).
   3. Start the bridge:  npm start   (in this terminal${process.platform === 'win32' ? '; bridge\\start-window.cmd opens its own window' : '; on Linux keep the game borderless/windowed and check the capture with: npm run probe'})
-  4. In game:  /wow-ai
+  4. In game:  /runback
 `);
 } catch (e) {
   console.error('setup failed:', e.message);

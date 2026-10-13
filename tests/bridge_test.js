@@ -74,7 +74,7 @@ test('systemPrompt always asks for the TL;DR block, and wraps the game context a
   // Without a context the prompt is only the reply-format rule.
   for (const empty of ['', '  \n ', undefined]) {
     const s = P.systemPrompt(empty);
-    assert.ok(s.includes('wow-ai addon'));
+    assert.ok(s.includes('runback addon'));
     assert.ok(s.includes('"TL;DR:"'), 'asks for the summary marker');
     assert.ok(!s.includes('in-game situation'), 'no context section without a context');
     assert.ok(!s.includes('Reference for writing addons'), 'no primer section without a context');
@@ -108,11 +108,11 @@ test('splitSummary takes the last TL;DR block for the game chat and keeps the wh
   assert.equal(P.splitSummary('a TL;DR: inline\nmore').summary, '');
   assert.equal(P.splitSummary('first TL;DR: x\n\nbody\n\nTL;DR: last one').summary, 'last one');
   // The slot file carries the summary only when there is one.
-  const lua = P.luaTable('WoWAI_SlotData', [{ chat: 'c', id: 1, status: 'done', text: 'body\nTL;DR: short', summary: 'short' }, { chat: 'c', id: 2, status: 'done', text: 'plain' }]);
+  const lua = P.luaTable('Runback_SlotData', [{ chat: 'c', id: 1, status: 'done', text: 'body\nTL;DR: short', summary: 'short' }, { chat: 'c', id: 2, status: 'done', text: 'plain' }]);
   assert.ok(lua.includes('summary = "short"'));
   assert.equal((lua.match(/summary = /g) || []).length, 1);
   // The agents installed on the bridge PC, and the models each can switch to.
-  const pools = P.luaTable('WoWAI_SlotData', [], { agent: 'claude', agents: ['claude', 'codex'], models: { claude: ['opus', 'sonnet'], codex: [], 'bad id': ['x'] } });
+  const pools = P.luaTable('Runback_SlotData', [], { agent: 'claude', agents: ['claude', 'codex'], models: { claude: ['opus', 'sonnet'], codex: [], 'bad id': ['x'] } });
   assert.ok(pools.includes('agents = { "claude", "codex" },'));
   assert.ok(pools.includes('models = { claude = { "opus", "sonnet" }, codex = {  }, ["bad id"] = { "x" } },'));
 });
@@ -138,7 +138,7 @@ test('jobsFromStrip handles several records per frame and older formats', () => 
 
 test('parseOutbox decodes the SavedVariables fallback', () => {
   const hex = s => Buffer.from(s, 'utf8').toString('hex');
-  const src = `WoWAIDB = {\n["outbox"] = {\n["id"] = 7,\n["session"] = "abc123",\n["chat"] = "c1",\n["text"] = "${hex('héllo')}",\n["cwd"] = "${hex('realms')}",\n["newSession"] = true,\n},\n["settings"] = {},\n}`;
+  const src = `RunbackDB = {\n["outbox"] = {\n["id"] = 7,\n["session"] = "abc123",\n["chat"] = "c1",\n["text"] = "${hex('héllo')}",\n["cwd"] = "${hex('realms')}",\n["newSession"] = true,\n},\n["settings"] = {},\n}`;
   assert.deepEqual(P.parseOutbox(src), { id: 7, session: 'abc123', chat: 'c1', text: 'héllo', cwd: 'realms', newSession: true, via: 'reload' });
   const withAllow = src.replace('["newSession"]', `["allow"] = "${hex('WebSearch\x1fBash(git:*)')}",\n["newSession"]`);
   assert.deepEqual(P.parseOutbox(withAllow).allow, ['WebSearch', 'Bash(git:*)']);
@@ -150,7 +150,7 @@ test('parseOutbox decodes the SavedVariables fallback', () => {
   const withModel = src.replace('["newSession"]', '["agent"] = "claude",\n["model"] = "sonnet",\n["newSession"]');
   assert.equal(P.parseOutbox(withModel).model, 'sonnet');
   assert.equal(P.parseOutbox(src.replace('["newSession"]', '["model"] = "-x",\n["newSession"]')).model, undefined);
-  assert.equal(P.parseOutbox('WoWAIDB = {}'), null);
+  assert.equal(P.parseOutbox('RunbackDB = {}'), null);
   assert.equal(P.parseOutbox('["outbox"] = { ["text"] = "" }'), null);
   // The reload outbox carries the chat's effort like its model; a bad token is dropped.
   const withEffort = src.replace('["newSession"] = true,', '["newSession"] = true,\n["model"] = "opus",\n["effort"] = "high",');
@@ -243,7 +243,7 @@ test('cmd flags accept only lowercase constrained names', () => {
 });
 
 test('isBroadFolder: drive root, home and above, Documents/Desktop/Downloads; a project folder is not', () => {
-  const home = path.join(os.tmpdir(), 'wowai-home', 'pedro');
+  const home = path.join(os.tmpdir(), 'runback-home', 'pedro');
   for (const d of [path.parse(home).root, home, path.dirname(home), path.join(home, 'Documents'), path.join(home, 'desktop'), path.join(home, 'Downloads'), path.join(home, 'OneDrive'), path.join(home, 'OneDrive - Work', 'Documents')]) {
     assert.equal(P.isBroadFolder(d, home), true, d);
   }
@@ -253,7 +253,7 @@ test('isBroadFolder: drive root, home and above, Documents/Desktop/Downloads; a 
 });
 
 test('pickDefaultCwd: explicit wins, broad start and config folders fall back to the mentor workspace', () => {
-  const home = path.join(os.tmpdir(), 'wowai-home', 'pedro');
+  const home = path.join(os.tmpdir(), 'runback-home', 'pedro');
   const docs = path.join(home, 'Documents'), proj = path.join(docs, 'realms'), mentorDir = path.join(docs, 'wow-mentor');
   const pick = o => P.pickDefaultCwd({ mentorDir, home, ...o });
   assert.deepEqual(pick({ project: docs, env: proj, started: proj }), { dir: docs, source: '--project' });
@@ -300,7 +300,7 @@ test('stalled runs (backlog 52): 3 quiet minutes or 5 minutes in total, and a no
   assert.match(P.noReplyText('Codex', [], 0), /finished without doing anything and without a reply/);
 
   // The marks ride in the slot file; anything else is dropped.
-  const lua = P.luaTable('WoWAI_SlotData', [
+  const lua = P.luaTable('Runback_SlotData', [
     { chat: 'c', id: 1, status: 'working', text: 'x', stall: 'quiet' },
     { chat: 'c', id: 2, status: 'done', text: 'y', stall: 'noreply' },
     { chat: 'c', id: 3, status: 'working', text: 'z', stall: '' },
@@ -435,7 +435,7 @@ test('splitFollowUps turns a FOLLOW-UPS line into at most two short questions an
   assert.deepEqual(P.splitFollowUps('a\n**Follow-ups**: one').followUps, ['one']);
   // The reply-format rules tell the agent about the tag; the slot file carries it.
   assert.ok(P.systemPrompt('').includes('FOLLOW-UPS: <question> | <question>'));
-  const lua = P.luaTable('WoWAI_SlotData', [{ chat: 'c', id: 1, status: 'done', text: 'x', followUps: ['Why "this"?', 'And that?'] }, { chat: 'c', id: 2, status: 'done', text: 'y', followUps: [] }]);
+  const lua = P.luaTable('Runback_SlotData', [{ chat: 'c', id: 1, status: 'done', text: 'x', followUps: ['Why "this"?', 'And that?'] }, { chat: 'c', id: 2, status: 'done', text: 'y', followUps: [] }]);
   assert.ok(lua.includes('followUps = { "Why \\"this\\"?", "And that?" },'), lua);
   assert.equal(lua.split('followUps').length, 2, 'none for a reply without follow-ups');
 });

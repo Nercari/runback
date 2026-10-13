@@ -19,12 +19,12 @@ module.exports = {
 };
 ```
 
-Addon modules call `WoWAIForever.Register(mod)` from a file loaded after `Forever.lua`. Every field is optional: `name`, `commands[word](rest,chat)`, `blocked()` (reason to refuse sends), `context(kind)` (extra context), `onReply(chat,rec)`, `events` plus `onEvent(event,...)`, and `init()`. Errors are isolated with `pcall`. A blocked reason is also shown in chat history; the strip is hidden until unblocked.
+Addon modules call `RunbackForever.Register(mod)` from a file loaded after `Forever.lua`. Every field is optional: `name`, `commands[word](rest,chat)`, `blocked()` (reason to refuse sends), `context(kind)` (extra context), `onReply(chat,rec)`, `events` plus `onEvent(event,...)`, and `init()`. Errors are isolated with `pcall`. A blocked reason is also shown in chat history; the strip is hidden until unblocked.
 
-Modules can exchange small internal notifications with `WoWAIForever.On(name, fn)` and `WoWAIForever.Fire(name, ...)`. Listener failures are isolated with `pcall`. Chat records can be inspected via the read-only accessor `WoWAIForever.GetChats()`.
+Modules can exchange small internal notifications with `RunbackForever.On(name, fn)` and `RunbackForever.Fire(name, ...)`. Listener failures are isolated with `pcall`. Chat records can be inspected via the read-only accessor `RunbackForever.GetChats()`.
 
 ```lua
-WoWAIForever.Register({
+RunbackForever.Register({
   name = "sample",
   commands = { sample = function(rest, chat) print(rest) end },
   blocked = function() return nil end,
@@ -39,12 +39,12 @@ WoWAIForever.Register({
 ## Look and hotkeys
 
 The optional Forever skin uses WoW's classic dialog and tooltip art. The saved
-`WoWAIForeverDB.skin.enabled`, `sounds`, and `minimap` settings default to true;
+`RunbackForeverDB.skin.enabled`, `sounds`, and `minimap` settings default to true;
 `minimapAngle` stores the button position. `/ai skin on|off` changes the skin
 setting and asks for a reload to apply it. `/ai minimap on|off` controls the
 minimap button.
 
-Hotkeys live in the game's own menu: Options > Keybindings > AddOns > WoW AI
+Hotkeys live in the game's own menu: Options > Keybindings > AddOns > Runback
 (from `Bindings.xml`). The addon never binds keys itself. On first login it
 prints the suggested keys and says which are free: Ctrl+Shift+A (window),
 Ctrl+Shift+M (mentor), Ctrl+Shift+R (review), Ctrl+Shift+D (death),
@@ -64,9 +64,9 @@ Shift+Tab switch chats.
 
 ## Addon builder
 
-Install the 20 LoadOnDemand user slots with `node tools/install-user-slots.js` before starting the client. Stage an addon as a flat directory of `.toc` and `.lua` files under `<mentorDir>/addon-staging/<Name>/`, then use `/ai try <Name>`. The builder applies the untrusted Lua safety scan, refuses links and non-Lua/XML files, and writes the result into a fresh `WoWAI_Uxx` slot. Click **Load <Name>** in the builder frame; WoW must have discovered the slot at client startup. Each slot is used once until `/ai builder reset` (only use reset after restarting the client). The slot code has no SavedVariables; the addon name vararg is the slot's name.
+Install the 20 LoadOnDemand user slots with `node tools/install-user-slots.js` before starting the client. Stage an addon as a flat directory of `.toc` and `.lua` files under `<mentorDir>/addon-staging/<Name>/`, then use `/ai try <Name>`. The builder applies the untrusted Lua safety scan, refuses links and non-Lua/XML files, and writes the result into a fresh `Runback_Uxx` slot. Click **Load <Name>** in the builder frame; WoW must have discovered the slot at client startup. Each slot is used once until `/ai builder reset` (only use reset after restarting the client). The slot code has no SavedVariables; the addon name vararg is the slot's name.
 
-`/ai promote <Name>` copies a linted addon to the regular AddOns folder for loading after the next full client restart. Names beginning with `WoWAI` are reserved, and existing folders are protected unless they carry `.wowai-promoted`. Linting blocks known dynamic code and protected APIs but cannot prove an addon safe: allowed WoW APIs and logic can still misbehave or affect the character within WoW's sandbox.
+`/ai promote <Name>` copies a linted addon to the regular AddOns folder for loading after the next full client restart. Names beginning with `Runback` are reserved, and existing folders are protected unless they carry `.runback-promoted`. Linting blocks known dynamic code and protected APIs but cannot prove an addon safe: allowed WoW APIs and logic can still misbehave or affect the character within WoW's sandbox.
 
 ## Push-to-talk
 

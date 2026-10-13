@@ -12,7 +12,7 @@ if (process.platform !== 'win32') {
   catch { console.log('SKIP Codec.lua round-trip: python3 is required off Windows.'); process.exit(0); }
 }
 
-const CODEC = path.join(__dirname, '..', 'addon', 'WoWAI', 'Codec.lua');
+const CODEC = path.join(__dirname, '..', 'addon', 'Runback', 'Codec.lua');
 const CAPTURE = path.join(__dirname, '..', 'bridge', 'capture.ps1');
 const CAPTURE_X11 = path.join(__dirname, '..', 'bridge', 'capture_x11.py');
 const TMP = path.join(__dirname, 'tmp');
@@ -25,7 +25,7 @@ function encodeWithLua(id, payload) {
   const L = lauxlib.luaL_newstate();
   lualib.luaL_openlibs(L);
   const code = fs.readFileSync(CODEC, 'utf8') +
-    `\nlocal cells, n = WoWAI_Codec.Encode(${id}, ${lit})\n` +
+    `\nlocal cells, n = Runback_Codec.Encode(${id}, ${lit})\n` +
     `local t = {}\nfor i = 1, #cells do t[i] = string.format("%d", cells[i]) end\n` +
     `RESULT = table.concat(t, ",")\n`;
   if (lauxlib.luaL_dostring(L, to_luastring(code)) !== 0) {

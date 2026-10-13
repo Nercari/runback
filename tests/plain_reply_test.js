@@ -53,17 +53,17 @@ function readReply(file, globalName) {
 }
 
 test('the game receives plain progress phrases, one evidence line and no internal lines', () => {
-  const S = fs.mkdtempSync(path.join(os.tmpdir(), 'wowai-plain-'));
+  const S = fs.mkdtempSync(path.join(os.tmpdir(), 'runback-plain-'));
   try {
     const repo = path.join(S, 'repo');
     fs.cpSync(path.join(__dirname, '..', 'bridge'), path.join(repo, 'bridge'), { recursive: true, filter: f => !/[\\/]bridge[\\/]tmp/.test(f) });
     fs.cpSync(path.join(__dirname, '..', 'mentor'), path.join(repo, 'mentor'), { recursive: true });
-    fs.mkdirSync(path.join(S, 'addons', 'WoWAI'), { recursive: true });
+    fs.mkdirSync(path.join(S, 'addons', 'Runback'), { recursive: true });
     fs.mkdirSync(path.join(S, 'proj'), { recursive: true });
-    fs.writeFileSync(path.join(S, 'addons', 'WoWAI', 'WoWAI.toc'), '## Interface: 16001\n');
+    fs.writeFileSync(path.join(S, 'addons', 'Runback', 'Runback.toc'), '## Interface: 16001\n');
     fs.writeFileSync(path.join(S, 'fake-claude.js'), FAKE);
     const cfg = JSON.parse(fs.readFileSync(path.join(repo, 'bridge', 'config.example.json'), 'utf8'));
-    Object.assign(cfg, { addonDir: path.join(S, 'addons'), inboxFile: path.join(S, 'addons', 'WoWAI', 'Inbox.lua'), savedVariablesFile: path.join(S, 'nope.lua'), defaultCwd: path.join(S, 'proj'), slots: 5, progressWriteMs: 1 });
+    Object.assign(cfg, { addonDir: path.join(S, 'addons'), inboxFile: path.join(S, 'addons', 'Runback', 'Inbox.lua'), savedVariablesFile: path.join(S, 'nope.lua'), defaultCwd: path.join(S, 'proj'), slots: 5, progressWriteMs: 1 });
     cfg.agent = 'claude';
     cfg.agents = { ...(cfg.agents || {}), claude: { ...((cfg.agents || {}).claude || {}), path: path.join(S, 'fake-claude.js') } };
     cfg.forever = { ...(cfg.forever || {}), mentorDir: path.join(S, 'mentor-workspace') };
@@ -77,9 +77,9 @@ test('the game receives plain progress phrases, one evidence line and no interna
     assert.equal(r.status, 0, r.stdout + r.stderr);
 
     // 49: while it worked, the window listed at most three phrases, none of them raw.
-    const working = readReply(path.join(S, 'snapshot.lua'), 'WoWAI_Inbox');
-    const final = readReply(cfg.inboxFile, 'WoWAI_Inbox');
-    if (process.env.WOWAI_DUMP) console.log('--- working ---\n' + working.text + '\n--- final ---\n' + final.text);
+    const working = readReply(path.join(S, 'snapshot.lua'), 'Runback_Inbox');
+    const final = readReply(cfg.inboxFile, 'Runback_Inbox');
+    if (process.env.RUNBACK_DUMP) console.log('--- working ---\n' + working.text + '\n--- final ---\n' + final.text);
     assert.equal(working.status, 'working');
     const lines = working.text.split('\n');
     assert.ok(lines.length >= 1 && lines.length <= 3, working.text);
@@ -90,7 +90,7 @@ test('the game receives plain progress phrases, one evidence line and no interna
     assert.equal(final.status, 'done');
     assert.doesNotMatch(final.text, /SPELL_CAST_SUCCESS|Player-4613|\d{2}\/\d{2}\/\d{4}/);
     assert.match(final.text, /Evidence: 17:41:56 Nercari cast Demon Skin/);
-    assert.doesNotMatch(final.text, /\[bridge\]|\[WoW AI map\]|point\(s\)|layer wand|needs your OK/i);
+    assert.doesNotMatch(final.text, /\[bridge\]|\[Runback map\]|point\(s\)|layer wand|needs your OK/i);
     assert.match(final.text, /I marked 2 places on your map: open it with M\./);
     assert.doesNotMatch(final.text, /wowmap/);
   } finally {

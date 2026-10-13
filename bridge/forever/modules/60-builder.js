@@ -31,7 +31,7 @@ function loadFiles(name, ctx) {
   const tocs = [...files.keys()].filter(file => file.toLowerCase().endsWith('.toc'));
   if (tocs.length !== 1) throw new Error('Staging addon must contain exactly one .toc file.');
   if (tocs[0] !== `${name}.toc`) throw new Error(`Staging .toc must be named ${name}.toc (case-sensitive).`);
-  const lintRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'wowai-lint-'));
+  const lintRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'runback-lint-'));
   const lintFolder = path.join(lintRoot, name);
   let checked;
   try {
@@ -58,7 +58,7 @@ function isKilled(ctx) { return fs.existsSync(path.join(ctx.HERE, 'KILLED')); }
 module.exports = {
   intercept(job, ctx) {
     if (!['try', 'promote', 'builder-reset'].includes(job.cmd)) return false;
-    if (isKilled(ctx)) { fail(ctx, job, 'AI is off. /wowai on to resume.'); return true; }
+    if (isKilled(ctx)) { fail(ctx, job, 'AI is off. /runback on to resume.'); return true; }
     if (job.cmd === 'builder-reset') {
       ctx.state.forever = ctx.state.forever || {};
       ctx.state.forever.builder = { used: {} };
@@ -68,19 +68,19 @@ module.exports = {
     }
     const name = String(job.text || '').trim();
     if (!safeName(name)) { fail(ctx, job, 'Invalid addon name. Use a letter followed by up to 39 letters, numbers or underscores.'); return true; }
-    if (name.toLowerCase().startsWith('wowai') || 'wowai'.startsWith(name.toLowerCase())) { fail(ctx, job, 'Names beginning with WoWAI are reserved.'); return true; }
+    if (name.toLowerCase().startsWith('runback') || 'runback'.startsWith(name.toLowerCase())) { fail(ctx, job, 'Names beginning with Runback are reserved.'); return true; }
     let loaded;
     try { loaded = loadFiles(name, ctx); } catch (error) { fail(ctx, job, error.message); return true; }
     const addons = ctx.cfg.addonDir;
     if (job.cmd === 'promote') {
-      if (name.toLowerCase().startsWith('wowai') || 'wowai'.startsWith(name.toLowerCase())) { fail(ctx, job, 'Names beginning with WoWAI are reserved.'); return true; }
+      if (name.toLowerCase().startsWith('runback') || 'runback'.startsWith(name.toLowerCase())) { fail(ctx, job, 'Names beginning with Runback are reserved.'); return true; }
       const dest = path.join(addons, name);
       let destInfo = null;
       try { destInfo = fs.lstatSync(dest); } catch (error) { if (error.code !== 'ENOENT') throw error; }
       if (destInfo) {
         const info = destInfo;
         if (!info.isDirectory() || info.isSymbolicLink()) { fail(ctx, job, 'Refusing to promote through a linked or non-directory destination.'); return true; }
-        const marker = path.join(dest, '.wowai-promoted');
+        const marker = path.join(dest, '.runback-promoted');
         let marked = false;
         try { marked = fs.lstatSync(marker).isFile(); } catch {}
         if (!marked) { fail(ctx, job, `Refusing to overwrite unmarked addon folder: ${dest}`); return true; }
@@ -94,7 +94,7 @@ module.exports = {
       }
       fs.mkdirSync(dest, { recursive: true });
       for (const [file, data] of loaded.files) ctx.atomicWrite(path.join(dest, file), data.content);
-      ctx.atomicWrite(path.join(dest, '.wowai-promoted'), `Promoted by WoW AI at ${new Date().toISOString()}\n`);
+      ctx.atomicWrite(path.join(dest, '.runback-promoted'), `Promoted by Runback at ${new Date().toISOString()}\n`);
       ctx.finish(job, 'done', `Promoted ${name}: it loads after the next client restart.`);
       return true;
     }
@@ -103,11 +103,11 @@ module.exports = {
     builder.used = builder.used || {};
     let slot = 0;
     for (let i = 1; i <= 20; i++) {
-      const candidate = `WoWAI_U${String(i).padStart(2, '0')}`;
+      const candidate = `Runback_U${String(i).padStart(2, '0')}`;
       const dir = path.join(addons, candidate);
       try {
         const dirInfo = fs.lstatSync(dir);
-        const markerInfo = fs.lstatSync(path.join(dir, '.wowai-slot'));
+        const markerInfo = fs.lstatSync(path.join(dir, '.runback-slot'));
         if (!builder.used[candidate] && dirInfo.isDirectory() &&
             !dirInfo.isSymbolicLink() && markerInfo.isFile()) { slot = i; break; }
       } catch {}
@@ -117,7 +117,7 @@ module.exports = {
         'Restart the client to free them (or /ai builder reset after a restart).');
       return true;
     }
-    const slotName = `WoWAI_U${String(slot).padStart(2, '0')}`;
+    const slotName = `Runback_U${String(slot).padStart(2, '0')}`;
     const body = `-- Built ${name} at ${new Date().toISOString()}\n-- Source files: ${loaded.ordered.join(', ')}\n` +
       loaded.ordered.map(file => `do\n-- ${file}\n${loaded.files.get(file).content}\nend\n`).join('\n');
     ctx.atomicWrite(path.join(addons, slotName, 'main.lua'), body);

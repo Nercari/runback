@@ -1,6 +1,6 @@
 # Blizzard policy compliance
 
-Permanent rule (Pedro, 2026-10-03): wow-ai must comply 100% with Blizzard's Terms of Service, EULA and UI add-on policy. Anything that could breach them is rejected; when in doubt, don't ship it and ask Pedro. Every PR is checked against this page.
+Permanent rule (Pedro, 2026-10-03): runback must comply 100% with Blizzard's Terms of Service, EULA and UI add-on policy. Anything that could breach them is rejected; when in doubt, don't ship it and ask Pedro. Every PR is checked against this page.
 
 ## Sources
 
@@ -30,13 +30,13 @@ Permanent rule (Pedro, 2026-10-03): wow-ai must comply 100% with Blizzard's Term
 
 Fixed in the PR that added this page:
 
-1. **`/r` replaced three methods on every game chat box** (`ProcessChatType`, `SendMessage`, `SendText`). That tainted the box, so a `/run` typed there afterwards could be blocked with "WoWAI has been blocked from an action only available to the Blizzard UI", the popup seen in the 2026-10-03 video (backlog item 10). This is the likely cause but it is inferred, not confirmed in game. `/r` is back to the game's own whisper reply; the `[reply]` link answers the agent.
+1. **`/r` replaced three methods on every game chat box** (`ProcessChatType`, `SendMessage`, `SendText`). That tainted the box, so a `/run` typed there afterwards could be blocked with "Runback has been blocked from an action only available to the Blizzard UI", the popup seen in the 2026-10-03 video (backlog item 10). This is the likely cause but it is inferred, not confirmed in game. `/r` is back to the game's own whisper reply; the `[reply]` link answers the agent.
 2. **A reload asked for in combat called `ReloadUI()` from the combat-end event**, which is not a keypress or click, so the game blocked it and blamed the addon. It now reloads on the first keypress after combat.
 
 Checked and compliant:
 
 - Auction house: the addon sends no search queries of its own. When the player clicks **Scan for AI**, it reads the results the player's own search already shows (`C_AuctionHouse.GetBrowseResults`, at most 500 items) and saves them; nothing runs on a timer or on its own. It never bids, buys or posts. Whether the Forever client has `GetBrowseResults` is unverified in game; without it the button only prints a short message.
-- Key bindings: the addon never binds keys on its own. `/wow-ai bind <key>` binds one key to the addon's own button when the player types it, out of combat.
+- Key bindings: the addon never binds keys on its own. `/runback bind <key>` binds one key to the addon's own button when the player types it, out of combat.
 - Keypress reload: the hidden key catcher lets every key through to the game and only reloads the UI; it never acts in the world.
 - Translation reads chat only on channels the player turns on (none by default) and pre-fills the reply box; the player presses Enter to send.
 - Screenshots: only the game's own `Screenshot()` behind a button the player clicks.
@@ -45,7 +45,7 @@ Checked and compliant:
 - Bags (backlog 62): the bags question only reads bag contents (`C_Container.GetContainerItemInfo`, `GetContainerItemQuestInfo`, `C_Item.GetItemInfo`) to send them as advice. The addon never picks up, sells, drops, moves or equips an item; the player does every action, and `tools/safety-ci.js` rejects the item actions (`PickupContainerItem`, `SellAllJunkItems`, `DeleteItem`, `EquipItemByName` and the rest).
 - Low-health starts (backlog 63): at combat start the addon reads the player's own health (`UnitHealth`, `UnitHealthMax`) once and keeps a count of the day's fights started below 50%. The count and its tip only leave with a recap or review the player asks for, which the addon never sends in combat; nothing warns at the start of a pull.
 - Guide fits the log (backlog 76): the guide panel only reads the quest log, the completed-quest flag, reputation standing (`GetFactionInfoByID`, `C_Reputation.GetFactionDataByID`), profession ranks (`GetProfessions`, `GetProfessionInfo`, `GetSkillLineInfo`) and XP (`UnitXP`, `UnitXPMax`) on game events, with no polling, to choose which step text to show and to show an XP pace line. It never accepts, turns in, abandons, picks gossip, targets or moves anything, and the pace line hides with the panel in a fight. Minutes per level only leave with a recap the player asks for.
-- Combat log: `LoggingCombat(true)` runs only from the player's click on the **Combat log** button or the **[turn on combat log]** chat link, out of combat. The login reminder and the "This fight wasn't logged" note only read `LoggingCombat()` (backlog 58). The flip watch (backlog 83) also only reads it, on the existing 2-second tick and the button refresh, to list changes in `/wow-ai diag` and say once in chat when the log turned off without the player's click; a test checks that `WoWAI.SetCombatLog` is the only call with an argument.
+- Combat log: `LoggingCombat(true)` runs only from the player's click on the **Combat log** button or the **[turn on combat log]** chat link, out of combat. The login reminder and the "This fight wasn't logged" note only read `LoggingCombat()` (backlog 58). The flip watch (backlog 83) also only reads it, on the existing 2-second tick and the button refresh, to list changes in `/runback diag` and say once in chat when the log turned off without the player's click; a test checks that `Runback.SetCombatLog` is the only call with an argument.
 
 Decisions and open questions for Pedro (nercari-control #114):
 

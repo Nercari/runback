@@ -55,10 +55,10 @@ test("update: nothing new upstream", (t) => {
 test("update: fast-forwards and lists the changed files", (t) => {
   const { dev, player } = repos(t);
   commit(dev, "bridge/bridge.js", "x\n");
-  commit(dev, "addon/WoWAI/WoWAI.lua", "y\n");
+  commit(dev, "addon/Runback/Runback.lua", "y\n");
   const r = update(player);
   assert.equal(r.changed, true);
-  assert.deepEqual(r.files.sort(), ["addon/WoWAI/WoWAI.lua", "bridge/bridge.js"]);
+  assert.deepEqual(r.files.sort(), ["addon/Runback/Runback.lua", "bridge/bridge.js"]);
   assert.equal(r.note, "updated to the latest release (2 files changed)");
   // Windows runners check out with core.autocrlf=true.
   assert.equal(fs.readFileSync(path.join(player, "bridge/bridge.js"), "utf8").replace(/\r\n/g, "\n"), "x\n");
@@ -354,13 +354,13 @@ test("addonDiffers: missing or changed files count, the bridge-owned Inbox.lua d
   const dest = path.join(dir, "dest");
   fs.mkdirSync(src);
   fs.mkdirSync(dest);
-  fs.writeFileSync(path.join(src, "WoWAI.lua"), "a");
+  fs.writeFileSync(path.join(src, "Runback.lua"), "a");
   fs.writeFileSync(path.join(src, "Inbox.lua"), "repo");
   assert.equal(addonDiffers(src, dest), true, "missing file");
-  fs.writeFileSync(path.join(dest, "WoWAI.lua"), "a");
+  fs.writeFileSync(path.join(dest, "Runback.lua"), "a");
   fs.writeFileSync(path.join(dest, "Inbox.lua"), "written by the bridge");
   assert.equal(addonDiffers(src, dest), false);
-  fs.writeFileSync(path.join(src, "WoWAI.lua"), "b");
+  fs.writeFileSync(path.join(src, "Runback.lua"), "b");
   assert.equal(addonDiffers(src, dest), true, "changed file");
 });
 

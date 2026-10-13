@@ -240,16 +240,16 @@ function parseOutbox(src) {
 // reply goes to the addon's window and only its closing "TL;DR:" block is
 // printed in the game chat, so every reply must end with one. Then, while the
 // addon has sent a context (the player's character, location and so on; see
-// GameContext in WoWAI.lua), that context plus the addon/macro primer
+// GameContext in Runback.lua), that context plus the addon/macro primer
 // (docs/WOW-ADDON-PRIMER.md) so it can write for this client whatever folder
 // the chat works in. Empty context = neither is appended, so a bridge used for
-// unrelated projects, or an addon with `/wow-ai context off`, only gets the
+// unrelated projects, or an addon with `/runback context off`, only gets the
 // reply-format rule. Claude and Grok take this as a system prompt; for Codex,
 // agents.js puts it at the top of the prompt.
 const SUMMARY_MARKER = 'TL;DR:';
 const FOLLOW_MARKER = 'FOLLOW-UPS:';
 const REPLY_FORMAT = [
-  'The user is talking to you from inside World of Warcraft through the wow-ai addon. They type in a small in-game window and your reply is shown there as plain text (markdown is not rendered), so keep replies compact and formatting simple.',
+  'The user is talking to you from inside World of Warcraft through the runback addon. They type in a small in-game window and your reply is shown there as plain text (markdown is not rendered), so keep replies compact and formatting simple.',
   '',
   `Only a short summary of each reply is printed into the game chat, where the user actually sees it while playing; the full reply is only visible if they open the addon window. So end EVERY reply with a final block that starts with "${SUMMARY_MARKER}" on its own line and holds one or two short lines (under about 200 characters in total) saying what you did or what the answer is, and what you need from the user if anything. Write it as plain text. Do not repeat the summary elsewhere, and put nothing after it.`,
   `Optionally, just before that block, add one line "${FOLLOW_MARKER} <question> | <question>" with at most two short questions (under about 60 characters each) the user is likely to ask next, in their words. Add it only when the reply invites a natural next question; otherwise leave the line out. It becomes buttons under the reply and is not shown as text.`,
@@ -288,7 +288,7 @@ const GAME_CONTROLS = {
     ['AI', 'switches this chat\'s agent or model'],
     ['+ New chat', 'in the left panel: starts a new chat'],
     ['Allow', 'under a reply that needed a permission: allows it and retries'],
-    ['Ask WoW AI', 'in the quest log: asks about the selected quest'],
+    ['Ask Runback', 'in the quest log: asks about the selected quest'],
   ],
   commands: [
     ['review', '[question]', 'reviews the last fight'],
@@ -699,7 +699,7 @@ function luaTable(globalName, records, opts = {}) {
   const now = opts.now || Date.now();
   const agents = Array.isArray(opts.agents) ? opts.agents : [];
   const lines = [
-    '-- Written by the wow-ai bridge (bridge/bridge.js). Do not edit by hand.',
+    '-- Written by the runback bridge (bridge/bridge.js). Do not edit by hand.',
     `${globalName} = {`,
     `\tts = ${luaStr(new Date(now).toISOString())},`,
     `\tnow = ${Math.floor(now / 1000)},`,

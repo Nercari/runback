@@ -1,16 +1,16 @@
 # WOW-02 Forever probe session
 
 1. Back up nothing. The probe writes only its own SavedVariables and a `WAIPROBE` macro that it deletes after the test.
-2. Before starting the client, copy `probe/WoWAIProbe` and `probe/WoWAIProbe_LOD` into `<Forever>\Interface\AddOns\`.
-3. Install unmodified upstream WoWAI and its bridge using `docs/INSTALL-WINDOWS.md` and the Claude agent. Try both upstream transports (reload and pixel tiers) as documented; note which work.
-4. In game, `/reload` twice, then run `/wowaiprobe`. Click each button out of combat. Enable Advanced Combat Logging under System > Network > Advanced Combat Logging, then `/combatlog`. Do one open-world fight and one dungeon boss; die once if convenient for F02; open a quest (QUEST_DETAIL) and the Auction House if nearby. Click “Show test strip” and take “Screenshot now” while the strip is visible.
+2. Before starting the client, copy `probe/RunbackProbe` and `probe/RunbackProbe_LOD` into `<Forever>\Interface\AddOns\`.
+3. Install unmodified upstream Runback and its bridge using `docs/INSTALL-WINDOWS.md` and the Claude agent. Try both upstream transports (reload and pixel tiers) as documented; note which work.
+4. In game, `/reload` twice, then run `/runbackprobe`. Click each button out of combat. Enable Advanced Combat Logging under System > Network > Advanced Combat Logging, then `/combatlog`. Do one open-world fight and one dungeon boss; die once if convenient for F02; open a quest (QUEST_DETAIL) and the Auction House if nearby. Click “Show test strip” and take “Screenshot now” while the strip is visible.
 5. Run `/reload` once to write SavedVariables.
 6. On Windows, replace placeholders and run:
 
    ```powershell
    node probe/check-log.js --log "<Forever>\Logs\WoWCombatLog.txt" --player "Name-Realm" --json > check-log.json
    node probe/check-log.js --log "<Forever>\Logs\WoWCombatLog.txt" --player "Name-Realm" --fixture "probe-fixture.txt" --start "2026-09-25T12:00:00Z" --end "2026-09-25T13:00:00Z" --json > fixture-summary.json
-   node probe/gate-table.js --sv "<Forever>\WTF\Account\<ACC>\SavedVariables\WoWAIProbe.lua" --log-report check-log.json --out gate-table.md
+   node probe/gate-table.js --sv "<Forever>\WTF\Account\<ACC>\SavedVariables\RunbackProbe.lua" --log-report check-log.json --out gate-table.md
    ```
 
    Send `check-log.json`, `fixture-summary.json`, `probe-fixture.txt`, and `gate-table.md` to Claude. The fixture includes only the requested time window, preserves your character name, and consistently anonymizes other players. The original combat log is never edited.

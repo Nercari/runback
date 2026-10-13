@@ -6,7 +6,7 @@ const path = require("node:path");
 test("hidden VBScript launchers use hidden window style and no cmd /k", () => {
   for (const f of [
     "../../bridge/start-hidden.vbs",
-    "../../bridge/wowai-kill.vbs",
+    "../../bridge/runback-kill.vbs",
     "../../tools/policy-watch.vbs",
   ]) {
     const s = fs.readFileSync(path.resolve(__dirname, f), "utf8");

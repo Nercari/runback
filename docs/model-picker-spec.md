@@ -5,7 +5,7 @@ Pedro asked (2026-10-09): "the model selection inside the addon should be exactl
 ## Where it stands (backlog 28, PR #35)
 
 - `bridge/agents.js` `modelChoices()` offers `agents.<id>.models` from `config.json`. With no list, Claude gets `opus, sonnet, haiku` and every other agent gets nothing, only its own default.
-- The bridge publishes `models = { claude = { "opus", ... } }` in the inbox (`protocol.luaTable`). The addon's AI picker lists one flat row per agent and per model, up to 24 rows (`WoWAI.PoolChoices`, `WoWAI.ShowPicker`).
+- The bridge publishes `models = { claude = { "opus", ... } }` in the inbox (`protocol.luaTable`). The addon's AI picker lists one flat row per agent and per model, up to 24 rows (`Runback.PoolChoices`, `Runback.ShowPicker`).
 - A chat sends `agent=<id>;model=<name>` in its strip flags (`protocol.parseFlags`). The bridge refuses a model not on the list and passes the rest as `--model` / `-m`.
 - No reasoning or effort level exists anywhere: not in the flags, the inbox, the picker or the command lines.
 
@@ -96,7 +96,7 @@ Effect on the tickets: 43 may use Hermes `--reasoning` (it is no longer conditio
 - One catalog, in the bridge. `bridge/models.js` holds, per agent, an ordered list of `{ id, label, efforts, defaultEffort }` copied from the tables above, each agent with its source URL and checked date. `agents.<id>.models` in `config.json` still overrides it; a plain string means a model with no effort levels.
 - Effort travels like model. Strip flag `effort=<level>`, the same token rule as `model=` but only `[a-z]{1,16}`. The bridge refuses a level the catalog does not list for that model, like it refuses an unknown model today, and passes nothing when the chat has no level (the CLI's own default applies).
 - The inbox adds `efforts = { claude = { opus = { "low", ... } } }` and `defaults = { ... }` next to `models`. An older addon ignores them; an older bridge sends neither, and the newer addon then shows no effort row.
-- The picker keeps one row per model and shows the effort levels of the chosen model as a second row of small buttons ("Effort: low medium [high] xhigh max"), default marked. The chat label becomes "Claude · opus · high". The typed form is `/wow-ai agent claude opus high`.
+- The picker keeps one row per model and shows the effort levels of the chosen model as a second row of small buttons ("Effort: low medium [high] xhigh max"), default marked. The chat label becomes "Claude · opus · high". The typed form is `/runback agent claude opus high`.
 - A model or effort change keeps the conversation, as a model change does today.
 
 ## Blizzard policy and combat
@@ -135,7 +135,7 @@ Each ticket: one PR into `forever`, `node tools/safety-ci.js` and `npm test` gre
 ### 45. Effort row in the AI picker
 
 - Needs: 44 for the list; 43 for the choice to take effect.
-- Do: store `c.effort` per chat; send `effort=` in the flags; show the effort row for the chosen model with the default marked; label "Agent · model · effort"; `/wow-ai agent <name> [model [effort]]` with the same checks; close the picker on combat start and refuse to open it in combat. Add the policy check to the PR body.
+- Do: store `c.effort` per chat; send `effort=` in the flags; show the effort row for the chosen model with the default marked; label "Agent · model · effort"; `/runback agent <name> [model [effort]]` with the same checks; close the picker on combat start and refuse to open it in combat. Add the policy check to the PR body.
 - Tests: flags for a chat with a level; switching to a model without that level clears it; the typed command refuses an unknown level; the picker does not open while `InCombatLockdown()` is true.
 - In game (Pedro): open the AI button, pick Codex, a model, then a level; send a question; the reply works and the chat label shows the level.
 

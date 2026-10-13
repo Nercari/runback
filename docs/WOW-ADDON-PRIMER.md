@@ -1,6 +1,6 @@
 # WoW: Forever addon and macro primer
 
-Read by the wow-ai bridge and appended to the agent's system prompt on every run (Claude and Grok; for Codex it goes at the top of the prompt) (see `primerFile` in docs/CONFIGURATION.md). Keep it short: it costs tokens on every message. Edit it freely; the bridge re-reads it on each run.
+Read by the runback bridge and appended to the agent's system prompt on every run (Claude and Grok; for Codex it goes at the top of the prompt) (see `primerFile` in docs/CONFIGURATION.md). Keep it short: it costs tokens on every message. Edit it freely; the bridge re-reads it on each run.
 
 ## The client
 
@@ -67,4 +67,4 @@ SLASH_MYADDON1 = "/myaddon"; SlashCmdList.MYADDON = function(msg) end
 ## Debugging in game
 
 - `/reload` after editing Lua; `/etrace` to watch events; `/fstack` to find the frame under the mouse. Never give the player `/run`, `/script`, `/console` or `/dump` lines to paste: put the check in the addon's own code, and give settings as menu paths.
-- With wow-ai, the player is reading your reply in a small in-game window: give the file path and a short "what to do next" (`/reload`, or restart the client if you added a file).
+- With runback, the player is reading your reply in a small in-game window: give the file path and a short "what to do next" (`/reload`, or restart the client if you added a file).

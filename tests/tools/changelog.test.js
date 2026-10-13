@@ -35,8 +35,8 @@ Intro text.
 
 - shipped
 
-[Unreleased]: https://github.com/example/wow-ai/compare/v0.4.0...HEAD
-[0.4.0]: https://github.com/example/wow-ai/compare/v0.3.0...v0.4.0
+[Unreleased]: https://github.com/example/runback/compare/v0.4.0...HEAD
+[0.4.0]: https://github.com/example/runback/compare/v0.3.0...v0.4.0
 `;
 
 function frag(file, text) {
@@ -96,9 +96,9 @@ test('buildRelease puts fragment entries above the old ones, in file name order'
 
 test('buildRelease moves the compare links', () => {
   const { text } = C.buildRelease(CHANGELOG, [frag('a.md', '### Added\n- x\n')], { version: '0.5.0', date: '2026-10-12' });
-  assert.ok(text.includes('[Unreleased]: https://github.com/example/wow-ai/compare/v0.5.0...HEAD\n'));
-  assert.ok(text.includes('[0.5.0]: https://github.com/example/wow-ai/compare/v0.4.0...v0.5.0\n'));
-  assert.ok(text.includes('[0.4.0]: https://github.com/example/wow-ai/compare/v0.3.0...v0.4.0\n'));
+  assert.ok(text.includes('[Unreleased]: https://github.com/example/runback/compare/v0.5.0...HEAD\n'));
+  assert.ok(text.includes('[0.5.0]: https://github.com/example/runback/compare/v0.4.0...v0.5.0\n'));
+  assert.ok(text.includes('[0.4.0]: https://github.com/example/runback/compare/v0.3.0...v0.4.0\n'));
 });
 
 test('buildRelease orders sections the Keep a Changelog way', () => {

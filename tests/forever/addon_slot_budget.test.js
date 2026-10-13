@@ -8,7 +8,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { lua, lauxlib, lualib, to_luastring, to_jsstring } = require('fengari');
 
-const addon = path.join(__dirname, '..', '..', 'addon', 'WoWAI');
+const addon = path.join(__dirname, '..', '..', 'addon', 'Runback');
 function vm({ soundWorks }) {
   const L = lauxlib.luaL_newstate(); lualib.luaL_openlibs(L);
   const run = code => {
@@ -24,16 +24,16 @@ function vm({ soundWorks }) {
   // Forever: every file, even an empty one, reports as playable. A working
   // client: only the control file and nothing the bridge has not raised.
   run(soundWorks
-    ? 'STUB.sounds["Interface\\\\AddOns\\\\WoWAI\\\\ctl\\\\valid.wav"] = true'
+    ? 'STUB.sounds["Interface\\\\AddOns\\\\Runback\\\\ctl\\\\valid.wav"] = true'
     : 'function PlaySoundFile() return true, 1 end');
-  for (const file of ['Codec.lua', 'Inbox.lua', 'Forever.lua', 'WoWAI.lua']) run(fs.readFileSync(path.join(addon, file), 'utf8'));
+  for (const file of ['Codec.lua', 'Inbox.lua', 'Forever.lua', 'Runback.lua']) run(fs.readFileSync(path.join(addon, file), 'utf8'));
   // A fake bridge. Its slot data carries the time it last published (what the
   // real bridge writes as `now`): at the hello, when it picks up a message, every
   // 30 s of progress, and when the reply is done.
   run(`BR = { pub = STUB.now, loads = 0 }
   STUB.onLoadAddOn = function()
     BR.loads = BR.loads + 1
-    local c = WoWAIDB.chats[1]
+    local c = RunbackDB.chats[1]
     local replies = {}
     if c.pendingId and BR.sent then
       local done = STUB.now >= BR.sent + BR.ready
@@ -41,26 +41,26 @@ function vm({ soundWorks }) {
       elseif STUB.now >= BR.sent + 3 then BR.pub = BR.sent + 3 + math.floor((STUB.now - BR.sent - 3) / 30) * 30 end
       replies = { { chat = c.id, id = c.pendingId, status = done and "done" or "working", text = done and "answer" or "reading" } }
     end
-    WoWAI_SlotData = { now = STUB.epoch + math.floor(BR.pub), cwd = "", agent = "claude", agents = { "claude" }, replies = replies }
+    Runback_SlotData = { now = STUB.epoch + math.floor(BR.pub), cwd = "", agent = "claude", agents = { "claude" }, replies = replies }
   end`);
   const advance = seconds => run(`for _ = 1, ${Math.round(seconds / 2)} do STUB.now = STUB.now + 2; STUB.Tick(); STUB.RunTimers() end`);
   // Send a message the bridge answers `ready` seconds later; wait for the answer.
   const ask = (text, ready) => {
-    run(`WoWAI.Send(${JSON.stringify(text)})`);
-    if (get('WoWAIDB.chats[1].pendingId') === 'nil') {
+    run(`Runback.Send(${JSON.stringify(text)})`);
+    if (get('RunbackDB.chats[1].pendingId') === 'nil') {
       // The light said the bridge was not seen lately: the box waits for the
       // reconnect hello, which the bridge answers.
       run('BR.pub = STUB.now + 2');
-      for (let i = 0; i < 30 && get('WoWAIDB.chats[1].pendingId') === 'nil'; i++) advance(2);
+      for (let i = 0; i < 30 && get('RunbackDB.chats[1].pendingId') === 'nil'; i++) advance(2);
     }
-    assert.notEqual(get('WoWAIDB.chats[1].pendingId'), 'nil', 'message went out');
+    assert.notEqual(get('RunbackDB.chats[1].pendingId'), 'nil', 'message went out');
     run(`BR.sent = STUB.now; BR.ready = ${ready}`);
-    for (let i = 0; i < 2000 && get('WoWAIDB.chats[1].pendingId') !== 'nil'; i++) advance(2);
-    assert.equal(get('WoWAIDB.chats[1].pendingId'), 'nil', 'reply arrived');
+    for (let i = 0; i < 2000 && get('RunbackDB.chats[1].pendingId') !== 'nil'; i++) advance(2);
+    assert.equal(get('RunbackDB.chats[1].pendingId'), 'nil', 'reply arrived');
     run('BR.sent = nil');
   };
   const loads = () => Number(get('BR.loads'));
-  run('STUB.FireEvent("ADDON_LOADED", "WoWAI"); STUB.FireEvent("PLAYER_LOGIN"); BR.pub = STUB.now');
+  run('STUB.FireEvent("ADDON_LOADED", "Runback"); STUB.FireEvent("PLAYER_LOGIN"); BR.pub = STUB.now');
   advance(10);
   return { run, get, advance, ask, loads };
 }
@@ -101,10 +101,10 @@ test('with the sound channel working, the fast schedule stays', () => {
   assert.equal(counts.idle1 + counts.idle2, 0, 'presence beats cover idle time, no slots');
 });
 
-test('/wow-ai diag reports slots per reply and per hour', () => {
+test('/runback diag reports slots per reply and per hour', () => {
   const { v } = evening(false);
-  v.run('SlashCmdList["WOWAI"]("diag")');
-  const diag = v.get('WoWAIDB.chats[1].history[#WoWAIDB.chats[1].history].text');
+  v.run('SlashCmdList["RUNBACK"]("diag")');
+  const diag = v.get('RunbackDB.chats[1].history[#RunbackDB.chats[1].history].text');
   const line = diag.split('\n').find(l => l.startsWith('slots used'));
   // 17 slots over about 56 minutes of session (10 + 60 + 120 + 1200 + 780 + 1200 s).
   assert.equal(line, 'slots used this session: 17 (hello 1, schedule 16), replies 2, 8.5 per reply, 18.2 per hour, free slots: 183/200');

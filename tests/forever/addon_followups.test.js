@@ -5,7 +5,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { lua, lauxlib, lualib, to_luastring, to_jsstring } = require('fengari');
 
-const addon = path.join(__dirname, '..', '..', 'addon', 'WoWAI');
+const addon = path.join(__dirname, '..', '..', 'addon', 'Runback');
 const read = file => fs.readFileSync(path.join(addon, file), 'utf8');
 function vm() {
   const L = lauxlib.luaL_newstate(); lualib.luaL_openlibs(L);
@@ -20,9 +20,9 @@ function vm() {
   };
   run(fs.readFileSync(path.join(__dirname, '..', 'wow_stub.lua'), 'utf8'));
   run('unpack = table.unpack');
-  for (const file of ['Codec.lua', 'Inbox.lua', 'WoWAI.lua', 'Forever.lua', 'Forever_Lockout.lua', 'Forever_Context.lua', 'Forever_Commands.lua']) run(read(file));
-  run('STUB.FireEvent("ADDON_LOADED", "WoWAI"); STUB.FireEvent("PLAYER_LOGIN"); STUB.RunTimers()');
-  run('WoWAI.IsConnected = function() return true end');
+  for (const file of ['Codec.lua', 'Inbox.lua', 'Runback.lua', 'Forever.lua', 'Forever_Lockout.lua', 'Forever_Context.lua', 'Forever_Commands.lua']) run(read(file));
+  run('STUB.FireEvent("ADDON_LOADED", "Runback"); STUB.FireEvent("PLAYER_LOGIN"); STUB.RunTimers()');
+  run('Runback.IsConnected = function() return true end');
   run(`function CLICK(label)
     for _, f in ipairs(STUB.frames) do
       if f.kind == "Button" and f.text == label then f.scripts.OnClick(f); return true end
@@ -31,10 +31,10 @@ function vm() {
   end`);
   return { run, get };
 }
-const outbox = v => v.get('WoWAIDB.outbox and WoWAIDB.outbox.cmd');
-const reply = (v, followUps = ['What should I buy first?', 'Which talent next?']) => v.run(`local c = WoWAIDB.chats[1]
+const outbox = v => v.get('RunbackDB.outbox and RunbackDB.outbox.cmd');
+const reply = (v, followUps = ['What should I buy first?', 'Which talent next?']) => v.run(`local c = RunbackDB.chats[1]
   table.insert(c.history, { role = "assistant", text = "Use Shadow Bolt.", t = time(), followUps = { ${followUps.map(q => JSON.stringify(q)).join(', ')} } })
-  WoWAI.Toggle(true); WoWAI.Render()`);
+  Runback.Toggle(true); Runback.Render()`);
 const shown = v => v.get('table.concat(STUB.texts, "|")');
 const visible = (v, label) => v.get(`(function() for _, f in ipairs(STUB.frames) do if f.kind == "Button" and f.text == ${JSON.stringify(label)} and f.shown then return true end end return false end)()`);
 
@@ -46,7 +46,7 @@ test('follow-up buttons are the mentor\'s suggestions under the newest finished 
   assert.equal(visible(v, 'Review my last fight'), 'false', 'the old fixed buttons are gone');
   v.run('CLICK("Which talent next?")');
   assert.ok(shown(v).includes('Which talent next?'), 'typed into the box');
-  assert.equal(v.get('WoWAIDB.chats[1].pendingId'), 'nil', 'nothing sent by itself');
+  assert.equal(v.get('RunbackDB.chats[1].pendingId'), 'nil', 'nothing sent by itself');
   assert.equal(outbox(v), 'nil');
 });
 
@@ -67,6 +67,6 @@ test('no follow-ups in combat or while a reply is pending', () => {
   reply(v);
   const fb = () => visible(v, 'What should I buy first?');
   assert.equal(fb(), 'false');
-  v.run('STUB.combat = false; STUB.FireEvent("PLAYER_REGEN_ENABLED"); WoWAI.Render()');
+  v.run('STUB.combat = false; STUB.FireEvent("PLAYER_REGEN_ENABLED"); Runback.Render()');
   assert.equal(fb(), 'true', 'back after the fight');
 });

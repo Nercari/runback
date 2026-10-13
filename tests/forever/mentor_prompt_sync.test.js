@@ -9,7 +9,7 @@ const path = require('path');
 const { syncPrompt } = require('../../bridge/forever/modules/05-mentor-guard.js');
 
 function dirs() {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'wowai-sync-'));
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'runback-sync-'));
   const template = path.join(root, 'mentor'), work = path.join(root, 'wow-mentor');
   fs.mkdirSync(template); fs.mkdirSync(work);
   fs.writeFileSync(path.join(template, 'AGENTS.md'), 'new rules\n');

@@ -1,5 +1,5 @@
 // Guide channel (backlog 67): env var, ```wowguide blocks, validation, state.json,
-// slot-file encoding with a version, and the real Guide.lua / WoWAI.lua reading it
+// slot-file encoding with a version, and the real Guide.lua / Runback.lua reading it
 // back in a Lua VM. Mirrors the map-layer tests (map_test.js, map_addon_test.js).
 'use strict';
 const test = require('node:test');
@@ -10,7 +10,7 @@ const { lua, lauxlib, lualib, to_luastring, to_jsstring } = require('fengari');
 const P = require('../bridge/protocol');
 const G = require('../bridge/guide');
 
-const ADDON = path.join(__dirname, '..', 'addon', 'WoWAI');
+const ADDON = path.join(__dirname, '..', 'addon', 'Runback');
 const fixture = name => fs.readFileSync(path.join(__dirname, 'fixtures', 'guides', name + '.json'), 'utf8');
 const mini = (id, extra = {}) => ({ id, title: `Guide ${id}`, steps: [{ kind: 'do', text: 'Walk to the fire.', points: [{ m: 9990, x: 45.5, y: 60.25 }] }], ...extra });
 
@@ -106,12 +106,12 @@ test('slot files carry the guides as a Lua table with a version, and only when t
   const store = G.newGuides('ep0ch');
   G.applyGuides(store, [FULL]);
   assert.equal(store.version, 1);
-  const src = P.luaTable('WoWAI_SlotData', [], { now: 1, cwd: '/x', guides: store });
+  const src = P.luaTable('Runback_SlotData', [], { now: 1, cwd: '/x', guides: store });
   const vm = luaVM();
   vm.run(src);
-  assert.equal(vm.evaluate('WoWAI_SlotData.guides.epoch'), 'ep0ch');
-  assert.equal(vm.evaluate('WoWAI_SlotData.guides.version'), '1');
-  const g = 'WoWAI_SlotData.guides.list[1]';
+  assert.equal(vm.evaluate('Runback_SlotData.guides.epoch'), 'ep0ch');
+  assert.equal(vm.evaluate('Runback_SlotData.guides.version'), '1');
+  const g = 'Runback_SlotData.guides.list[1]';
   assert.equal(vm.evaluate(`${g}.title`), 'Demo "start" route');
   assert.equal(vm.evaluate(`#${g}.steps`), '3');
   assert.equal(vm.evaluate(`${g}.steps[2].text`), 'Defeat five dummies \\ near the camp.');
@@ -129,35 +129,35 @@ test('one guide round-trips: bridge Lua -> slot data -> Guide.lua -> saved varia
   G.applyGuides(store, [FULL]);
   const vm = luaVM();
   vm.run(fs.readFileSync(path.join(ADDON, 'Guide.lua'), 'utf8'));
-  vm.run(P.luaTable('WoWAI_SlotData', [], { now: 1, guides: store }));
-  assert.equal(vm.evaluate('WoWAIGuide.Sync(WoWAI_SlotData.guides)'), 'true');
-  assert.equal(vm.evaluate('WoWAIGuideDB.guides.version'), '1');
-  assert.equal(vm.evaluate('#WoWAIGuide.List()'), '1');
-  assert.equal(vm.evaluate('WoWAIGuide.Find("demo-start").steps[3].kind'), 'turnin');
-  assert.equal(vm.evaluate('WoWAIGuide.Find("nope")'), null);
+  vm.run(P.luaTable('Runback_SlotData', [], { now: 1, guides: store }));
+  assert.equal(vm.evaluate('RunbackGuide.Sync(Runback_SlotData.guides)'), 'true');
+  assert.equal(vm.evaluate('RunbackGuideDB.guides.version'), '1');
+  assert.equal(vm.evaluate('#RunbackGuide.List()'), '1');
+  assert.equal(vm.evaluate('RunbackGuide.Find("demo-start").steps[3].kind'), 'turnin');
+  assert.equal(vm.evaluate('RunbackGuide.Find("nope")'), null);
   // The same or an older version changes nothing; a newer one or another epoch replaces.
-  assert.equal(vm.evaluate('WoWAIGuide.Sync(WoWAI_SlotData.guides)'), 'false');
-  assert.equal(vm.evaluate('WoWAIGuide.Sync({ epoch = "ep0ch", version = 0, list = {} })'), 'false');
-  assert.equal(vm.evaluate('#WoWAIGuide.List()'), '1');
-  assert.equal(vm.evaluate('WoWAIGuide.Sync({ epoch = "ep0ch", version = 2, list = {} })'), 'true');
-  assert.equal(vm.evaluate('#WoWAIGuide.List()'), '0');
-  assert.equal(vm.evaluate('WoWAIGuide.Sync({ epoch = "other", version = 1, list = { { id = "x", steps = { { kind = "note", text = "t" } } } } })'), 'true');
-  assert.equal(vm.evaluate('WoWAIGuide.Version()'), '1');
+  assert.equal(vm.evaluate('RunbackGuide.Sync(Runback_SlotData.guides)'), 'false');
+  assert.equal(vm.evaluate('RunbackGuide.Sync({ epoch = "ep0ch", version = 0, list = {} })'), 'false');
+  assert.equal(vm.evaluate('#RunbackGuide.List()'), '1');
+  assert.equal(vm.evaluate('RunbackGuide.Sync({ epoch = "ep0ch", version = 2, list = {} })'), 'true');
+  assert.equal(vm.evaluate('#RunbackGuide.List()'), '0');
+  assert.equal(vm.evaluate('RunbackGuide.Sync({ epoch = "other", version = 1, list = { { id = "x", steps = { { kind = "note", text = "t" } } } } })'), 'true');
+  assert.equal(vm.evaluate('RunbackGuide.Version()'), '1');
   // Junk is ignored, not stored.
-  assert.equal(vm.evaluate('WoWAIGuide.Sync("junk")'), 'false');
-  assert.equal(vm.evaluate('WoWAIGuide.Sync({ epoch = "e3", version = 1, list = { 5, { id = 1 }, { id = "y", steps = {} } } })'), 'true');
-  assert.equal(vm.evaluate('#WoWAIGuide.List()'), '0');
+  assert.equal(vm.evaluate('RunbackGuide.Sync("junk")'), 'false');
+  assert.equal(vm.evaluate('RunbackGuide.Sync({ epoch = "e3", version = 1, list = { 5, { id = 1 }, { id = "y", steps = {} } } })'), 'true');
+  assert.equal(vm.evaluate('#RunbackGuide.List()'), '0');
 });
 
-test('slot data carrying guides reaches the guide store through the real WoWAI.lua', () => {
+test('slot data carrying guides reaches the guide store through the real Runback.lua', () => {
   const vm = luaVM();
   vm.run(fs.readFileSync(path.join(__dirname, 'wow_stub.lua'), 'utf8'));
-  for (const f of ['Codec.lua', 'Inbox.lua', 'WoWAI.lua', 'Guide.lua']) vm.run(fs.readFileSync(path.join(ADDON, f), 'utf8'));
+  for (const f of ['Codec.lua', 'Inbox.lua', 'Runback.lua', 'Guide.lua']) vm.run(fs.readFileSync(path.join(ADDON, f), 'utf8'));
   const store = G.newGuides('ep0ch');
   G.applyGuides(store, [FULL]);
-  vm.run(`STUB.FireEvent("ADDON_LOADED", "WoWAI"); ${P.luaTable('WoWAI_Inbox', [], { now: 1, guides: store })}; STUB.FireEvent("PLAYER_LOGIN")`);
-  assert.equal(vm.evaluate('WoWAIGuideDB.guides.list[1].id'), 'demo-start');
-  assert.equal(vm.evaluate('WoWAIGuideDB.guides.version'), '1');
+  vm.run(`STUB.FireEvent("ADDON_LOADED", "Runback"); ${P.luaTable('Runback_Inbox', [], { now: 1, guides: store })}; STUB.FireEvent("PLAYER_LOGIN")`);
+  assert.equal(vm.evaluate('RunbackGuideDB.guides.list[1].id'), 'demo-start');
+  assert.equal(vm.evaluate('RunbackGuideDB.guides.version'), '1');
 });
 
 test('Guide.lua calls no game action, shows nothing, and replaces nothing', () => {
@@ -190,17 +190,17 @@ if (process.env.FAKE_MODE === 'guides') {
 `;
 
 test('the bridge sets WOW_AI_GUIDE_FILE on every run and keeps validated guides', () => {
-  const S = fs.mkdtempSync(path.join(os.tmpdir(), 'wowai-guide-'));
+  const S = fs.mkdtempSync(path.join(os.tmpdir(), 'runback-guide-'));
   try {
     const repo = path.join(S, 'repo');
     fs.cpSync(path.join(__dirname, '..', 'bridge'), path.join(repo, 'bridge'), { recursive: true, filter: f => !/[\\/]bridge[\\/]tmp/.test(f) });
     fs.cpSync(path.join(__dirname, '..', 'mentor'), path.join(repo, 'mentor'), { recursive: true });
-    fs.mkdirSync(path.join(S, 'addons', 'WoWAI'), { recursive: true });
+    fs.mkdirSync(path.join(S, 'addons', 'Runback'), { recursive: true });
     fs.mkdirSync(path.join(S, 'proj'), { recursive: true });
-    fs.writeFileSync(path.join(S, 'addons', 'WoWAI', 'WoWAI.toc'), '## Interface: 16001\n');
+    fs.writeFileSync(path.join(S, 'addons', 'Runback', 'Runback.toc'), '## Interface: 16001\n');
     fs.writeFileSync(path.join(S, 'fake-claude.js'), FAKE);
     const cfg = JSON.parse(fs.readFileSync(path.join(repo, 'bridge', 'config.example.json'), 'utf8'));
-    Object.assign(cfg, { addonDir: path.join(S, 'addons'), inboxFile: path.join(S, 'addons', 'WoWAI', 'Inbox.lua'), savedVariablesFile: path.join(S, 'nope.lua'), defaultCwd: path.join(S, 'proj'), slots: 5, progressWriteMs: 1 });
+    Object.assign(cfg, { addonDir: path.join(S, 'addons'), inboxFile: path.join(S, 'addons', 'Runback', 'Inbox.lua'), savedVariablesFile: path.join(S, 'nope.lua'), defaultCwd: path.join(S, 'proj'), slots: 5, progressWriteMs: 1 });
     cfg.agent = 'claude';
     cfg.agents = { ...(cfg.agents || {}), claude: { ...((cfg.agents || {}).claude || {}), path: path.join(S, 'fake-claude.js') } };
     cfg.forever = { ...(cfg.forever || {}), mentorDir: path.join(S, 'mentor-workspace') };
@@ -237,17 +237,17 @@ test('the bridge sets WOW_AI_GUIDE_FILE on every run and keeps validated guides'
     const inbox = fs.readFileSync(cfg.inboxFile, 'utf8');
     const vm = luaVM();
     vm.run(inbox);
-    assert.equal(vm.evaluate('WoWAI_Inbox.guides.version'), String(state.guides.version));
-    assert.equal(vm.evaluate('#WoWAI_Inbox.guides.list'), '2');
-    const text = vm.evaluate('WoWAI_Inbox.replies[1].text');
+    assert.equal(vm.evaluate('Runback_Inbox.guides.version'), String(state.guides.version));
+    assert.equal(vm.evaluate('#Runback_Inbox.guides.list'), '2');
+    const text = vm.evaluate('Runback_Inbox.replies[1].text');
     assert.doesNotMatch(text, /wowguide|DeleteCursorItem|Walk/);
     assert.match(text, /Here is a short guide\./);
     assert.match(text, /I saved 2 guides\./);
 
-    // The addon reads that same slot file back through WoWAI.lua's inbox path.
+    // The addon reads that same slot file back through Runback.lua's inbox path.
     vm.run(fs.readFileSync(path.join(ADDON, 'Guide.lua'), 'utf8'));
-    assert.equal(vm.evaluate('WoWAIGuide.Sync(WoWAI_Inbox.guides)'), 'true');
-    assert.equal(vm.evaluate('WoWAIGuide.Find("inreply").steps[1].points[1].m'), '1429');
+    assert.equal(vm.evaluate('RunbackGuide.Sync(Runback_Inbox.guides)'), 'true');
+    assert.equal(vm.evaluate('RunbackGuide.Find("inreply").steps[1].points[1].m'), '1429');
   } finally {
     fs.rmSync(S, { recursive: true, force: true });
   }

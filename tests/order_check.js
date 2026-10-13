@@ -7,17 +7,17 @@ const fs = require('fs');
 const path = require('path');
 const luaparse = require('luaparse');
 
-const ADDON = process.argv[2] || path.join(__dirname, '..', 'addon', 'WoWAI');
+const ADDON = process.argv[2] || path.join(__dirname, '..', 'addon', 'Runback');
 let bad = 0;
-// The files are the .lua lines of WoWAI.toc, so a new addon file is checked
+// The files are the .lua lines of Runback.toc, so a new addon file is checked
 // without editing a list here. Comment and metadata lines start with #.
-const FILES = fs.readFileSync(path.join(ADDON, 'WoWAI.toc'), 'utf8').split(/\r?\n/)
+const FILES = fs.readFileSync(path.join(ADDON, 'Runback.toc'), 'utf8').split(/\r?\n/)
   .map(l => l.trim()).filter(l => l && !l.startsWith('#') && l.endsWith('.lua'));
 // An addon file the .toc does not list never loads in game: a merge that
 // drops the toc line (or a PR that forgets it) fails here.
 for (const f of fs.readdirSync(ADDON).filter(n => n.endsWith('.lua') && !FILES.includes(n))) {
   bad++;
-  console.log('NOT IN WoWAI.toc:', f);
+  console.log('NOT IN Runback.toc:', f);
 }
 for (const f of FILES) {
   const src = fs.readFileSync(path.join(ADDON, f), 'utf8');

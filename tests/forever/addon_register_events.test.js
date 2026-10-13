@@ -5,7 +5,7 @@ const fs = require('fs');
 const path = require('path');
 const { lua, lauxlib, lualib, to_luastring, to_jsstring } = require('fengari');
 
-const ADDON = path.join(__dirname, '..', '..', 'addon', 'WoWAI');
+const ADDON = path.join(__dirname, '..', '..', 'addon', 'Runback');
 const STUB_PATH = path.join(__dirname, '..', 'wow_stub.lua');
 
 // The Forever client has no retail auction house search events; its RegisterEvent errors on them.
@@ -51,15 +51,15 @@ function newVM() {
 
 test('a module event the client lacks is skipped instead of breaking the addon load', () => {
   const vm = newVM();
-  for (const f of ['Codec.lua', 'Inbox.lua', 'WoWAI.lua', 'Forever.lua', 'Forever_Bulk.lua']) {
-    vm.run(fs.readFileSync(path.join(ADDON, f), 'utf8'), 'WoWAI');
+  for (const f of ['Codec.lua', 'Inbox.lua', 'Runback.lua', 'Forever.lua', 'Forever_Bulk.lua']) {
+    vm.run(fs.readFileSync(path.join(ADDON, f), 'utf8'), 'Runback');
   }
-  assert.equal(vm.evaluate('WoWAIForever.modules[#WoWAIForever.modules].name'), 'bulk');
-  vm.run(`WoWAIForever.Register({ name = "retail-ah", events = {
+  assert.equal(vm.evaluate('RunbackForever.modules[#RunbackForever.modules].name'), 'bulk');
+  vm.run(`RunbackForever.Register({ name = "retail-ah", events = {
     ITEM_SEARCH_RESULTS_RECEIVED = true, COMMODITY_SEARCH_RESULTS_RECEIVED = true, AUCTION_HOUSE_SHOW = true } })`);
-  assert.equal(vm.evaluate('WoWAIForever.skippedEvents.ITEM_SEARCH_RESULTS_RECEIVED'), 'true');
-  assert.equal(vm.evaluate('WoWAIForever.skippedEvents.COMMODITY_SEARCH_RESULTS_RECEIVED'), 'true');
-  assert.equal(vm.evaluate('WoWAIForever.skippedEvents.AUCTION_HOUSE_SHOW'), null);
+  assert.equal(vm.evaluate('RunbackForever.skippedEvents.ITEM_SEARCH_RESULTS_RECEIVED'), 'true');
+  assert.equal(vm.evaluate('RunbackForever.skippedEvents.COMMODITY_SEARCH_RESULTS_RECEIVED'), 'true');
+  assert.equal(vm.evaluate('RunbackForever.skippedEvents.AUCTION_HOUSE_SHOW'), null);
   // Every event the client does know is still registered for the bulk module.
   vm.run(`
     HAS = {}

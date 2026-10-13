@@ -1,0 +1,10 @@
+<Bindings>
+	<Binding name="RUNBACK_TOGGLE" header="RUNBACK" category="ADDONS">RunbackForeverKeys.Run("toggle")</Binding>
+	<Binding name="RUNBACK_MENTOR" category="ADDONS">RunbackForeverKeys.Run("mentor")</Binding>
+	<Binding name="RUNBACK_FOCUS" category="ADDONS">RunbackForeverKeys.Run("focus")</Binding>
+	<Binding name="RUNBACK_REVIEW" category="ADDONS">RunbackForeverKeys.Run("review")</Binding>
+	<Binding name="RUNBACK_DEATH" category="ADDONS">RunbackForeverKeys.Run("death")</Binding>
+	<Binding name="RUNBACK_LOOK" category="ADDONS">RunbackForeverKeys.Run("look")</Binding>
+	<Binding name="RUNBACK_SWITCH" category="ADDONS">RunbackForeverKeys.Run("switch")</Binding>
+	<Binding name="RUNBACK_SEND" category="ADDONS">RunbackForeverKeys.Run("send")</Binding>
+</Bindings>

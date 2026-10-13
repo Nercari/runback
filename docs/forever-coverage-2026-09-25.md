@@ -31,18 +31,18 @@ Spec v2 accepts prompt-only features (F02, F05–F07, F10, F11, F13, F14, F16, F
 | 19 | XP/hour, `/played`, route | — | level: first run PARTIAL (no `/played`); re-run: PASS (`/played` reported) | — |
 | 20 | Repeated question answered from cache with date; stale entry refetched | — | facts-fresh: PASS (cache hit, date worded "today"); facts-stale: PASS (refetched, file rewritten) | — |
 | 21 | Spoiler-free quests; narration toggle | addon_p4_speech: narration on QUEST_DETAIL | quest: PASS | — |
-| 22 | `/wowai look` answer about the screenshot | p2: look attaches newest, refuses agy | — | take a screenshot and ask |
+| 22 | `/runback look` answer about the screenshot | p2: look attaches newest, refuses agy | — | take a screenshot and ask |
 | 23 | Opted-in whisper translated, other channels never sent, reply only on Enter | addon_p4_features: never buffers non-opted channels, ≤1 per 10 s, never calls SendChatMessage | translate: PASS (fenced `reply` block) | whisper test with a friend |
 | 24 | Logout writes a journal note with screenshots | addon_p4_bulk: journal events and logout flag; p2: logout journal handler | journal: PASS (48 words, screenshot linked) | real logout |
 | 25 | Council shows answers and synthesis, survives a timeout | p2: council owns the job and tolerates a timeout | council: PASS (synthesis, missing grok named) | — |
 | 26 | Job board status and done notice | addon_p4_features: job board transition, sound and speech once | — | — |
-| 27 | Phone done notice; `/wowai phone` continues in the folder | p2: phone intercept, notifier stub (never real hermes) | — | needs a hermes gateway; Pedro's phone |
+| 27 | Phone done notice; `/runback phone` continues in the folder | p2: phone intercept, notifier stub (never real hermes) | — | needs a hermes gateway; Pedro's phone |
 | 28 | Lint blocks; pass → free slot; new slot per iteration; Promote loads after restart | p7_builder (7 tests), p7_install_user_slots, safety-ci untrusted mode | — | `LoadAddOn` and restart in game |
 | 29 | Spoken question arrives after confirm; no keyboard hook | p7_ptt (recent strip, kill switch, stale drop); safety-ci forbids SetWindowsHookEx and SendKeys in `.ps1` | — | mic, speech recognizer, overlay |
 | 30 | F25 screenshot transport round trip | — | — | DEFERRED: WOW-17 is built only if the F25 gate passes in WOW-02. Fallback in use: text over the strip, `look` for images |
 | 31 | S2 fails on a planted call, passes clean code | safety-ci (15 tests, repo and untrusted modes) | — | — |
 | 32 | Every outbound prompt in the audit log | p2: audit appends prompt fields, prunes old files | — | — |
-| 33 | `/wowai off` stops everything, stays off across `/reload` and restarts | p2: kill switch refuses jobs, stops capture and agents; p7: builder and PTT honor KILLED; addon_p3_behavior: off switch reaches the bridge in combat | — | addon-side state across `/reload` gated on WOW-02 SavedVariables read-back |
+| 33 | `/runback off` stops everything, stays off across `/reload` and restarts | p2: kill switch refuses jobs, stops capture and agents; p7: builder and PTT honor KILLED; addon_p3_behavior: off switch reaches the bridge in combat | — | addon-side state across `/reload` gated on WOW-02 SavedVariables read-back |
 | 34 | Simulated policy diff → alert and banner | policy-watch: changed diff and alert, alert after 2 failures; addon_p4_features: policy banner | — | — |
 
 ## Live check log

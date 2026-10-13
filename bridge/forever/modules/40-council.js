@@ -9,7 +9,7 @@ module.exports = {
   async run(job, ctx) {
     const opts = ctx.cfg.forever.council || {};
     const ids = (opts.agents || ['claude', 'codex']).filter(id => ctx.cfg.agents && ctx.cfg.agents[id]);
-    const prompt = String(job.text || '').replace(/^\[wowai cmd=council\]\n/, '');
+    const prompt = String(job.text || '').replace(/^\[runback cmd=council\]\n/, '');
     if (!ids.length) { ctx.finish(job, 'error', 'No council agents are configured.'); return true; }
     const results = await Promise.all(ids.map(async id => {
       const r = await ctx.runAgentOnce({ agentId: id, cwd: job.cwd, prompt, timeoutMs: opts.timeoutMs || 240000 });

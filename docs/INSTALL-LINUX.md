@@ -11,17 +11,17 @@ The addon is the same; only the bridge's screen capture differs. On Linux the br
 ## Install
 
 ```bash
-git clone https://github.com/chelinho139/wow-ai
-cd wow-ai
+git clone https://github.com/chelinho139/runback
+cd runback
 npm ci                      # only needed to run the tests
 node setup.js --wow "$HOME/.wine/drive_c/Program Files (x86)/World of Warcraft/_classic_beta_" --project ~/path/to/the/project
 ```
 
-Without `--wow`, `setup.js` looks in `$WINEPREFIX`, `~/.wine` and `~/Games/battlenet`. Then fully restart the game, enable *WoW AI* on the AddOns screen, and start the bridge with `npm start`.
+Without `--wow`, `setup.js` looks in `$WINEPREFIX`, `~/.wine` and `~/Games/battlenet`. Then fully restart the game, enable *Runback* on the AddOns screen, and start the bridge with `npm start`.
 
 ## Check the capture (do this once)
 
-Log in, open the WoW AI window and send any message, then while the strip of colored squares is in the top-left corner run:
+Log in, open the Runback window and send any message, then while the strip of colored squares is in the top-left corner run:
 
 ```bash
 npm run probe
@@ -32,6 +32,6 @@ It finds the game window, saves what the capture sees to `bridge/probe.png`, and
 1. `"keepComposited": true` under `capture` in `bridge/config.json` (asks mutter/KWin to keep compositing the game window), then restart the bridge.
 2. Plain windowed mode in the game settings.
 3. `nvidia-settings -a AllowFlipping=0` (NVIDIA).
-4. As a last resort `/wow-ai mode reload` in game: no capture at all, one UI reload per message.
+4. As a last resort `/runback mode reload` in game: no capture at all, one UI reload per message.
 
 `bridge.log` shows `capture: attached to window 0x...` once the window is found. If it keeps saying `waiting for WowB window`, set `capture.processName` to your executable's name, or `capture.windowName` to part of the window title. `capture.python` picks the interpreter if `python3` is not the one on your `PATH`.

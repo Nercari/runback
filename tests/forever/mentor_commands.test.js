@@ -8,7 +8,7 @@ const path = require('path');
 const mentor = require('../../bridge/forever/modules/05-mentor-guard');
 
 const ROOT = path.join(__dirname, '..', '..');
-const REPO = '/home/me/wow-ai';
+const REPO = '/home/me/runback';
 
 // Claude Code's Bash rule semantics: `Bash(prefix:*)` matches a command equal to the
 // prefix or starting with `prefix `; any other `Bash(x)` is an exact match. A compound

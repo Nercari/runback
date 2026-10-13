@@ -6,7 +6,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { lua, lauxlib, lualib, to_luastring, to_jsstring } = require('fengari');
 
-const addon = path.join(__dirname, '..', '..', 'addon', 'WoWAI');
+const addon = path.join(__dirname, '..', '..', 'addon', 'Runback');
 const read = file => fs.readFileSync(path.join(addon, file), 'utf8');
 function vm(logging) {
   const L = lauxlib.luaL_newstate(); lualib.luaL_openlibs(L);
@@ -27,8 +27,8 @@ function vm(logging) {
       if on ~= nil then table.insert(LOG_SETS, tostring(on)); STUB.logging = on end
       return STUB.logging
     end`);
-  for (const file of ['Codec.lua', 'Inbox.lua', 'WoWAI.lua', 'Forever.lua', 'Forever_Lockout.lua', 'Forever_CombatLog.lua']) run(read(file));
-  run('STUB.FireEvent("ADDON_LOADED", "WoWAI"); STUB.FireEvent("PLAYER_LOGIN"); STUB.RunTimers()');
+  for (const file of ['Codec.lua', 'Inbox.lua', 'Runback.lua', 'Forever.lua', 'Forever_Lockout.lua', 'Forever_CombatLog.lua']) run(read(file));
+  run('STUB.FireEvent("ADDON_LOADED", "Runback"); STUB.FireEvent("PLAYER_LOGIN"); STUB.RunTimers()');
   return { run, get };
 }
 const prints = v => v.get('table.concat(STUB.prints, "\\n")').split('\n').filter(Boolean);
@@ -36,7 +36,7 @@ const reminders = v => prints(v).filter(line => line.includes('[turn on combat l
 const logSets = v => v.get('table.concat(LOG_SETS, ",")');
 const mini = v => v.get(`(function()
   local out = {}
-  for _, c in ipairs(WoWAIMini.children) do if c.kind == "FontString" and c.text then out[#out + 1] = c.text end end
+  for _, c in ipairs(RunbackMini.children) do if c.kind == "FontString" and c.text then out[#out + 1] = c.text end end
   return table.concat(out, " | ")
 end)()`);
 const fight = v => v.run('STUB.combat = true; STUB.FireEvent("PLAYER_REGEN_DISABLED"); STUB.combat = false; STUB.FireEvent("PLAYER_REGEN_ENABLED")');
@@ -46,7 +46,7 @@ test('login with the combat log off prints exactly one line with the link', () =
   v.run('STUB.RunTimers(); STUB.FireEvent("PLAYER_ENTERING_WORLD")');
   const lines = reminders(v);
   assert.equal(lines.length, 1);
-  assert.ok(lines[0].includes('|Hwowai:combatlog|h|cff55ff55[turn on combat log]|r|h'), lines[0]);
+  assert.ok(lines[0].includes('|Hrunback:combatlog|h|cff55ff55[turn on combat log]|r|h'), lines[0]);
 });
 
 test('login with the combat log on prints nothing', () => {
@@ -65,33 +65,33 @@ test('the reminder never switches the log on by itself', () => {
 
 test('clicking the link turns the log on out of combat, and only says so in combat', () => {
   let v = vm(false);
-  v.run('SetItemRef("wowai:combatlog")');
+  v.run('SetItemRef("runback:combatlog")');
   assert.equal(logSets(v), 'true');
   assert.equal(v.get('STUB.logging'), 'true');
-  assert.ok(prints(v).includes('|cff7ec8ff[WoW AI]|r Combat log on.'));
+  assert.ok(prints(v).includes('|cff7ec8ff[Runback]|r Combat log on.'));
   assert.ok(v.get('table.concat(STUB.texts, "|")').includes('Combat log: on'), 'the window button is refreshed');
 
   v = vm(false);
-  v.run('STUB.combat = true; SetItemRef("wowai:combatlog")');
+  v.run('STUB.combat = true; SetItemRef("runback:combatlog")');
   assert.equal(logSets(v), '');
   assert.equal(v.get('STUB.logging'), 'false');
-  assert.ok(prints(v).includes('|cff7ec8ff[WoW AI]|r The combat log can be switched on out of combat only.'));
+  assert.ok(prints(v).includes('|cff7ec8ff[Runback]|r The combat log can be switched on out of combat only.'));
 });
 
 test('a fight that ends with the log off shows "This fight wasn\'t logged" on the mini bar', () => {
   const v = vm(false);
-  v.run('WoWAI.Minimize(true)');
+  v.run('Runback.Minimize(true)');
   assert.doesNotMatch(mini(v), /wasn't logged/);
   fight(v);
   assert.match(mini(v), /This fight wasn't logged/);
   // Switching the log on clears it at once.
-  v.run('SetItemRef("wowai:combatlog")');
+  v.run('SetItemRef("runback:combatlog")');
   assert.doesNotMatch(mini(v), /wasn't logged/);
 });
 
 test('a fight that ends with the log on shows nothing about it', () => {
   const v = vm(true);
-  v.run('WoWAI.Minimize(true)');
+  v.run('Runback.Minimize(true)');
   fight(v);
   assert.doesNotMatch(mini(v), /wasn't logged/);
   assert.match(mini(v), /idle/);
@@ -106,12 +106,12 @@ test('the Combat log button still toggles through the shared switch', () => {
 });
 
 // Backlog 83: the button read "off" for a moment with no click. Each change of
-// LoggingCombat() is recorded with its time for /wow-ai diag; an off without the
+// LoggingCombat() is recorded with its time for /runback diag; an off without the
 // player's click says so once in chat; nothing here switches the log.
 const flipNotes = v => prints(v).filter(line => line.includes('without a click on the Combat log button'));
 const diag = v => {
-  v.run('SlashCmdList["WOWAI"]("diag")');
-  const h = 'WoWAIDB.chats[1].history';
+  v.run('SlashCmdList["RUNBACK"]("diag")');
+  const h = 'RunbackDB.chats[1].history';
   return v.get(`${h}[#${h}].text`);
 };
 const clickButton = v => v.run(`for _, f in ipairs(STUB.frames) do
@@ -124,7 +124,7 @@ test('a flip to off with no click is recorded for diag and said once in chat', (
   v.run('STUB.logging = false; STUB.Tick(); STUB.Tick(); STUB.Tick()');
   const notes = flipNotes(v);
   assert.equal(notes.length, 1, 'one line, not one per tick');
-  assert.match(notes[0], /^\|cff7ec8ff\[WoW AI\]\|r The combat log turned off at 12:00 without a click/);
+  assert.match(notes[0], /^\|cff7ec8ff\[Runback\]\|r The combat log turned off at 12:00 without a click/);
   // It comes back on (by something else), then flips off again: a second flip, a second line.
   v.run('STUB.logging = true; STUB.Tick(); STUB.logging = false; STUB.Tick()');
   assert.equal(flipNotes(v).length, 2);
@@ -158,7 +158,7 @@ test('no diag change and no line while the log stays as it is', () => {
 });
 
 test('only the player-click switch calls LoggingCombat with an argument', () => {
-  // Every LoggingCombat( call in the addon either reads it (no argument) or is the one in WoWAI.SetCombatLog.
+  // Every LoggingCombat( call in the addon either reads it (no argument) or is the one in Runback.SetCombatLog.
   const writes = [];
   for (const file of fs.readdirSync(addon).filter(f => f.endsWith('.lua'))) {
     read(file).split('\n').forEach((line, i) => {
@@ -166,16 +166,16 @@ test('only the player-click switch calls LoggingCombat with an argument', () => 
       for (const m of line.matchAll(/LoggingCombat\(([^)]*)\)/g)) if (m[1].trim() !== '') writes.push(`${file}:${i + 1}: ${line.trim()}`);
     });
   }
-  assert.deepEqual(writes, ['WoWAI.lua:' + (read('WoWAI.lua').split('\n').findIndex(l => l.trim() === 'LoggingCombat(on)') + 1) + ': LoggingCombat(on)']);
-  const fn = read('WoWAI.lua').match(/function WoWAI\.SetCombatLog\(on\)\n([\s\S]*?)\nend/)[1];
+  assert.deepEqual(writes, ['Runback.lua:' + (read('Runback.lua').split('\n').findIndex(l => l.trim() === 'LoggingCombat(on)') + 1) + ': LoggingCombat(on)']);
+  const fn = read('Runback.lua').match(/function Runback\.SetCombatLog\(on\)\n([\s\S]*?)\nend/)[1];
   assert.match(fn, /if InCombatLockdown\(\) or type\(LoggingCombat\) ~= "function" then return false end\n\tLoggingCombat\(on\)/);
   // SetCombatLog is reached only from the button's OnClick and the chat link click.
   const callers = [];
   for (const file of fs.readdirSync(addon).filter(f => f.endsWith('.lua'))) {
-    read(file).split('\n').forEach(line => { if (/SetCombatLog\(/.test(line) && !/function WoWAI\.SetCombatLog/.test(line)) callers.push(line.trim()); });
+    read(file).split('\n').forEach(line => { if (/SetCombatLog\(/.test(line) && !/function Runback\.SetCombatLog/.test(line)) callers.push(line.trim()); });
   }
   assert.deepEqual(callers, [
-    'if type(LoggingCombat) == "function" then WoWAI.SetCombatLog(not LoggingCombat()) end',
-    'elseif WoWAI.SetCombatLog(true) then',
+    'if type(LoggingCombat) == "function" then Runback.SetCombatLog(not LoggingCombat()) end',
+    'elseif Runback.SetCombatLog(true) then',
   ]);
 });

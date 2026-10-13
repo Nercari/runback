@@ -117,7 +117,7 @@ try {
     }
   })
   $form = [QuietForm]::new()
-  $form.Text = 'WoW AI push-to-talk'
+  $form.Text = 'Runback push-to-talk'
   $form.TopMost = $true
   $form.Size = New-Object Drawing.Size(430, 150)
   $form.StartPosition = 'CenterScreen'

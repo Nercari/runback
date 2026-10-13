@@ -15,7 +15,7 @@ module.exports = {
       this.off = true;
       ctx.capture.stop();
       if (ctx.stopRunning) ctx.stopRunning();
-      ctx.finish(job, 'done', 'AI is off. /wowai on to resume.');
+      ctx.finish(job, 'done', 'AI is off. /runback on to resume.');
       return true;
     }
     if (job.cmd === 'on') {
@@ -27,7 +27,7 @@ module.exports = {
     }
     if (this.off || fs.existsSync(this.file)) {
       this.off = true;
-      ctx.finish(job, 'done', 'AI is off (/wowai on).');
+      ctx.finish(job, 'done', 'AI is off (/runback on).');
       return true;
     }
     return false;

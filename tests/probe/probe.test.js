@@ -73,15 +73,15 @@ function probeVM() {
       end
     end
   `);
-  const addon = fs.readFileSync(path.join(root, 'probe', 'WoWAIProbe', 'WoWAIProbe.lua'), 'utf8');
-  run(`(function(...) ${addon}\nend)("WoWAIProbe")`);
+  const addon = fs.readFileSync(path.join(root, 'probe', 'RunbackProbe', 'RunbackProbe.lua'), 'utf8');
+  run(`(function(...) ${addon}\nend)("RunbackProbe")`);
   return { run, value };
 }
 
 test('probe Lua files parse as Lua 5.1', () => {
   for (const file of [
-    'probe/WoWAIProbe/WoWAIProbe.lua',
-    'probe/WoWAIProbe_LOD/WoWAIProbe_LOD.lua',
+    'probe/RunbackProbe/RunbackProbe.lua',
+    'probe/RunbackProbe_LOD/RunbackProbe_LOD.lua',
   ]) {
     assert.doesNotThrow(() => {
       luaparse.parse(fs.readFileSync(path.join(root, file), 'utf8'), { luaVersion: '5.1' });
@@ -91,17 +91,17 @@ test('probe Lua files parse as Lua 5.1', () => {
 
 test('probe boot readback, event counts, and buttons obey click and combat gates', () => {
   const vm = probeVM();
-  vm.run('STUB.FireEvent("ADDON_LOADED", "WoWAIProbe")');
-  assert.equal(vm.value('WoWAIProbeDB.results.sv_readback.value'), 'UNKNOWN (first run)');
-  vm.run('WoWAIProbeDB = { boot = 1, lastWrite = 10 }; STUB.FireEvent("ADDON_LOADED", "WoWAIProbe")');
-  assert.equal(vm.value('WoWAIProbeDB.results.sv_readback.value'), 'PASS');
+  vm.run('STUB.FireEvent("ADDON_LOADED", "RunbackProbe")');
+  assert.equal(vm.value('RunbackProbeDB.results.sv_readback.value'), 'UNKNOWN (first run)');
+  vm.run('RunbackProbeDB = { boot = 1, lastWrite = 10 }; STUB.FireEvent("ADDON_LOADED", "RunbackProbe")');
+  assert.equal(vm.value('RunbackProbeDB.results.sv_readback.value'), 'PASS');
   vm.run('STUB.FireEvent("PLAYER_LOGIN")');
   assert.equal(vm.value('#STUB.calls'), '0');
   vm.run('STUB.combat = true; STUB.FireEvent("PLAYER_REGEN_DISABLED")');
   vm.run('STUB.FireEvent("QUEST_DETAIL"); STUB.FireEvent("ENCOUNTER_START", 1, "Boss")');
   vm.run('STUB.FireEvent("PLAYER_REGEN_ENABLED")');
-  assert.equal(vm.value('WoWAIProbeDB.events.PLAYER_REGEN_DISABLED.count'), '1');
-  assert.equal(vm.value('WoWAIProbeDB.events.PLAYER_REGEN_ENABLED.count'), '1');
+  assert.equal(vm.value('RunbackProbeDB.events.PLAYER_REGEN_DISABLED.count'), '1');
+  assert.equal(vm.value('RunbackProbeDB.events.PLAYER_REGEN_ENABLED.count'), '1');
   const before = Number(vm.value('#STUB.calls'));
   vm.run('STUB.ClickProbe("Screenshot now")');
   assert.equal(Number(vm.value('#STUB.calls')), before);
@@ -139,9 +139,9 @@ test('check-log streams summary and anonymizes fixture consistently without chan
 });
 
 test('gate-table uses exact per-key pass values', () => {
-  const saved = path.join(tmp, 'WoWAIProbe.lua');
+  const saved = path.join(tmp, 'RunbackProbe.lua');
   const output = path.join(tmp, 'gate.md');
-  fs.writeFileSync(saved, 'WoWAIProbeDB = { ["report"] = "screenshot_hw=CALLED\\napi_auctionhouse=table\\nsv_readback=PASS\\ncreatemacro=FAIL\\n" }');
+  fs.writeFileSync(saved, 'RunbackProbeDB = { ["report"] = "screenshot_hw=CALLED\\napi_auctionhouse=table\\nsv_readback=PASS\\ncreatemacro=FAIL\\n" }');
   const result = spawnSync(process.execPath, [
     path.join(root, 'probe/gate-table.js'), '--sv', saved, '--out', output,
   ], { encoding: 'utf8' });

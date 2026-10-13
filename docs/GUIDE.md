@@ -102,13 +102,13 @@ Same route as map layers (`docs/MAP.md`); nothing new is invented.
 2. **The bridge validates when the run ends.** The file and the blocks go through `validateGuideSet` above; a block is taken out of the text the player reads, valid or not. A guide that does not validate is dropped and never stored (the reason goes to `bridge.log`). The reply gets one plain line: `I saved the guide "<title>".`, `I saved N guides.` or `I could not save that guide.`
 3. **The bridge keeps them in `state.json`** under `guides` as `{ epoch, version, guides }`. A guide with an `id` already held replaces it. At most 12 guides and 1500 steps in all are kept, the oldest dropped first (`GUIDE_STATE_STEPS` in `bridge/guide.js`); this keeps the slot files small. The version goes up only when something changed.
 4. **The slot files carry the whole set** as `guides = { epoch, version, list }` for three minutes after a change (on progress publishes only while it is small), and again after every hello, exactly as the map does. The field names inside each guide and step are the ones in this document. The addon replaces its copy when the version is newer or the epoch is another (the bridge's state was reset), so a guide is never applied twice and a client that lost its saved data gets its guides back on its next hello.
-5. **The addon only stores them.** `addon/WoWAI/Guide.lua` keeps the set in the `WoWAIGuideDB` saved variable and offers `WoWAIGuide.List()`, `Find(id)` and `Version()` for the guide panel (item 69). It shows nothing, prints nothing, reads no game state and calls no game action. The guide panel below reads from it. The panel ticks steps off from the quest log (item 70) and puts the current step's points on the map (item 71, below).
+5. **The addon only stores them.** `addon/Runback/Guide.lua` keeps the set in the `RunbackGuideDB` saved variable and offers `RunbackGuide.List()`, `Find(id)` and `Version()` for the guide panel (item 69). It shows nothing, prints nothing, reads no game state and calls no game action. The guide panel below reads from it. The panel ticks steps off from the quest log (item 70) and puts the current step's points on the map (item 71, below).
 
 To remove a guide, send a guide with the same `id`; there is no clear command yet.
 
 ## Guide panel
 
-`addon/WoWAI/Forever_Guide.lua` (backlog 69) is a small window with the current step of one guide and the next two. It only shows text: every step is still something you do by hand.
+`addon/Runback/Forever_Guide.lua` (backlog 69) is a small window with the current step of one guide and the next two. It only shows text: every step is still something you do by hand.
 
 - **Previous / Next** move one step.
 - **Progress from your quest log (item 70).** A step with a `questId` ticks itself off when your own quest log shows it done, and the panel moves on to the next step that is not done:
@@ -122,7 +122,7 @@ To remove a guide, send a guide with the same `id`; there is no clear command ye
   Other kinds, and steps without a `questId`, are ticked by hand. A step with a `level` filter shows once you reach that level; reaching it does not tick it, because the step still asks you to do something (visit your trainer, take the road). Done steps show `(done)`.
 - **Tick / Untick** marks the current step done or not done by hand, and ticking moves on. Your choice wins over the quest log until that quest's state changes (accepted, objectives complete, turned in, abandoned); then the log decides again. Previous onto a done step stays there.
 - The panel reads the log when a quest is accepted, turned in, removed or updated and when you level up, then once more a second later, because objective data can arrive after the event. It never polls, and it only reads: it never accepts, turns in, abandons, picks a gossip option, targets or moves anything.
-- **Why?** next to each step puts "Why this step, and what do I need?" with that step and its quest name in the WoW AI question box and opens the chat window (item 75), like the **[explain this quest]** link. Nothing is sent: you read it, change it if you like, and press Enter. The button does nothing in a fight (the panel is hidden then anyway).
+- **Why?** next to each step puts "Why this step, and what do I need?" with that step and its quest name in the Runback question box and opens the chat window (item 75), like the **[explain this quest]** link. Nothing is sent: you read it, change it if you like, and press Enter. The button does nothing in a fight (the panel is hidden then anyway).
 - **Re-plan** in the header (item 73) puts a request in the same box and opens the chat window: "Re-plan my leveling guide from here: I skipped steps or took another route", the current guide, its current step and how many steps are done. With no guide it asks for a new one instead. Level, zone and quest log are not repeated: every message already carries them in the game context. The mentor (rule 13) skips what the log shows done and writes the new chunk under a **new `id`**, so the old guide stays and nothing is replaced behind your back; choose the new one with **Pick guide**. Nothing is sent by itself and the button does nothing in a fight.
 - **Pick guide** (or **Next guide (N)** when there are several) switches to the next stored guide; each guide remembers its own step. A new set opens on the newest guide until you pick one.
 - The **X** hides the window.
@@ -138,19 +138,19 @@ To remove a guide, send a guide with the same `id`; there is no clear command ye
 
   The rules apply only while the step's own quest is neither in your log nor turned in. **Unknown never hides a step:** a missing API, a call that fails, an answer that is not a plain yes or no, a faction the client does not know or a collapsed skill header all count as "can take it". A step that becomes available behind the current one is not pulled back; Previous reaches it.
 - **XP pace (item 76).** Under the steps one line says `About N min to level, from your last M minutes`, from the game's own `UnitXP` and `UnitXPMax`, read on `PLAYER_XP_UPDATE`. It shows once there are five minutes of readings from the last ten and some XP was gained in them, and counts XP across a level up. It hides with the panel in a fight.
-- **Time per level (item 76).** The addon counts the minutes you play at each level (between XP, level-up and logout events, so also on `/reload`) and when you reached it, per character, in `WoWAIGuideDB.levels["Name-Realm"][level] = { at, sec }`. A session recap (`/ai recap`, item 40) carries `levelMinutes=24:38,25:12`: minutes at each of the last five levels the addon saw you reach, the last one still counting. A level reached before this version is not listed.
+- **Time per level (item 76).** The addon counts the minutes you play at each level (between XP, level-up and logout events, so also on `/reload`) and when you reached it, per character, in `RunbackGuideDB.levels["Name-Realm"][level] = { at, sec }`. A session recap (`/ai recap`, item 40) carries `levelMinutes=24:38,25:12`: minutes at each of the last five levels the addon saw you reach, the last one still counting. A level reached before this version is not listed.
 - Text is shown as plain text: a `|` in it shows as `|`, never as a game escape code. Text is shown as plain text: a `|` in it shows as `|`, never as a game escape code.
 - **In combat, during an encounter or a challenge run the window hides**, and it comes back when the fight ends, like the chat window (item 31). Guide commands typed mid-fight only print "The guide shows when the fight ends."
-- The window can be dragged. Its position, whether it is open, the chosen guide and the step in each guide are kept in `WoWAIGuideDB.panel`.
+- The window can be dragged. Its position, whether it is open, the chosen guide and the step in each guide are kept in `RunbackGuideDB.panel`.
 
 | Command | What it does |
 |---|---|
-| `/wow-ai guide` | Show or hide the panel. |
-| `/wow-ai guide show` / `hide` | Show or hide it. |
-| `/wow-ai guide next` / `prev` | Next or previous step (`back` and `previous` work too). |
-| `/wow-ai guide tick` | Tick or untick the current step, like the **Tick** button. |
-| `/wow-ai guide list` | Print the stored guides with their number and id. |
-| `/wow-ai guide pick <n or id>` | Switch to that guide. |
+| `/runback guide` | Show or hide the panel. |
+| `/runback guide show` / `hide` | Show or hide it. |
+| `/runback guide next` / `prev` | Next or previous step (`back` and `previous` work too). |
+| `/runback guide tick` | Tick or untick the current step, like the **Tick** button. |
+| `/runback guide list` | Print the stored guides with their number and id. |
+| `/runback guide pick <n or id>` | Switch to that guide. |
 
 ## On the map
 
@@ -158,11 +158,11 @@ While the panel is open, the current step's `points` (item 71) show on the world
 
 - A step with several points is a numbered route. The navigator starts at point 1.
 - **Arriving ticks a point off** and the navigator moves to the step's next point. A point with a `radius` counts as reached anywhere inside it (the radius is map percent of the point's own map, measured across its width, and never less than 12 yards); a point without one needs 12 yards. After the last point the navigator stops for that step. Arriving never ticks the step itself: that stays with the quest log or the Tick button.
-- A route the agent draws takes the navigator over; `/wow-ai map nav guide` goes back to the step. The panel's step keeps its place in the navigator through `/reload`.
+- A route the agent draws takes the navigator over; `/runback map nav guide` goes back to the step. The panel's step keeps its place in the navigator through `/reload`.
 - **In combat, during an encounter or a challenge run the guide pins and the navigator on the guide hide**, like the panel, and come back when the fight ends. A route the agent drew keeps its navigator in combat as before.
 - Point labels are plain text: control characters and `|` are removed, a point that is not a number on a real map is dropped, the radius is clamped to 0.5 to 25 and at most 8 points per step are kept.
-- `/wow-ai map hide guide` and `show guide` hide or show the pins, like any layer.
+- `/runback map hide guide` and `show guide` hide or show the pins, like any layer.
 
 Display only: the addon reads your position from the map API and draws. Nothing moves, targets or interacts for you.
 
-Anything else after `guide` (`/ai guide me to Goldshire`) is a message for the agent, as with the other command words. `/ai` works the same as `/wow-ai`.
+Anything else after `guide` (`/ai guide me to Goldshire`) is a message for the agent, as with the other command words. `/ai` works the same as `/runback`.

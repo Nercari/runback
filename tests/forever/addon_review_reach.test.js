@@ -5,7 +5,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { lua, lauxlib, lualib, to_luastring, to_jsstring } = require('fengari');
 
-const addon = path.join(__dirname, '..', '..', 'addon', 'WoWAI');
+const addon = path.join(__dirname, '..', '..', 'addon', 'Runback');
 const read = file => fs.readFileSync(path.join(addon, file), 'utf8');
 function vm() {
   const L = lauxlib.luaL_newstate(); lualib.luaL_openlibs(L);
@@ -20,9 +20,9 @@ function vm() {
   };
   run(fs.readFileSync(path.join(__dirname, '..', 'wow_stub.lua'), 'utf8'));
   run('unpack = table.unpack');
-  for (const file of ['Codec.lua', 'Inbox.lua', 'WoWAI.lua', 'Forever.lua', 'Forever_Lockout.lua', 'Forever_Context.lua', 'Forever_Commands.lua']) run(read(file));
-  run('STUB.FireEvent("ADDON_LOADED", "WoWAI"); STUB.FireEvent("PLAYER_LOGIN"); STUB.RunTimers()');
-  run('WoWAI.IsConnected = function() return true end');
+  for (const file of ['Codec.lua', 'Inbox.lua', 'Runback.lua', 'Forever.lua', 'Forever_Lockout.lua', 'Forever_Context.lua', 'Forever_Commands.lua']) run(read(file));
+  run('STUB.FireEvent("ADDON_LOADED", "Runback"); STUB.FireEvent("PLAYER_LOGIN"); STUB.RunTimers()');
+  run('Runback.IsConnected = function() return true end');
   run(`function CLICK(label)
     for _, f in ipairs(STUB.frames) do
       if f.kind == "Button" and f.text == label then f.scripts.OnClick(f); return true end
@@ -32,9 +32,9 @@ function vm() {
   return { run, get };
 }
 const outbox = v => ({
-  cmd: v.get('WoWAIDB.outbox and WoWAIDB.outbox.cmd'),
-  text: Buffer.from(v.get('WoWAIDB.outbox and WoWAIDB.outbox.text or ""'), 'hex').toString(),
-  ctx: Buffer.from(v.get('WoWAIDB.outbox and WoWAIDB.outbox.ctx or ""'), 'hex').toString(),
+  cmd: v.get('RunbackDB.outbox and RunbackDB.outbox.cmd'),
+  text: Buffer.from(v.get('RunbackDB.outbox and RunbackDB.outbox.text or ""'), 'hex').toString(),
+  ctx: Buffer.from(v.get('RunbackDB.outbox and RunbackDB.outbox.ctx or ""'), 'hex').toString(),
 });
 const fight = v => v.run('STUB.FireEvent("PLAYER_REGEN_DISABLED"); STUB.now = STUB.now + 30; STUB.FireEvent("PLAYER_REGEN_ENABLED")');
 
@@ -51,13 +51,13 @@ test('the Review last fight button sends the review command with the fight times
 test('a lone "review" typed in the window is the review command; other text stays a plain message', () => {
   let v = vm();
   fight(v);
-  v.run('WoWAIInput:SetText("Review."); WoWAI.SendFromInput()');
+  v.run('RunbackInput:SetText("Review."); Runback.SendFromInput()');
   assert.equal(outbox(v).cmd, 'review');
   assert.match(outbox(v).ctx, /lastFight=start=/);
 
   v = vm();
   fight(v);
-  v.run('WoWAIInput:SetText("review my gear"); WoWAI.SendFromInput()');
+  v.run('RunbackInput:SetText("review my gear"); Runback.SendFromInput()');
   assert.equal(outbox(v).cmd, 'nil');
   assert.equal(outbox(v).text, 'review my gear');
 });
@@ -65,19 +65,19 @@ test('a lone "review" typed in the window is the review command; other text stay
 test('in combat the Review button sends nothing', () => {
   const v = vm();
   v.run('STUB.combat = true; STUB.FireEvent("PLAYER_REGEN_DISABLED"); CLICK("Review last fight")');
-  assert.equal(v.get('WoWAIDB.outbox'), 'nil');
-  assert.match(v.get('WoWAIDB.chats[1].history[#WoWAIDB.chats[1].history].text'), /AI paused in combat/);
+  assert.equal(v.get('RunbackDB.outbox'), 'nil');
+  assert.match(v.get('RunbackDB.chats[1].history[#RunbackDB.chats[1].history].text'), /AI paused in combat/);
 });
 
 test('the Combat log button shows the game state and toggles it only out of combat', () => {
   const v = vm();
   v.run('STUB.logging = false; function LoggingCombat(on) if on ~= nil then STUB.logging = on end return STUB.logging end');
-  v.run('WoWAI.UpdateLogButton()');
+  v.run('Runback.UpdateLogButton()');
   v.run('CLICK("Combat log: off")');
   assert.equal(v.get('STUB.logging'), 'true');
   v.run('CLICK("Combat log: on")');
   assert.equal(v.get('STUB.logging'), 'false');
-  v.run('STUB.combat = true; WoWAI.UpdateLogButton(); CLICK("Combat log: off")');
+  v.run('STUB.combat = true; Runback.UpdateLogButton(); CLICK("Combat log: off")');
   assert.equal(v.get('STUB.logging'), 'false');
 });
 
@@ -89,11 +89,11 @@ test('the Why did I die? button sends the death command; in combat it sends noth
 
   v = vm();
   v.run('STUB.combat = true; STUB.FireEvent("PLAYER_REGEN_DISABLED"); CLICK("Why did I die?")');
-  assert.equal(v.get('WoWAIDB.outbox'), 'nil');
+  assert.equal(v.get('RunbackDB.outbox'), 'nil');
 });
 
 // Backlog 51: fight questions in the player's words.
-const chat = (v, text) => { v.run(`WoWAIDB.outbox = nil; WoWAIInput:SetText(${JSON.stringify(text)}); WoWAI.SendFromInput()`); return outbox(v); };
+const chat = (v, text) => { v.run(`RunbackDB.outbox = nil; RunbackInput:SetText(${JSON.stringify(text)}); Runback.SendFromInput()`); return outbox(v); };
 
 test('a plain chat message within 10 minutes of a fight carries lastFight and deaths', () => {
   const v = vm();
@@ -122,7 +122,7 @@ test('a death alone opens the window, and nothing is added during a fight', () =
   v = vm();
   fight(v);
   v.run('STUB.FireEvent("PLAYER_REGEN_DISABLED")');
-  assert.doesNotMatch(v.get('WoWAI.GameContext()'), /lastFight=|deaths=/);
+  assert.doesNotMatch(v.get('Runback.GameContext()'), /lastFight=|deaths=/);
 });
 
 test('the mentor prompt answers fight questions from the lines', () => {

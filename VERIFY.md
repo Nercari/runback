@@ -1,6 +1,6 @@
 # VERIFY
 
-Merge evidence for wow-ai. This file lists the commands only; it never holds their results. Results go in the PR body, because a results section in this file is the same few lines every PR appends, and parallel PRs then conflict on it.
+Merge evidence for runback. This file lists the commands only; it never holds their results. Results go in the PR body, because a results section in this file is the same few lines every PR appends, and parallel PRs then conflict on it.
 
 Run these from the repo root. CI runs the first three on Windows and Linux.
 
