@@ -1,6 +1,6 @@
 # Ideas from similar addons (2026-10-03)
 
-Pedro asked for addons similar to runback and for complementary ideas to borrow. Only ideas that stay out of combat, play nothing for the player and use the Forever client's APIs or the combat log file are kept. No code was copied; only ideas.
+Nercari asked for addons similar to runback and for complementary ideas to borrow. Only ideas that stay out of combat, play nothing for the player and use the Forever client's APIs or the combat log file are kept. No code was copied; only ideas.
 
 Sources: the CurseForge pages of WOWGPT, CombatAnalyzer, Localog and Mythic Raider Tools were opened. Details!, WoWAnalyzer, Wipefest, Warcraft Logs, Elitist Group, Questie, RestedXP and Zygor come from search results and general knowledge, not an opened page. None was checked on the Forever client.
 

@@ -4,11 +4,11 @@ Branch `forever`. How each acceptance criterion (spec v1 AC1–AC8, spec v2 AC9�
 
 - **Auto**: a test in `npm test` (file: test name).
 - **Dry run**: a real `codex exec` transcript through `runAgentOnce` and the mentor guard. See `docs/forever-dryrun-2026-09-25.md` (first batch) and `docs/forever-dryrun2-2026-09-25.md` (gap batch).
-- **Live**: needs the Forever client, installed on Pedro's PC on 2026-10-03. Pedro runs these with the WOW-02 probe kit (`probe/PROBE.md`); results go in the live log below.
+- **Live**: needs the Forever client, installed on Nercari's PC on 2026-10-03. Nercari runs these with the WOW-02 probe kit (`probe/PROBE.md`); results go in the live log below.
 
 Spec v2 accepts prompt-only features (F02, F05–F07, F10, F11, F13, F14, F16, F18 drafts, F19 text, F20 synthesis) by a dry-run transcript. Gated features pass their own AC or a documented fallback.
 
-| AC | What | Auto | Dry run | Live (Pedro) |
+| AC | What | Auto | Dry run | Live (Nercari) |
 |---|---|---|---|---|
 | 1 | Four agents answer and resume after `/reload` | agents_test: each adapter's args, resume and stream parser; restore_test: slot file round-trip | review/death runs used codex through `runAgentOnce` | in-game chat with each agent, then `/reload` |
 | 2 | Send in combat or encounter refused | addon_p3_behavior: lockouts; addon_test: Forever blocks sends | — | enter combat and try to send |
@@ -36,7 +36,7 @@ Spec v2 accepts prompt-only features (F02, F05–F07, F10, F11, F13, F14, F16, F
 | 24 | Logout writes a journal note with screenshots | addon_p4_bulk: journal events and logout flag; p2: logout journal handler | journal: PASS (48 words, screenshot linked) | real logout |
 | 25 | Council shows answers and synthesis, survives a timeout | p2: council owns the job and tolerates a timeout | council: PASS (synthesis, missing grok named) | — |
 | 26 | Job board status and done notice | addon_p4_features: job board transition, sound and speech once | — | — |
-| 27 | Phone done notice; `/runback phone` continues in the folder | p2: phone intercept, notifier stub (never real hermes) | — | needs a hermes gateway; Pedro's phone |
+| 27 | Phone done notice; `/runback phone` continues in the folder | p2: phone intercept, notifier stub (never real hermes) | — | needs a hermes gateway; Nercari's phone |
 | 28 | Lint blocks; pass → free slot; new slot per iteration; Promote loads after restart | p7_builder (7 tests), p7_install_user_slots, safety-ci untrusted mode | — | `LoadAddOn` and restart in game |
 | 29 | Spoken question arrives after confirm; no keyboard hook | p7_ptt (recent strip, kill switch, stale drop); safety-ci forbids SetWindowsHookEx and SendKeys in `.ps1` | — | mic, speech recognizer, overlay |
 | 30 | F25 screenshot transport round trip | — | — | DEFERRED: WOW-17 is built only if the F25 gate passes in WOW-02. Fallback in use: text over the strip, `look` for images |
@@ -49,7 +49,7 @@ Spec v2 accepts prompt-only features (F02, F05–F07, F10, F11, F13, F14, F16, F
 
 | Date | Check | Result | Notes |
 |---|---|---|---|
-| 2026-10-03 | Addon installs and loads on Forever (Windows) | PASS | First login showed a Lua error at `Forever.lua:27` (retail-only AH search events in the bulk module). Fixed in PR #2; after updating and restarting the client, Pedro saw no error on login. |
+| 2026-10-03 | Addon installs and loads on Forever (Windows) | PASS | First login showed a Lua error at `Forever.lua:27` (retail-only AH search events in the bulk module). Fixed in PR #2; after updating and restarting the client, Nercari saw no error on login. |
 
 ## WOW-02 gate table
 The gates (strip decode, SavedVariables read-back, `Screenshot()` and PNG decode, advanced-logging positions, `C_DamageMeter`, `C_AuctionHouse`, voices) are listed in `probe/PROBE.md`. None has run yet: the Forever beta client gets installed after 2026-10-02.

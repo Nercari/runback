@@ -1,7 +1,7 @@
 ## Interface: 16001
 ## Title: Runback
 ## Notes: Talk to Claude Code, Codex or Grok from inside the game, one session per chat. Needs the companion bridge (see README).
-## Author: chelinho139
+## Author: Nercari
 ## Version: 0.4.0
 ## SavedVariables: RunbackDB, RunbackMapDB, RunbackGuideDB, RunbackForeverDB, Runback_Bulk
 ## OptionalDeps: Runback_Nodes

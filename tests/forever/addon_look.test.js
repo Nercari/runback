@@ -63,7 +63,7 @@ test('/ai council alone still asks for its question', () => {
   assert.equal(sent(v).cmd, 'nil');
 });
 
-// Backlog 84: Pedro pressed Print Screen, typed "look!" in the box and pressed Send; it went to
+// Backlog 84: Nercari pressed Print Screen, typed "look!" in the box and pressed Send; it went to
 // the agent as a plain message. A lone "look" in the box is the look command.
 // A fresh client per line: one message in flight blocks the next send.
 const typed = (v, line) => {
