@@ -4,6 +4,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const path = require('path');
 const os = require('os');
+const luaparse = require('luaparse');
 const P = require('../bridge/protocol');
 
 test('luaStr escapes everything Lua 5.1 needs', () => {
@@ -113,7 +114,7 @@ test('splitSummary takes the last TL;DR block for the game chat and keeps the wh
   // The agents installed on the bridge PC, and the models each can switch to.
   const pools = P.luaTable('WoWAI_SlotData', [], { agent: 'claude', agents: ['claude', 'codex'], models: { claude: ['opus', 'sonnet'], codex: [], 'bad id': ['x'] } });
   assert.ok(pools.includes('agents = { "claude", "codex" },'));
-  assert.ok(pools.includes('models = { claude = { "opus", "sonnet" }, codex = {  } },'));
+  assert.ok(pools.includes('models = { claude = { "opus", "sonnet" }, codex = {  }, ["bad id"] = { "x" } },'));
 });
 
 test('the shipped primer exists, mentions the essentials, and stays small enough to send on every run', () => {
@@ -437,4 +438,64 @@ test('splitFollowUps turns a FOLLOW-UPS line into at most two short questions an
   const lua = P.luaTable('WoWAI_SlotData', [{ chat: 'c', id: 1, status: 'done', text: 'x', followUps: ['Why "this"?', 'And that?'] }, { chat: 'c', id: 2, status: 'done', text: 'y', followUps: [] }]);
   assert.ok(lua.includes('followUps = { "Why \\"this\\"?", "And that?" },'), lua);
   assert.equal(lua.split('followUps').length, 2, 'none for a reply without follow-ups');
+});
+
+test('luaTable writes model keys Lua 5.1 can load', () => {
+  const lua = P.luaTable('X', [], { models: { claude: ['opus'], 'my-agent': ['m'], '1abc': ['n'], end: ['k'], 'say"hi\\': ['q'] } });
+  assert.doesNotThrow(() => luaparse.parse(lua, { luaVersion: '5.1' }));
+  assert.match(lua, /claude = \{ "opus" \}/);
+  assert.match(lua, /\["my-agent"\] = \{ "m" \}/);
+  assert.match(lua, /\["1abc"\] = \{ "n" \}/);
+  assert.match(lua, /\["end"\] = \{ "k" \}/);
+  assert.match(lua, /\["say\\"hi\\\\"\] = \{ "q" \}/);
+});
+
+test('noReplyText treats missing actions as none', () => {
+  const empty = P.noReplyText('Claude', [], 0);
+  assert.equal(P.noReplyText('Claude', null), empty);
+  assert.equal(P.noReplyText('Claude', undefined), empty);
+});
+
+test('describeToolUse survives a missing block', () => {
+  assert.equal(P.describeToolUse(null), '');
+  assert.equal(P.describeToolUse(undefined), '');
+  assert.equal(P.describeToolUse({ name: 'Read', input: { file_path: 'a.txt' } }), 'read a.txt');
+});
+
+test('luaTable treats missing records and restore chats as empty', () => {
+  for (const records of [null, undefined]) {
+    const lua = P.luaTable('X', records, { restore: { token: 't' } });
+    assert.doesNotThrow(() => luaparse.parse(lua, { luaVersion: '5.1' }));
+    assert.match(lua, /replies = \{\s*\}/);
+    assert.match(lua, /chats = \{\s*\}/);
+  }
+  const bare = P.luaTable('X', [], { restore: {} });
+  assert.doesNotThrow(() => luaparse.parse(bare, { luaVersion: '5.1' }));
+  assert.match(bare, /chats = \{\s*\}/);
+  const noMessages = P.luaTable('X', [], { restore: { token: 't', chats: [{ id: 'c', name: 'n', cwd: '' }] } });
+  assert.doesNotThrow(() => luaparse.parse(noMessages, { luaVersion: '5.1' }));
+  assert.match(noMessages, /messages = \{\s*\}/);
+});
+
+test('slotNumber stays inside 1..max', () => {
+  assert.equal(P.slotNumber(1, 200), 1);
+  assert.equal(P.slotNumber(200, 200), 200);
+  assert.equal(P.slotNumber(201, 200), 1);
+  assert.equal(P.slotNumber(0, 200), null);
+  assert.equal(P.slotNumber(-5, 200), null);
+  assert.equal(P.slotNumber(5, 0), null);
+  assert.equal(P.slotNumber(5, -3), null);
+});
+
+test('jobsFromStrip keeps only ids that survive as integers', () => {
+  const huge = '99999999999999999999';
+  const rec = (id) => ['sess', 'chat1', id, '', '', 'My chat', 'hi'].join('\x1F');
+  assert.deepEqual(P.jobsFromStrip(1, rec(huge)), []);
+  assert.deepEqual(P.jobsFromStrip(1, rec('9007199254740993')), []);
+  const safe = P.jobsFromStrip(1, rec(String(Number.MAX_SAFE_INTEGER)));
+  assert.equal(safe.length, 1);
+  assert.equal(safe[0].id, Number.MAX_SAFE_INTEGER);
+  assert.equal(P.jobsFromStrip(1, rec('12'))[0].id, 12);
+  const old = ['sess', 'chat1', huge, 'C:\\x', 'n', 'second'].join('\x1F');
+  assert.deepEqual(P.jobsFromStrip(9, old), []);
 });
