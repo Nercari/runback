@@ -37,27 +37,34 @@ function vm() {
   return { run, get, truthy, load: () => run('STUB.FireEvent("ADDON_LOADED", "Runback")') };
 }
 
-test('legacy WoWAIDB migrates into RunbackDB once without touching the legacy table', () => {
-  const v = vm();
-  v.run('WoWAIDB = { settings = { echo = "short" }, chats = { { id = "abc", name = "Old" } }, marker = 42 }');
-  v.load();
-  assert.equal(v.get('RunbackDB.migratedFrom'), 'WoWAI');
-  assert.equal(v.get('RunbackDB.marker'), '42');
-  assert.equal(v.get('RunbackDB.settings.echo'), 'short');
-  assert.equal(v.get('WoWAIDB.marker'), '42');
-  assert.equal(v.get('WoWAIDB.settings.echo'), 'short');
-});
+const PAIRS = [
+  ['RunbackDB', 'WoWAIDB', '{ settings = { echo = "short" }, chats = {}, marker = 42 }'],
+  ['RunbackMapDB', 'WoWAIMapDB', '{ map = { layers = {} }, marker = 7 }'],
+  ['RunbackGuideDB', 'WoWAIGuideDB', '{ guides = { list = {} }, marker = 3 }'],
+  ['RunbackForeverDB', 'WoWAIForeverDB', '{ off = false, marker = 9 }'],
+  ['Runback_Bulk', 'WoWAI_Bulk', '{ ah = { version = 2 }, marker = 11 }'],
+];
 
-test('an existing RunbackDB is not overwritten when WoWAIDB is still present', () => {
-  const v = vm();
-  v.run('RunbackDB = { settings = { echo = "off" }, chats = {}, kept = true }');
-  v.run('WoWAIDB = { settings = { echo = "full" }, chats = {}, marker = 99 }');
-  v.load();
-  assert.equal(v.get('RunbackDB.kept'), 'true');
-  assert.equal(v.get('RunbackDB.settings.echo'), 'off');
-  assert.equal(v.truthy('RunbackDB.migratedFrom == nil'), true);
-  assert.equal(v.get('WoWAIDB.marker'), '99');
-});
+for (const [newName, oldName, legacyLua] of PAIRS) {
+  test(`legacy ${oldName} migrates into ${newName} without touching the legacy table`, () => {
+    const v = vm();
+    v.run(`${oldName} = ${legacyLua}`);
+    v.load();
+    assert.equal(v.get(`${newName}.migratedFrom`), 'WoWAI');
+    assert.equal(v.get(`${newName}.marker`), legacyLua.match(/marker = (\d+)/)[1]);
+    assert.equal(v.get(`${oldName}.marker`), legacyLua.match(/marker = (\d+)/)[1]);
+  });
+
+  test(`existing ${newName} is not overwritten when ${oldName} is still present`, () => {
+    const v = vm();
+    v.run(`${newName} = { marker = 1, kept = true }`);
+    v.run(`${oldName} = ${legacyLua}`);
+    v.load();
+    assert.equal(v.get(`${newName}.kept`), 'true');
+    assert.equal(v.truthy(`${newName}.migratedFrom == nil`), true);
+    assert.equal(v.get(`${oldName}.marker`), legacyLua.match(/marker = (\d+)/)[1]);
+  });
+}
 
 test('migration is idempotent on a second ADDON_LOADED', () => {
   const v = vm();
@@ -69,10 +76,11 @@ test('migration is idempotent on a second ADDON_LOADED', () => {
   assert.equal(v.get('RunbackDB.migratedFrom'), 'WoWAI');
 });
 
-test('/runback and /wowai are registered; /rb registers when free', () => {
+test('slash commands: /runback primary, /wow-ai and /wowai kept, /rb when free', () => {
   const v = vm();
   v.load();
   assert.equal(v.get('SLASH_RUNBACK1'), '/runback');
   assert.equal(v.get('SLASH_RUNBACK2'), '/wowai');
-  assert.equal(v.get('SLASH_RUNBACK6'), '/rb');
+  assert.equal(v.get('SLASH_RUNBACK3'), '/wow-ai');
+  assert.equal(v.get('SLASH_RUNBACK7'), '/rb');
 });

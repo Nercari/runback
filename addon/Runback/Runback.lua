@@ -245,15 +245,30 @@ local function DeepCopy(value)
 	return copy
 end
 
-local function MigrateLegacyDB()
-	if RunbackDB ~= nil then return end
-	if WoWAIDB == nil then return end
-	RunbackDB = DeepCopy(WoWAIDB)
-	RunbackDB.migratedFrom = "WoWAI"
+local LEGACY_SAVED = {
+	{ "RunbackDB", "WoWAIDB" },
+	{ "RunbackMapDB", "WoWAIMapDB" },
+	{ "RunbackGuideDB", "WoWAIGuideDB" },
+	{ "RunbackForeverDB", "WoWAIForeverDB" },
+	{ "Runback_Bulk", "WoWAI_Bulk" },
+}
+
+local function MigrateLegacySaved(newName, oldName)
+	if _G[newName] ~= nil then return end
+	local legacy = _G[oldName]
+	if legacy == nil then return end
+	_G[newName] = DeepCopy(legacy)
+	_G[newName].migratedFrom = "WoWAI"
+end
+
+local function MigrateAllLegacySaved()
+	for _, pair in ipairs(LEGACY_SAVED) do
+		MigrateLegacySaved(pair[1], pair[2])
+	end
 end
 
 local function InitDB()
-	MigrateLegacyDB()
+	MigrateAllLegacySaved()
 	RunbackDB = RunbackDB or {}
 	db = RunbackDB
 	db.settings = db.settings or {}
@@ -3555,11 +3570,12 @@ end
 
 SLASH_RUNBACK1 = "/runback"
 SLASH_RUNBACK2 = "/wowai"
-SLASH_RUNBACK3 = "/wow-claude"
-SLASH_RUNBACK4 = "/ai"
-SLASH_RUNBACK5 = "/ask"
+SLASH_RUNBACK3 = "/wow-ai"
+SLASH_RUNBACK4 = "/wow-claude"
+SLASH_RUNBACK5 = "/ai"
+SLASH_RUNBACK6 = "/ask"
 if RbSlashFree() then
-	SLASH_RUNBACK6 = "/rb"
+	SLASH_RUNBACK7 = "/rb"
 end
 SlashCmdList["RUNBACK"] = function(msg)
 	msg = Trim(msg or "")

@@ -109,7 +109,7 @@ test('addon loads, builds its UI and creates a first chat', () => {
   assert.equal(vm.evaluate('RunbackMini ~= nil'), 'true');
   assert.equal(vm.num('#STUB.tickers'), 1);
   assert.equal(vm.evaluate('SlashCmdList.RUNBACK ~= nil'), 'true');
-  assert.deepEqual([1, 2, 3, 4, 5].map(i => vm.evaluate('SLASH_RUNBACK' + i)), ['/runback', '/wowai', '/wow-claude', '/ai', '/ask'], 'the old command name and the short forms are aliases');
+  assert.deepEqual([1, 2, 3, 4, 5, 6].map(i => vm.evaluate('SLASH_RUNBACK' + i)), ['/runback', '/wowai', '/wow-ai', '/wow-claude', '/ai', '/ask'], 'the old command name and the short forms are aliases');
   assert.equal(vm.evaluate('SlashCmdList.RUNBACKASK'), null, '/ai is an alias of the one command, not a handler of its own');
 });
 
