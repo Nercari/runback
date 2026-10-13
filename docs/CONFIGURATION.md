@@ -141,7 +141,7 @@ All of these are gitignored.
 | `--project "<dir>"` | Written to `defaultCwd`. Left empty by default, which means the mentor workspace. |
 | `--account <name>` | Which `WTF\Account\<name>` to use when there are several. |
 
-Re-running `setup.js` re-copies the addon (except `Inbox.lua`, which the bridge owns once running), keeps an existing `config.json` (adding the `agents` blocks and fixing paths if it predates them), and only creates slot and signal files that are missing. An install under the project's old name (the `WoWClaude` addon) is migrated: its saved data is copied to `Runback.lua` so chats survive, and the old addon and slot folders are removed.
+Re-running `setup.js` re-copies the addon (except `Inbox.lua`, which the bridge owns once running), keeps an existing `config.json` (adding the `agents` blocks and fixing paths if it predates them), and only creates slot and signal files that are missing. An install under an old name is migrated: `WoWClaude.lua` and each account's `WoWAI.lua` are copied to `Runback.lua` when that file is absent (`WoWAI.lua` is left unchanged), and the old `WoWClaude`, `WoWClaude_S###` and `WoWAI` folders are moved to a dated backup outside `Interface\AddOns`. `WoWAI_Nodes` is not moved.
 
 ## Forever bridge modules
 

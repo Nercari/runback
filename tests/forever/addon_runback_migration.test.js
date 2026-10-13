@@ -85,6 +85,43 @@ test('slash commands: /runback primary, /wow-ai and /wowai kept, /rb when free',
   assert.equal(v.get('SLASH_RUNBACK7'), '/rb');
 });
 
+function rbNotes(v) {
+  const text = v.get('table.concat(STUB.prints, "\\n")');
+  return text.split('\n').filter(line => line.includes('/runback still works'));
+}
+
+test('SlashCmdList.WOWAI is the Runback slash handler', () => {
+  const v = vm();
+  v.load();
+  assert.equal(v.truthy('type(SlashCmdList["WOWAI"]) == "function"'), true);
+  assert.equal(v.truthy('SlashCmdList["WOWAI"] == SlashCmdList["RUNBACK"]'), true);
+  const before = v.get('#RunbackDB.chats[1].history');
+  v.run('SlashCmdList["WOWAI"]("help")');
+  assert.notEqual(v.get('#RunbackDB.chats[1].history'), before);
+});
+
+test('PLAYER_LOGIN rechecks /rb and says once when another addon owns it', () => {
+  const taken = vm();
+  taken.load();
+  assert.equal(taken.get('SLASH_RUNBACK7'), '/rb');
+  taken.run('hash_SlashCmdList["/rb"] = "OTHER"');
+  taken.run('STUB.prints = {}');
+  taken.run('STUB.FireEvent("PLAYER_LOGIN")');
+  assert.equal(taken.get('SLASH_RUNBACK7'), 'nil');
+  const once = rbNotes(taken);
+  assert.equal(once.length, 1);
+  assert.equal(once[0].includes('\n'), false);
+  taken.run('STUB.FireEvent("PLAYER_LOGIN")');
+  assert.equal(rbNotes(taken).length, 1);
+
+  const free = vm();
+  free.load();
+  free.run('STUB.prints = {}');
+  free.run('STUB.FireEvent("PLAYER_LOGIN")');
+  assert.equal(free.get('SLASH_RUNBACK7'), '/rb');
+  assert.equal(rbNotes(free).length, 0);
+});
+
 test('slash /rb is not registered when hash_SlashCmdList already owns /rb', () => {
   const L = lauxlib.luaL_newstate();
   lualib.luaL_openlibs(L);
@@ -108,6 +145,11 @@ test('slash /rb is not registered when hash_SlashCmdList already owns /rb', () =
   for (const file of ['Codec.lua', 'Inbox.lua', 'Forever.lua']) run(read(file));
   run(read('Runback.lua'), 'Runback');
   assert.equal(get('SLASH_RUNBACK7'), 'nil');
+  run('STUB.prints = {}');
+  run('STUB.FireEvent("PLAYER_LOGIN")');
+  run('STUB.FireEvent("PLAYER_LOGIN")');
+  run('RESULT = 0; for _, line in ipairs(STUB.prints) do if string.find(line, "/runback still works", 1, true) then RESULT = RESULT + 1 end end');
+  assert.equal(get('RESULT'), '1');
 });
 
 test('Runback.toc declares Runback and legacy SavedVariables', () => {

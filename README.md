@@ -73,7 +73,7 @@ bridge\start-window.cmd # double-click version: opens its own window
 
 It restarts itself if it ever crashes. Ctrl+C (or closing the window) stops it. The banner lists every agent with where its executable was found, or what to install.
 
-**One double-click instead (Windows).** `Runback.cmd` in the repo folder does all of the above every time: it updates the checkout (a fast-forward `git pull`, skipped when the folder has local edits or there's no network; a clean folder left on another branch goes back to `forever` first), runs `setup.js`, starts the bridge in a minimized window (or restarts it when the update changed it), and says whether the game needs a `/reload`, a relaunch, or nothing. If the game isn't running it opens the Battle.net app, where you press Play; it never starts or touches the game itself. The first run puts a **Runback** icon on your desktop that does the same.
+**One double-click instead (Windows).** `Runback.cmd` in the repo folder does all of the above every time: it updates the checkout (a fast-forward `git pull`, skipped when the folder has local edits or there's no network; a clean folder left on another branch goes back to `forever` first), runs `setup.js`, starts the bridge in a minimized window (or restarts it when the update changed it), and says whether the game needs a `/reload`, a relaunch, or nothing. If the game isn't running it opens the Battle.net app, where you press Play; it never starts or touches the game itself. The first run puts a **Runback** icon on your desktop that does the same. A previous **WoW AI** shortcut is removed so only the Runback one remains. If `docs/assets/runback.ico` is in the checkout, the shortcut uses it.
 
 ### Linux (Wine)
 
@@ -104,9 +104,7 @@ If `WAYLAND_DISPLAY` is set, or `XDG_SESSION_TYPE` is `wayland`, the doctor prin
 
 ### Upgrading from wow-claude or WoW AI
 
-`node setup.js` migrates a `WoWClaude` install (saved data and old slot folders only) and updates paths in `bridge/config.json` when needed. For a former `WoWAI` install, use the manual copy step below. Then fully quit and relaunch WoW.
-
-**One-time manual copy (game closed):** if you still have settings only in `WTF/Account/<ACCOUNT>/SavedVariables/WoWAI.lua`, copy that file to `Runback.lua` in the same folder and replace `WoWAIDB` with `RunbackDB` in the copy. On first load the addon also copies a legacy `WoWAIDB` table into `RunbackDB` when `RunbackDB` is missing.
+`node setup.js` copies `WoWClaude.lua` to `Runback.lua` when `Runback.lua` is not there yet, and copies each account's `WoWAI.lua` the same way without changing that file or replacing an existing `Runback.lua`. On first load the addon copies `WoWAIDB`, `WoWAIMapDB`, `WoWAIGuideDB`, `WoWAIForeverDB` and `WoWAI_Bulk` when the Runback tables are missing. Old `WoWClaude`, `WoWClaude_S###` and `WoWAI` folders are moved to `Runback-backup-YYYY-MM-DD` next to the game client, outside `Interface\AddOns`. `WoWAI_Nodes` stays where it is. Paths in `bridge/config.json` are updated when needed. Then fully quit and relaunch WoW.
 
 ### `runback`: start the bridge from the project folder
 

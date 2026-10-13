@@ -456,6 +456,37 @@ test("Windows: gameRunning sees a running process by name", WIN, () => {
   assert.equal(launch.gameRunning("NoSuchGameHere"), false);
 });
 
+test("old WoW AI desktop shortcuts are removed when Runback.lnk is already there", (t) => {
+  const desktop = path.join(tmp(t), "Desk");
+  fs.mkdirSync(desktop);
+  const mark = path.join(desktop, "mark");
+  fs.writeFileSync(mark, "done\n");
+  fs.writeFileSync(path.join(desktop, "Runback.lnk"), "runback");
+  fs.writeFileSync(path.join(desktop, "WoW AI.lnk"), "old");
+  fs.writeFileSync(path.join(desktop, "WoW AI.cmd"), "old");
+  assert.equal(launch.makeShortcut({ desktop, mark }), null);
+  assert.equal(fs.existsSync(path.join(desktop, "WoW AI.lnk")), false);
+  assert.equal(fs.existsSync(path.join(desktop, "WoW AI.cmd")), false);
+  assert.equal(fs.readFileSync(path.join(desktop, "Runback.lnk"), "utf8"), "runback");
+});
+
+test("shortcut icon is docs/assets/runback.ico when that file exists", (t) => {
+  const root = tmp(t);
+  assert.equal(launch.shortcutIconPath(root), null);
+  const icon = path.join(root, "docs", "assets", "runback.ico");
+  fs.mkdirSync(path.dirname(icon), { recursive: true });
+  fs.writeFileSync(icon, "ico");
+  assert.equal(launch.shortcutIconPath(root), icon);
+  assert.equal(launch.shortcutIconPath(path.resolve(__dirname, "../..")), fs.existsSync(path.resolve(__dirname, "../../docs/assets/runback.ico")) ? path.resolve(__dirname, "../../docs/assets/runback.ico") : null);
+});
+
+test("a previous WoW AI shortcut is replaced by Runback when Runback.lnk is missing", () => {
+  assert.equal(launch.shouldCreateShortcut(false, false, false), true);
+  assert.equal(launch.shouldCreateShortcut(true, false, false), false);
+  assert.equal(launch.shouldCreateShortcut(true, true, true), false);
+  assert.equal(launch.shouldCreateShortcut(true, true, false), true);
+});
+
 test("Windows: the desktop shortcut points at Runback.cmd and is made only once", WIN, (t) => {
   const desktop = path.join(tmp(t), "Desk top");
   fs.mkdirSync(desktop);

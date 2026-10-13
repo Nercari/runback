@@ -219,26 +219,62 @@ function openBattleNet() {
   return true;
 }
 
+const OLD_SHORTCUTS = ['WoW AI.lnk', 'WoW AI.cmd'];
+
+function shortcutIconPath(root = ROOT) {
+  const icon = path.join(root, 'docs', 'assets', 'runback.ico');
+  return fs.existsSync(icon) ? icon : null;
+}
+
+function shouldCreateShortcut(marked, hadOld, hasRunback) {
+  return !marked || (hadOld && !hasRunback);
+}
+
+function clearOldShortcuts(desktop) {
+  let n = 0;
+  for (const name of OLD_SHORTCUTS) {
+    const file = path.join(desktop, name);
+    if (!fs.existsSync(file)) continue;
+    fs.unlinkSync(file);
+    n++;
+  }
+  return n;
+}
+
 // A "Runback" icon on the desktop pointing at Runback.cmd. Made once: if the
 // player deletes it, it stays deleted (bridge/.shortcut-made remembers).
 // desktop and mark are for the tests.
 function makeShortcut({ desktop = '', mark = SHORTCUT_MARK } = {}) {
-  if (fs.existsSync(mark)) return null;
-  const target = path.join(ROOT, 'Runback.cmd');
-  const q = s => `'${s.replace(/'/g, "''")}'`;
-  const r = powershell([
-    desktop ? `$d = ${q(desktop)}` : `$d = [Environment]::GetFolderPath('Desktop')`,
-    `$l = (New-Object -ComObject WScript.Shell).CreateShortcut((Join-Path $d 'Runback.lnk'))`,
-    `$l.TargetPath = ${q(target)}`,
-    `$l.WorkingDirectory = ${q(ROOT)}`,
-    `$l.WindowStyle = 7`,
-    `$l.Description = 'Update and start Runback'`,
-    `$l.Save()`,
-    `Write-Output $d`,
-  ].join('; '));
-  if (!r.ok) return null;
-  fs.writeFileSync(mark, new Date().toISOString() + '\n');
-  return r.out;
+  let desk = desktop;
+  if (!desk) {
+    if (!WIN) return null;
+    const found = powershell(`[Environment]::GetFolderPath('Desktop')`);
+    if (!found.ok || !found.out) return null;
+    desk = found.out.trim();
+  }
+  const hadOld = OLD_SHORTCUTS.some(name => fs.existsSync(path.join(desk, name)));
+  const hasRunback = fs.existsSync(path.join(desk, 'Runback.lnk'));
+  if (shouldCreateShortcut(fs.existsSync(mark), hadOld, hasRunback)) {
+    const target = path.join(ROOT, 'Runback.cmd');
+    const icon = shortcutIconPath();
+    const q = s => `'${s.replace(/'/g, "''")}'`;
+    const lines = [
+      `$l = (New-Object -ComObject WScript.Shell).CreateShortcut(${q(path.join(desk, 'Runback.lnk'))})`,
+      `$l.TargetPath = ${q(target)}`,
+      `$l.WorkingDirectory = ${q(ROOT)}`,
+      `$l.WindowStyle = 7`,
+      `$l.Description = 'Update and start Runback'`,
+    ];
+    if (icon) lines.push(`$l.IconLocation = ${q(icon)}`);
+    lines.push('$l.Save()', `Write-Output ${q(desk)}`);
+    const r = powershell(lines.join('; '));
+    if (!r.ok) return null;
+    if (!fs.existsSync(mark)) fs.writeFileSync(mark, new Date().toISOString() + '\n');
+    clearOldShortcuts(desk);
+    return r.out;
+  }
+  clearOldShortcuts(desk);
+  return null;
 }
 
 // --- main ------------------------------------------------------------------
@@ -320,4 +356,6 @@ module.exports = {
   stopBridge,
   gameRunning,
   makeShortcut,
+  shortcutIconPath,
+  shouldCreateShortcut,
 };
