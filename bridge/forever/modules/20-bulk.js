@@ -6,7 +6,7 @@ module.exports = {
   init(ctx) { this.ctx = ctx; this.tries = 0; },
   onSavedVariables(src, ctx) {
     let root;
-    try { root = lua.parseGlobal(src, 'WoWAI_Bulk'); this.tries = 0; }
+    try { root = lua.parseGlobal(src, 'Runback_Bulk'); this.tries = 0; }
     catch (err) {
       if (this.tries++ < 2) setTimeout(() => { try { this.onSavedVariables(fs.readFileSync(ctx.SAVED_VARS, 'utf8'), ctx); } catch {} }, 2000);
       return;
@@ -27,7 +27,7 @@ module.exports = {
         const now = new Date();
         const day = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
         const outputFile = path.join(ctx.cfg.forever.journal.dir, `${day}.md`);
-        const prompt = `[wowai cmd=journal]\nWrite today's session story per AGENTS.md (Journal) ` +
+        const prompt = `[runback cmd=journal]\nWrite today's session story per AGENTS.md (Journal) ` +
           `from bulk/journal.json into ${outputFile}. Screenshots folder: ` +
           `${ctx.cfg.forever.clientDir}\\Screenshots.`;
         // One journal run at a time, however often the file changes.

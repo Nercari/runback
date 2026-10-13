@@ -7,7 +7,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { GAME_CONTROLS, systemPrompt } = require('../../bridge/protocol');
 
-const addon = path.join(__dirname, '..', '..', 'addon', 'WoWAI');
+const addon = path.join(__dirname, '..', '..', 'addon', 'Runback');
 const read = file => fs.readFileSync(path.join(addon, file), 'utf8');
 const luaFiles = fs.readdirSync(addon).filter(f => f.endsWith('.lua'));
 
@@ -28,10 +28,10 @@ function tableKeys(src, start) {
   return keys;
 }
 
-// Every command word the addon handles: the core table in WoWAI.lua and each module's commands.
+// Every command word the addon handles: the core table in Runback.lua and each module's commands.
 function handledCommands() {
   const handled = new Set();
-  const core = read('WoWAI.lua');
+  const core = read('Runback.lua');
   tableKeys(core, core.indexOf('local COMMAND_ARGS = {') + 'local COMMAND_ARGS = '.length).forEach(k => handled.add(k));
   for (const file of luaFiles) {
     const src = read(file);

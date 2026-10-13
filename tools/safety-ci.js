@@ -204,7 +204,7 @@ function scanLines(file, source, mode, findings, root, allow) {
   const lines = source.split(/\r?\n/);
 
   if (ext === ".lua") {
-    const addonName = mode === "untrusted" ? path.basename(path.dirname(file)) : "WoWAI";
+    const addonName = mode === "untrusted" ? path.basename(path.dirname(file)) : "Runback";
     checkBlizzardOverrides(file, source, addonName, findings, root);
   }
 
@@ -229,7 +229,7 @@ function scanLines(file, source, mode, findings, root, allow) {
       const token = ["Send", "Message"].join("");
       candidate = candidate.replace(new RegExp(`\\b${token}\\b`, "g"), "");
     }
-    if (mode === "repo" && ext === ".lua" && rel === "addon/WoWAI/WoWAI.lua") {
+    if (mode === "repo" && ext === ".lua" && rel === "addon/Runback/Runback.lua") {
       candidate = candidate.replace(/\bSetBinding\b/g, "");
     }
     if (FORBIDDEN.test(candidate)) {
@@ -242,7 +242,7 @@ function scanLines(file, source, mode, findings, root, allow) {
       findings.push(finding(file, lineNumber, "LUA-DYNAMIC-CODE", line, root));
     }
     let protectedCandidate = line;
-    if (mode === "repo" && rel === "addon/WoWAI/WoWAI.lua") {
+    if (mode === "repo" && rel === "addon/Runback/Runback.lua") {
       protectedCandidate = protectedCandidate.replace(/\bSetBinding\b/g, "");
     }
     if (ext === ".lua" && (PROTECTED.test(protectedCandidate) || PROTECTED_QUALIFIED.test(protectedCandidate))) {
@@ -335,7 +335,7 @@ function checkBlizzardOverrides(file, source, addonName, findings, root) {
   }
   const owned = (name) => {
     const lower = name.toLowerCase();
-    return lower.startsWith("wowai") || lower.startsWith(addonName.toLowerCase()) ||
+    return lower.startsWith("runback") || lower.startsWith(addonName.toLowerCase()) ||
       name.startsWith("SLASH_") || name.startsWith("BINDING_");
   };
   const fromGlobalLookup = new Set();
@@ -397,7 +397,8 @@ function loadLuaAllowlist(root) {
 }
 
 function reservedGlobal(name, allowlist) {
-  return name.toLowerCase().startsWith("wowai") ||
+  const lower = name.toLowerCase();
+  return lower.startsWith("runback") || lower.startsWith("wowai") ||
     allowlist.globals.includes(name) || Object.hasOwn(allowlist.namespaces, name);
 }
 

@@ -7,7 +7,7 @@ const fengari = require('fengari');
 const luaparse = require('luaparse');
 const { lua, lauxlib, lualib, to_luastring, to_jsstring } = fengari;
 
-const ADDON = path.join(__dirname, '..', '..', 'addon', 'WoWAI');
+const ADDON = path.join(__dirname, '..', '..', 'addon', 'Runback');
 const STUB_PATH = path.join(__dirname, '..', 'wow_stub.lua');
 
 const FEATURES_STUB = `
@@ -70,18 +70,18 @@ function newVM(extra) {
   run(FEATURES_STUB);
   if (extra) run(extra);
   for (const f of [
-    'Codec.lua', 'Inbox.lua', 'WoWAI.lua', 'Forever.lua',
+    'Codec.lua', 'Inbox.lua', 'Runback.lua', 'Forever.lua',
     'Forever_Lockout.lua', 'Forever_Context.lua', 'Forever_Switch.lua', 'Forever_Commands.lua',
     'Forever_Speech.lua', 'Forever_Macro.lua', 'Forever_Bulk.lua', 'Forever_DeathShot.lua',
     'Forever_Translate.lua', 'Forever_Jobs.lua', 'Forever_Banner.lua',
   ]) {
-    run(fs.readFileSync(path.join(ADDON, f), 'utf8'), 'WoWAI');
+    run(fs.readFileSync(path.join(ADDON, f), 'utf8'), 'Runback');
   }
   return { run, evaluate, num };
 }
 
 function login(vm) {
-  vm.run('STUB.FireEvent("ADDON_LOADED", "WoWAI")');
+  vm.run('STUB.FireEvent("ADDON_LOADED", "Runback")');
   vm.run('STUB.FireEvent("PLAYER_LOGIN")');
   vm.run('STUB.RunTimers()');
 }
@@ -128,31 +128,31 @@ test('death shot button appears after death when out of combat and calls Screens
   vm.run('InCombatLockdown = function() return true end');
   vm.run('STUB.FireEvent("PLAYER_DEAD")');
   // The button may not exist yet: it is built lazily, out of combat.
-  assert.equal(vm.evaluate('not (WoWAIDeathShotButton and WoWAIDeathShotButton.shown)'), 'true', 'button not shown in combat');
+  assert.equal(vm.evaluate('not (RunbackDeathShotButton and RunbackDeathShotButton.shown)'), 'true', 'button not shown in combat');
   assert.equal(vm.num('STUB.screenshots'), 0);
 
   // Leave combat
   vm.run('InCombatLockdown = function() return false end');
   vm.run('STUB.FireEvent("PLAYER_REGEN_ENABLED")');
-  assert.equal(vm.evaluate('WoWAIDeathShotButton.shown'), 'true', 'button shown once out of combat');
+  assert.equal(vm.evaluate('RunbackDeathShotButton.shown'), 'true', 'button shown once out of combat');
   assert.equal(vm.num('STUB.screenshots'), 0, 'Screenshot not called before click');
 
   // Click the button
-  vm.run('WoWAIDeathShotButton.scripts.OnClick(WoWAIDeathShotButton)');
+  vm.run('RunbackDeathShotButton.scripts.OnClick(RunbackDeathShotButton)');
   assert.equal(vm.num('STUB.screenshots'), 1, 'Screenshot called on click');
-  assert.equal(vm.evaluate('WoWAIDeathShotButton.shown'), 'false', 'button hidden after click');
+  assert.equal(vm.evaluate('RunbackDeathShotButton.shown'), 'false', 'button hidden after click');
 });
 
 test('translator never buffers non-opted channels, rate limits <= 1 send per 10s, never calls SendChatMessage', () => {
   const vm = newVM();
   login(vm);
-  // Connect so WoWAI.Send works
+  // Connect so Runback.Send works
   vm.run(`
-    WoWAI.IsConnected = function() return true end
-    WoWAI.Send = function(text, allow, opts)
+    Runback.IsConnected = function() return true end
+    Runback.Send = function(text, allow, opts)
       STUB.sentMsg = text
       STUB.sentOpts = opts
-      for _, c in ipairs(WoWAIDB.chats) do
+      for _, c in ipairs(RunbackDB.chats) do
         if c.id == opts.chat then c.pendingId = 7; STUB.target = c end
       end
     end
@@ -163,8 +163,8 @@ test('translator never buffers non-opted channels, rate limits <= 1 send per 10s
   assert.equal(vm.evaluate('STUB.sentMsg'), null, 'nothing sent for non-opted channel');
 
   // Opt-in to whisper
-  vm.run('SlashCmdList.WOWAI("translate on whisper")');
-  assert.equal(vm.evaluate('WoWAIForeverDB.translate.channels["whisper"]'), 'true');
+  vm.run('SlashCmdList.RUNBACK("translate on whisper")');
+  assert.equal(vm.evaluate('RunbackForeverDB.translate.channels["whisper"]'), 'true');
 
   // Message from Alice
   vm.run('STUB.FireEvent("CHAT_MSG_WHISPER", "hello friend", "Alice")');
@@ -183,23 +183,23 @@ test('translator never buffers non-opted channels, rate limits <= 1 send per 10s
 
   // A plain reply in the mentor chat is not a translation: no popup.
   vm.run(`
-    for _, mod in ipairs(WoWAIForever.modules) do
+    for _, mod in ipairs(RunbackForever.modules) do
       if mod.name == "translate" and mod.onReply then
         mod.onReply(STUB.target, { id = 6, text = "Plain mentor answer." })
       end
     end
   `);
-  assert.equal(vm.evaluate('WoWAITranslateFrame == nil or not WoWAITranslateFrame:IsShown()'), 'true');
+  assert.equal(vm.evaluate('RunbackTranslateFrame == nil or not RunbackTranslateFrame:IsShown()'), 'true');
 
   // Reply containing fenced reply block pre-fills chat edit box
   vm.run(`
-    for _, mod in ipairs(WoWAIForever.modules) do
+    for _, mod in ipairs(RunbackForever.modules) do
       if mod.name == "translate" and mod.onReply then
         mod.onReply(STUB.target, { id = 7, text ="Translation here.\\n\\n\`\`\`reply\\nEstou bem, obrigado!\\n\`\`\`" })
       end
     end
   `);
-  assert.equal(vm.evaluate('WoWAITranslateFrame:IsShown()'), 'true', 'a translation opens the popup');
+  assert.equal(vm.evaluate('RunbackTranslateFrame:IsShown()'), 'true', 'a translation opens the popup');
   assert.equal(vm.num('#STUB.sentTells'), 1);
   assert.equal(vm.evaluate('STUB.sentTells[1]'), 'Alice');
   // Never call SendChatMessage
@@ -210,23 +210,23 @@ test('job board status transition triggers done sound and speech notice once', (
   const vm = newVM();
   login(vm);
 
-  vm.run('SlashCmdList.WOWAI("speak on")');
+  vm.run('SlashCmdList.RUNBACK("speak on")');
 
   // Toggle jobs frame
-  vm.run('SlashCmdList.WOWAI("jobs")');
-  assert.equal(vm.evaluate('WoWAIJobsFrame.shown'), 'true');
+  vm.run('SlashCmdList.RUNBACK("jobs")');
+  assert.equal(vm.evaluate('RunbackJobsFrame.shown'), 'true');
 
   // Set chat 1 to working
-  vm.run('WoWAIDB.chats[1].pendingId = 42');
-  vm.run('for _, mod in ipairs(WoWAIForever.modules) do if mod.name == "jobs" then mod.onReply({}, {}) end end'); // records "working"
+  vm.run('RunbackDB.chats[1].pendingId = 42');
+  vm.run('for _, mod in ipairs(RunbackForever.modules) do if mod.name == "jobs" then mod.onReply({}, {}) end end'); // records "working"
   vm.run('STUB.playedSounds = {}; C_VoiceChat.spoken = {}');
 
   // Chat 1 completes with done status
   vm.run(`
-    local c = WoWAIDB.chats[1]
+    local c = RunbackDB.chats[1]
     c.pendingId = nil
     table.insert(c.history, { role = "assistant", text = "Finished task.", id = 42, t = time() })
-    for _, mod in ipairs(WoWAIForever.modules) do
+    for _, mod in ipairs(RunbackForever.modules) do
       if mod.name == "jobs" and mod.onReply then
         mod.onReply(c, { id = 42, status = "done", text = "Finished task." })
       end
@@ -251,23 +251,23 @@ test('policy banner shows on [policy] reply and prints once', () => {
   const policyMsg = '[policy] File access to /etc/passwd was denied by security policy.';
   vm.run(`
     STUB.prints = {}
-    for _, mod in ipairs(WoWAIForever.modules) do
+    for _, mod in ipairs(RunbackForever.modules) do
       if mod.name == "banner" and mod.onReply then
         mod.onReply({}, { text = "${policyMsg}" })
       end
     end
   `);
 
-  assert.equal(vm.evaluate('WoWAIPolicyBanner.shown'), 'true');
-  assert.equal(vm.evaluate('WoWAIPolicyBanner.msgText.text'), policyMsg);
+  assert.equal(vm.evaluate('RunbackPolicyBanner.shown'), 'true');
+  assert.equal(vm.evaluate('RunbackPolicyBanner.msgText.text'), policyMsg);
   assert.ok(vm.evaluate('table.concat(STUB.prints, "\\n")').includes(policyMsg));
 
   // It sits below the mini bar (which spans y -40 to -70), stays on screen and closes with Esc.
-  assert.ok(vm.num('WoWAIPolicyBanner.y') <= -70, 'banner anchored clear of the mini bar');
-  assert.equal(vm.evaluate('WoWAIPolicyBanner.clamped'), 'true');
-  assert.equal(vm.evaluate('(function() for _, n in ipairs(UISpecialFrames) do if n == "WoWAIPolicyBanner" then return true end end return false end)()'), 'true');
+  assert.ok(vm.num('RunbackPolicyBanner.y') <= -70, 'banner anchored clear of the mini bar');
+  assert.equal(vm.evaluate('RunbackPolicyBanner.clamped'), 'true');
+  assert.equal(vm.evaluate('(function() for _, n in ipairs(UISpecialFrames) do if n == "RunbackPolicyBanner" then return true end end return false end)()'), 'true');
 
   // Dismiss button hides banner
-  vm.run('WoWAIPolicyBanner.dismiss.scripts.OnClick()');
-  assert.equal(vm.evaluate('WoWAIPolicyBanner.shown'), 'false');
+  vm.run('RunbackPolicyBanner.dismiss.scripts.OnClick()');
+  assert.equal(vm.evaluate('RunbackPolicyBanner.shown'), 'false');
 });

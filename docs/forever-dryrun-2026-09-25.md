@@ -43,8 +43,8 @@ You stopped the first Fireball; later ones killed you. Practice checking shield 
 Prompt:
 
 ```
-[wowai cmd=death]
-[Context from the WoW AI bridge, not written by the user]
+[runback cmd=death]
+[Context from the Runback bridge, not written by the user]
 character=Brakka-Testrealm class=Warrior level=18 zone=Westfall
 logging=true
 advLogging=false
@@ -77,8 +77,8 @@ Repeated Fireballs killed you; the last hit for 80. Practice retreating after tw
 Prompt:
 
 ```
-[wowai cmd=brief The Deadmines]
-[Context from the WoW AI bridge, not written by the user]
+[runback cmd=brief The Deadmines]
+[Context from the Runback bridge, not written by the user]
 character=Brakka-Testrealm class=Warrior level=18 zone=Westfall
 logging=true
 advLogging=false
@@ -107,8 +107,8 @@ Follow the tank’s target and watch for fleeing enemies. At 18, take extra care
 Prompt:
 
 ```
-[wowai cmd=build]
-[Context from the WoW AI bridge, not written by the user]
+[runback cmd=build]
+[Context from the Runback bridge, not written by the user]
 character=Brakka-Testrealm class=Warrior level=18 zone=Westfall
 logging=true
 advLogging=false
@@ -138,8 +138,8 @@ Spend your 8 points on Arms: Deflection 5/5, then Improved Tactical Mastery 3/5.
 Prompt:
 
 ```
-[wowai cmd=drill]
-[Context from the WoW AI bridge, not written by the user]
+[runback cmd=drill]
+[Context from the Runback bridge, not written by the user]
 character=Brakka-Testrealm class=Warrior level=18 zone=Westfall
 logging=true
 advLogging=false
@@ -162,8 +162,8 @@ Drill recorded as good. Practice it again September 28.
 Prompt:
 
 ```
-[wowai cmd=quest]
-[Context from the WoW AI bridge, not written by the user]
+[runback cmd=quest]
+[Context from the Runback bridge, not written by the user]
 character=Brakka-Testrealm class=Warrior level=18 zone=Westfall
 logging=true
 advLogging=false
@@ -187,8 +187,8 @@ Check the quest objective and send it to me for the exact next stop.
 Prompt:
 
 ```
-[wowai cmd=level]
-[Context from the WoW AI bridge, not written by the user]
+[runback cmd=level]
+[Context from the Runback bridge, not written by the user]
 character=Brakka-Testrealm class=Warrior level=18 zone=Westfall
 logging=true
 advLogging=false

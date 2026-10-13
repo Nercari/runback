@@ -5,7 +5,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { lua, lauxlib, lualib, to_luastring, to_jsstring } = require('fengari');
 
-const addon = path.join(__dirname, '..', '..', 'addon', 'WoWAI');
+const addon = path.join(__dirname, '..', '..', 'addon', 'Runback');
 const read = file => fs.readFileSync(path.join(addon, file), 'utf8');
 function vm() {
   const L = lauxlib.luaL_newstate(); lualib.luaL_openlibs(L);
@@ -21,8 +21,8 @@ function vm() {
   };
   run(fs.readFileSync(path.join(__dirname, '..', 'wow_stub.lua'), 'utf8'));
   run('unpack = table.unpack');
-  for (const file of ['Codec.lua', 'Inbox.lua', 'WoWAI.lua', 'Forever.lua', 'Forever_Lockout.lua', 'Forever_Recap.lua', 'Forever_Commands.lua']) run(read(file));
-  run('STUB.FireEvent("ADDON_LOADED", "WoWAI"); STUB.FireEvent("PLAYER_LOGIN"); STUB.RunTimers()');
+  for (const file of ['Codec.lua', 'Inbox.lua', 'Runback.lua', 'Forever.lua', 'Forever_Lockout.lua', 'Forever_Recap.lua', 'Forever_Commands.lua']) run(read(file));
+  run('STUB.FireEvent("ADDON_LOADED", "Runback"); STUB.FireEvent("PLAYER_LOGIN"); STUB.RunTimers()');
   return { run, get };
 }
 const prints = v => v.get('table.concat(STUB.prints, "\\n")');
@@ -37,9 +37,9 @@ test('recap offer: one chat line after a fight and a quiet spell; the link fills
   assert.ok(!prints(v).includes('recap this session'), 'not before the quiet spell');
   v.run('STUB.RunTimers()');
   assert.ok(prints(v).includes('[recap this session]'));
-  v.run('SetItemRef("wowai:ask:" .. WoWAIDB.chats[1].id)');
+  v.run('SetItemRef("runback:ask:" .. RunbackDB.chats[1].id)');
   assert.ok(v.get('table.concat(STUB.texts, "|")').includes('Give me a short recap of this session.'));
-  assert.equal(v.get('WoWAIDB.chats[1].pendingId'), 'nil', 'the player still has to press Enter');
+  assert.equal(v.get('RunbackDB.chats[1].pendingId'), 'nil', 'the player still has to press Enter');
 });
 
 test('recap offer: cancelled by a new fight, at most once an hour, quiet while the AI is off', () => {
@@ -58,22 +58,22 @@ test('recap offer: cancelled by a new fight, at most once an hour, quiet while t
   assert.ok(prints(v).includes('recap this session'), 'offered again after an hour and another fight');
 
   v = vm();
-  v.run('WoWAIForeverDB = WoWAIForeverDB or {}; WoWAIForeverDB.off = true');
+  v.run('RunbackForeverDB = RunbackForeverDB or {}; RunbackForeverDB.off = true');
   fight(v); v.run('STUB.RunTimers()');
   assert.ok(!prints(v).includes('recap this session'));
 });
 
 test('/ai recap sends cmd=recap with the default text out of combat only', () => {
   const v = vm();
-  v.run('STUB.combat = true; STUB.FireEvent("PLAYER_REGEN_DISABLED"); SlashCmdList.WOWAI("recap")');
-  assert.match(v.get('WoWAIDB.chats[1].history[#WoWAIDB.chats[1].history].text'), /AI paused in combat/);
+  v.run('STUB.combat = true; STUB.FireEvent("PLAYER_REGEN_DISABLED"); SlashCmdList.RUNBACK("recap")');
+  assert.match(v.get('RunbackDB.chats[1].history[#RunbackDB.chats[1].history].text'), /AI paused in combat/);
 });
 
 test('recap offer: window use restarts the quiet spell (no offer within 5 minutes of use)', () => {
   const v = vm();
-  v.run('WoWAI.Toggle(true)');
+  v.run('Runback.Toggle(true)');
   fight(v);
-  v.run('STUB.now = STUB.now + 200; WoWAI.SendFromInput()');
+  v.run('STUB.now = STUB.now + 200; Runback.SendFromInput()');
   v.run('STUB.now = STUB.now + 150'); // 350 s after the fight, 150 s after the last use
   v.run('STUB.RunTimers()');
   assert.ok(!prints(v).includes('recap this session'), 'used the window 150 s ago');
@@ -84,16 +84,16 @@ test('recap offer: window use restarts the quiet spell (no offer within 5 minute
 
 test('recap offer: every kind of window use counts, and an unused window does not delay it', () => {
   const uses = {
-    open: 'WoWAI.Toggle(false); WoWAI.Toggle(true)',
-    send: 'WoWAI.SendFromInput()',
-    typing: 'WoWAIInput.hooks.OnTextChanged[1](WoWAIInput, true)',
-    clickBox: 'WoWAIInput.hooks.OnEditFocusGained[1](WoWAIInput)',
-    clickWindow: 'WoWAIFrame.hooks.OnMouseDown[1](WoWAIFrame)',
-    replyShown: 'WoWAI.Toggle(true); WoWAI.internal.ActiveChat().pendingId = 99; WoWAI.internal.Finish(WoWAI.internal.ActiveChat(), "assistant", "hi")',
+    open: 'Runback.Toggle(false); Runback.Toggle(true)',
+    send: 'Runback.SendFromInput()',
+    typing: 'RunbackInput.hooks.OnTextChanged[1](RunbackInput, true)',
+    clickBox: 'RunbackInput.hooks.OnEditFocusGained[1](RunbackInput)',
+    clickWindow: 'RunbackFrame.hooks.OnMouseDown[1](RunbackFrame)',
+    replyShown: 'Runback.Toggle(true); Runback.internal.ActiveChat().pendingId = 99; Runback.internal.Finish(Runback.internal.ActiveChat(), "assistant", "hi")',
   };
   for (const [name, code] of Object.entries(uses)) {
     const v = vm();
-    v.run('WoWAI.Toggle(true)');
+    v.run('Runback.Toggle(true)');
     fight(v);
     v.run('STUB.now = STUB.now + 250');
     try { v.run(code); } catch (e) { assert.fail(`${name}: ${e.message}`); }

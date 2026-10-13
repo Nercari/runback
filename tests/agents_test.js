@@ -72,7 +72,7 @@ test('Codex: exec --json in the chat folder, sandbox from permissionMode, resume
   // for a new session and as the short version on a resumed one.
   const fresh = A.AGENTS.codex.input({ prompt: 'fix it', system: 'FULL', systemShort: 'SHORT', resume: '' });
   assert.equal(fresh.stdin, A.contextBlock('FULL') + 'fix it');
-  assert.ok(fresh.stdin.startsWith('[Context from the WoW AI bridge'));
+  assert.ok(fresh.stdin.startsWith('[Context from the Runback bridge'));
   assert.equal(A.AGENTS.codex.input({ prompt: 'fix it', system: 'FULL', systemShort: 'SHORT', resume: 't' }).stdin, A.contextBlock('SHORT') + 'fix it');
   assert.equal(A.AGENTS.codex.input({ prompt: 'fix it', system: '', systemShort: '', resume: '' }).stdin, 'fix it');
   assert.deepEqual(A.AGENTS.codex.args({ cfg: {}, resume: '', cwd: 'x', images: ['a.png', 'b.png'] }).slice(-5), ['-i', 'a.png', '-i', 'b.png', '-']);
@@ -342,7 +342,7 @@ test('Grok stream as Grok Build 1.0.41 prints it: tool inputs, a classifier refu
 });
 
 test('resolveCommand: a configured script runs with this node, an npm .cmd shim is unwrapped, a native binary next to it wins', () => {
-  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'wow-ai-agents-'));
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'runback-agents-'));
   try {
     const script = path.join(tmp, 'cli.js');
     fs.writeFileSync(script, '');

@@ -1,5 +1,5 @@
 // Guide progress from the quest log (backlog 70): Forever_Guide.lua in a Lua VM with
-// the real Guide.lua, WoWAI.lua and the lockout module, and a fake quest log. Each
+// the real Guide.lua, Runback.lua and the lockout module, and a fake quest log. Each
 // step kind ticks off from the log, the late-objective retry, the hand tick that
 // wins over the log, the classic API fallback and a hostile or missing API.
 'use strict';
@@ -9,7 +9,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { lua, lauxlib, lualib, to_luastring, to_jsstring } = require('fengari');
 
-const addon = path.join(__dirname, '..', '..', 'addon', 'WoWAI');
+const addon = path.join(__dirname, '..', '..', 'addon', 'Runback');
 const read = file => fs.readFileSync(path.join(addon, file), 'utf8');
 
 // LOG holds { id, complete, objectives }; FLAGGED[id] marks a quest turned in before.
@@ -38,14 +38,14 @@ function vm() {
   run(fs.readFileSync(path.join(__dirname, '..', 'wow_stub.lua'), 'utf8'));
   run('unpack = table.unpack');
   run(FAKE_LOG);
-  for (const file of ['Codec.lua', 'Inbox.lua', 'WoWAI.lua', 'Guide.lua', 'Forever.lua', 'Forever_Lockout.lua', 'Forever_Guide.lua']) run(read(file));
-  run('STUB.FireEvent("ADDON_LOADED", "WoWAI"); STUB.FireEvent("PLAYER_LOGIN"); STUB.RunTimers()');
+  for (const file of ['Codec.lua', 'Inbox.lua', 'Runback.lua', 'Guide.lua', 'Forever.lua', 'Forever_Lockout.lua', 'Forever_Guide.lua']) run(read(file));
+  run('STUB.FireEvent("ADDON_LOADED", "Runback"); STUB.FireEvent("PLAYER_LOGIN"); STUB.RunTimers()');
   return { run, get };
 }
 
 // The stub character is level 23. Step 4 shows from level 24 and has no quest.
 const seed = v => {
-  v.run(`WoWAIGuide.Sync({ epoch = 1, version = 1, list = { { id = "g", title = "G", steps = {
+  v.run(`RunbackGuide.Sync({ epoch = 1, version = 1, list = { { id = "g", title = "G", steps = {
     { kind = "accept", text = "Take the task.", quest = "Task", questId = 101 },
     { kind = "do", text = "Do the task.", questId = 101 },
     { kind = "turnin", text = "Hand it in.", questId = 101 },
@@ -53,11 +53,11 @@ const seed = v => {
     { kind = "accept", text = "Take the next one.", questId = 102 },
     { kind = "note", text = "The end." },
   } } } })`);
-  v.run('SlashCmdList.WOWAI("guide show")');
+  v.run('SlashCmdList.RUNBACK("guide show")');
 };
-const rows = v => [2, 3, 4].map(i => v.get(`WoWAIGuideFrame.children[${i}]:GetText()`));
-const step = v => v.get('WoWAIGuideDB.panel.step.g');
-const tickLabel = v => v.get('WoWAIGuideFrame.tick:GetText()');
+const rows = v => [2, 3, 4].map(i => v.get(`RunbackGuideFrame.children[${i}]:GetText()`));
+const step = v => v.get('RunbackGuideDB.panel.step.g');
+const tickLabel = v => v.get('RunbackGuideFrame.tick:GetText()');
 const objectives = done => `{ { text = "Rats: 3/3", finished = true }, { text = "Wolves", finished = ${done} } }`;
 
 test('each step kind ticks off from the log and the panel moves on', () => {
@@ -75,14 +75,14 @@ test('each step kind ticks off from the log and the panel moves on', () => {
 
   v.run('LOG = {}; STUB.FireEvent("QUEST_TURNED_IN", 101, 0, 0); STUB.FireEvent("QUEST_REMOVED", 101)');
   assert.equal(step(v), '5', 'turnin: QUEST_TURNED_IN for that id, the hidden level 24 step skipped');
-  v.run('SlashCmdList.WOWAI("guide prev"); SlashCmdList.WOWAI("guide prev")');
+  v.run('SlashCmdList.RUNBACK("guide prev"); SlashCmdList.RUNBACK("guide prev")');
   assert.deepEqual(rows(v), ['Do: Do the task. (done)', 'Accept: Take the next one.', 'Note: The end.'], 'the rows after the current step leave out done steps (backlog 76)');
   assert.equal(tickLabel(v), 'Untick');
 
   v.run('FLAGGED[102] = true; STUB.FireEvent("QUEST_LOG_UPDATE")');
   assert.equal(step(v), '2', 'Previous onto a done step stays there when the log updates');
-  assert.equal(v.get('WoWAIGuidePanel.Snapshot()(102)'), '3', 'turnin: IsQuestFlaggedCompleted counts as turned in');
-  assert.equal(v.get('WoWAIGuidePanel.Snapshot()(999)'), '0');
+  assert.equal(v.get('RunbackGuidePanel.Snapshot()(102)'), '3', 'turnin: IsQuestFlaggedCompleted counts as turned in');
+  assert.equal(v.get('RunbackGuidePanel.Snapshot()(999)'), '0');
 });
 
 test('a step with only a level filter shows on level up and is ticked by hand', () => {
@@ -90,12 +90,12 @@ test('a step with only a level filter shows on level up and is ticked by hand', 
   seed(v);
   v.run('LOG = { { id = 101, complete = true } }; FLAGGED[101] = true; STUB.FireEvent("QUEST_LOG_UPDATE")');
   assert.equal(step(v), '5', 'quest 101 done, the level 24 step is still hidden');
-  v.run('WoWAIGuideDB.panel.step.g = 4; STUB.level = 24; STUB.FireEvent("PLAYER_LEVEL_UP", 24)');
+  v.run('RunbackGuideDB.panel.step.g = 4; STUB.level = 24; STUB.FireEvent("PLAYER_LEVEL_UP", 24)');
   assert.deepEqual(rows(v), ['Train: Visit your trainer.', 'Accept: Take the next one.', 'Note: The end.']);
   assert.equal(step(v), '4', 'reaching the level shows the step; it does not tick it');
-  v.run('WoWAIGuideFrame.tick.scripts.OnClick()');
+  v.run('RunbackGuideFrame.tick.scripts.OnClick()');
   assert.equal(step(v), '5', 'the Tick button ticks it and moves on');
-  v.run('SlashCmdList.WOWAI("guide prev")');
+  v.run('SlashCmdList.RUNBACK("guide prev")');
   assert.equal(rows(v)[0], 'Train: Visit your trainer. (done)');
 });
 
@@ -117,18 +117,18 @@ test('a hand untick wins over the log until the quest state changes', () => {
   seed(v);
   v.run('LOG = { { id = 101 } }; STUB.FireEvent("QUEST_ACCEPTED", 1, 101)');
   assert.equal(step(v), '2');
-  v.run('SlashCmdList.WOWAI("guide prev")');
+  v.run('SlashCmdList.RUNBACK("guide prev")');
   assert.equal(tickLabel(v), 'Untick');
-  v.run('WoWAIGuideFrame.tick.scripts.OnClick()');
+  v.run('RunbackGuideFrame.tick.scripts.OnClick()');
   assert.equal(rows(v)[0], 'Accept: Take the task. (Task)', 'unticked by hand');
   v.run('for i = 1, 3 do STUB.FireEvent("QUEST_LOG_UPDATE"); STUB.RunTimers() end');
   assert.equal(step(v), '1', 'log updates with the quest in the same state leave it unticked');
   assert.equal(rows(v)[0], 'Accept: Take the task. (Task)');
   v.run(`LOG[1].objectives = ${objectives(true)}; STUB.FireEvent("QUEST_WATCH_UPDATE", 1)`);
   assert.equal(step(v), '3', 'the quest moved on, so the log decides again: accept and do are both done');
-  v.run('SlashCmdList.WOWAI("guide tick")');
+  v.run('SlashCmdList.RUNBACK("guide tick")');
   assert.equal(step(v), '5', 'the tick command ticks the current step by hand and moves on');
-  v.run('SlashCmdList.WOWAI("guide prev"); SlashCmdList.WOWAI("guide tick")');
+  v.run('SlashCmdList.RUNBACK("guide prev"); SlashCmdList.RUNBACK("guide tick")');
   assert.equal(rows(v)[0], 'Turn in: Hand it in.', 'a hand tick can be taken back');
 });
 
@@ -150,7 +150,7 @@ test('classic quest log API when C_QuestLog is missing', () => {
   assert.equal(step(v), '2', 'one objective of two is not done');
   v.run('CLASSIC.done = 2; STUB.FireEvent("QUEST_LOG_UPDATE")');
   assert.equal(step(v), '3', 'every leaderboard line finished');
-  assert.equal(v.get('WoWAIGuidePanel.Snapshot()(102)'), '3', 'global IsQuestFlaggedCompleted');
+  assert.equal(v.get('RunbackGuidePanel.Snapshot()(102)'), '3', 'global IsQuestFlaggedCompleted');
 });
 
 test('hostile or missing quest API: nothing ticks, nothing throws, the hand tick still works', () => {
@@ -167,7 +167,7 @@ test('hostile or missing quest API: nothing ticks, nothing throws, the hand tick
     for (const ev of ['QUEST_ACCEPTED', 'QUEST_TURNED_IN', 'QUEST_REMOVED', 'QUEST_WATCH_UPDATE', 'QUEST_LOG_UPDATE', 'PLAYER_LEVEL_UP']) v.run(`STUB.FireEvent("${ev}", "|cffff0000"); STUB.RunTimers()`);
     assert.equal(step(v), 'nil', setup);
     assert.deepEqual(rows(v), ['Accept: Take the task. (Task)', 'Do: Do the task.', 'Turn in: Hand it in.'], setup);
-    v.run('WoWAIGuideFrame.tick.scripts.OnClick()');
+    v.run('RunbackGuideFrame.tick.scripts.OnClick()');
     assert.equal(step(v), '2', setup);
   }
 });
@@ -177,10 +177,10 @@ test('combat: the log still ticks steps but the panel stays hidden until the fig
   seed(v);
   v.run('STUB.combat = true; STUB.FireEvent("PLAYER_REGEN_DISABLED")');
   v.run('LOG = { { id = 101 } }; STUB.FireEvent("QUEST_ACCEPTED", 1, 101); STUB.RunTimers()');
-  assert.equal(v.get('WoWAIGuideFrame:IsShown()'), 'false', 'no guide text during a fight');
-  v.run('SlashCmdList.WOWAI("guide tick")');
+  assert.equal(v.get('RunbackGuideFrame:IsShown()'), 'false', 'no guide text during a fight');
+  v.run('SlashCmdList.RUNBACK("guide tick")');
   assert.equal(step(v), '2', 'the tick command does nothing mid-fight');
   v.run('STUB.combat = false; STUB.FireEvent("PLAYER_REGEN_ENABLED")');
-  assert.equal(v.get('WoWAIGuideFrame:IsShown()'), 'true');
+  assert.equal(v.get('RunbackGuideFrame:IsShown()'), 'true');
   assert.equal(rows(v)[0], 'Do: Do the task.');
 });

@@ -8,7 +8,7 @@ const path = require('path');
 const builder = require('../../bridge/forever/modules/60-builder');
 
 function fixture() {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'wowai-builder-'));
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'runback-builder-'));
   const mentorDir = path.join(root, 'mentor');
   const staging = path.join(mentorDir, 'addon-staging', 'Demo');
   const addonDir = path.join(root, 'AddOns');
@@ -25,9 +25,9 @@ function fixture() {
     },
   };
   for (let i = 1; i <= 20; i++) {
-    const name = `WoWAI_U${String(i).padStart(2, '0')}`;
+    const name = `Runback_U${String(i).padStart(2, '0')}`;
     fs.mkdirSync(path.join(addonDir, name));
-    fs.writeFileSync(path.join(addonDir, name, '.wowai-slot'), 'slot');
+    fs.writeFileSync(path.join(addonDir, name, '.runback-slot'), 'slot');
     fs.writeFileSync(path.join(addonDir, name, 'main.lua'), '-- Reserved for test\n');
   }
   return { root, staging, addonDir, ctx };
@@ -42,7 +42,7 @@ function source(staging, lua = 'local ok = true\n') {
 test('builder rejects unsafe names and lint failures without writing slots', () => {
   const { staging, addonDir, ctx } = fixture();
   source(staging, 'loadstring("bad")\n');
-  for (const name of ['../x', 'a/b', 'WoWAI_X']) {
+  for (const name of ['../x', 'a/b', 'Runback_X']) {
     const job = { cmd: 'try', text: name };
     builder.intercept(job, ctx);
     assert.equal(job.result.status, 'error');
@@ -50,23 +50,23 @@ test('builder rejects unsafe names and lint failures without writing slots', () 
   const job = { cmd: 'try', text: 'Demo' };
   builder.intercept(job, ctx);
   assert.match(job.result.text, /LUA-DYNAMIC-CODE|LUA-RESTRICTED/);
-  assert.equal(fs.readFileSync(path.join(addonDir, 'WoWAI_U01', 'main.lua'), 'utf8'), '-- Reserved for test\n');
+  assert.equal(fs.readFileSync(path.join(addonDir, 'Runback_U01', 'main.lua'), 'utf8'), '-- Reserved for test\n');
 });
 
-test('builder reserves names that prefix WoWAI for try and promote', () => {
+test('builder reserves names that prefix Runback for try and promote', () => {
   const { ctx } = fixture();
   for (const cmd of ['try', 'promote']) {
-    const job = { cmd, text: 'WoW' };
+    const job = { cmd, text: 'Run' };
     builder.intercept(job, ctx);
     assert.equal(job.result.status, 'error');
     assert.match(job.result.text, /reserved/);
   }
 });
 
-test('builder rejects empty, WoWAI, and mismatched toc names', () => {
+test('builder rejects empty, Runback, and mismatched toc names', () => {
   const { staging, ctx } = fixture();
   source(staging);
-  for (const toc of ['.toc', 'WoWAI.toc', 'Other.toc']) {
+  for (const toc of ['.toc', 'Runback.toc', 'Other.toc']) {
     for (const file of fs.readdirSync(staging)) fs.unlinkSync(path.join(staging, file));
     fs.writeFileSync(path.join(staging, toc), 'main.lua\n');
     fs.writeFileSync(path.join(staging, 'main.lua'), 'local ok = true\n');
@@ -92,8 +92,8 @@ test('builder consumes fresh slots in TOC order and reports exhaustion', () => {
   for (let i = 1; i <= 20; i++) {
     const job = { cmd: 'try', text: 'Demo' };
     builder.intercept(job, ctx);
-    assert.match(job.result.text, new RegExp(`slot=WoWAI_U${String(i).padStart(2, '0')}`));
-    const content = fs.readFileSync(path.join(addonDir, `WoWAI_U${String(i).padStart(2, '0')}`, 'main.lua'), 'utf8');
+    assert.match(job.result.text, new RegExp(`slot=Runback_U${String(i).padStart(2, '0')}`));
+    const content = fs.readFileSync(path.join(addonDir, `Runback_U${String(i).padStart(2, '0')}`, 'main.lua'), 'utf8');
     assert.ok(content.indexOf('-- second.lua') < content.indexOf('-- main.lua'));
   }
   const last = { cmd: 'try', text: 'Demo' };
@@ -121,12 +121,12 @@ test('builder refuses promotion collisions and marks permitted promotion', () =>
   assert.match(job.result.text, /Refusing to overwrite/);
   fs.rmSync(dest, { recursive: true });
   fs.mkdirSync(dest);
-  fs.writeFileSync(path.join(dest, '.wowai-promoted'), 'marker');
+  fs.writeFileSync(path.join(dest, '.runback-promoted'), 'marker');
   fs.writeFileSync(path.join(dest, 'old.lua'), 'stale');
   job = { cmd: 'promote', text: 'Demo' };
   // Promote the staging name as the addon folder.
   job.text = 'Demo';
   builder.intercept(job, ctx);
-  assert.ok(fs.existsSync(path.join(dest, '.wowai-promoted')));
+  assert.ok(fs.existsSync(path.join(dest, '.runback-promoted')));
   assert.equal(fs.existsSync(path.join(dest, 'old.lua')), false);
 });

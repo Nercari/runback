@@ -6,7 +6,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { lua, lauxlib, lualib, to_luastring, to_jsstring } = require('fengari');
 
-const addon = path.join(__dirname, '..', '..', 'addon', 'WoWAI');
+const addon = path.join(__dirname, '..', '..', 'addon', 'Runback');
 function vm() {
   const L = lauxlib.luaL_newstate(); lualib.luaL_openlibs(L);
   const run = code => {
@@ -19,11 +19,11 @@ function vm() {
     const value = to_jsstring(lua.lua_tolstring(L, -1)); lua.lua_pop(L, 1); return value;
   };
   run(fs.readFileSync(path.join(__dirname, '..', 'wow_stub.lua'), 'utf8'));
-  for (const file of ['Codec.lua', 'Inbox.lua', 'Forever.lua', 'WoWAI.lua']) run(fs.readFileSync(path.join(addon, file), 'utf8'));
+  for (const file of ['Codec.lua', 'Inbox.lua', 'Forever.lua', 'Runback.lua']) run(fs.readFileSync(path.join(addon, file), 'utf8'));
   run(`-- Buttons are created once with their first label; Reload keeps its object when it reads "Get reply".
   function ANY_BUTTON(label)
     for _, f in ipairs(STUB.frames) do
-      if f.kind == "Button" and f.text == label and f.parent == WoWAIFrame then return f end
+      if f.kind == "Button" and f.text == label and f.parent == RunbackFrame then return f end
     end
   end
   -- Every text the window shows right now, one per line (hidden frames skipped).
@@ -34,23 +34,23 @@ function vm() {
       if f.kind == "FontString" and f.text and f.text ~= "" then out[#out + 1] = f.text end
       for _, c in ipairs(f.children or {}) do walk(c) end
     end
-    walk(WoWAIFrame)
+    walk(RunbackFrame)
     return table.concat(out, "\\n")
   end
   -- The status light: the frame whose texture carries the tooltip text.
   function LIGHT()
     for _, f in ipairs(STUB.frames) do
-      if f.parent == WoWAIFrame and f.scripts.OnEnter and f.textures[1] and f.textures[1].tip then return f end
+      if f.parent == RunbackFrame and f.scripts.OnEnter and f.textures[1] and f.textures[1].tip then return f end
     end
   end`);
   return { run, get };
 }
 
-const slot = replies => `STUB.onLoadAddOn = function() WoWAI_SlotData = { now = time(), cwd = "C:\\\\Users\\\\pedro\\\\wow-mentor", agent = "agy", agents = { "claude", "agy" }, replies = { ${replies || ''} } } end`;
+const slot = replies => `STUB.onLoadAddOn = function() Runback_SlotData = { now = time(), cwd = "C:\\\\Users\\\\nercari\\\\wow-mentor", agent = "agy", agents = { "claude", "agy" }, replies = { ${replies || ''} } } end`;
 
 function connected() {
   const v = vm();
-  v.run('STUB.FireEvent("ADDON_LOADED", "WoWAI"); STUB.FireEvent("PLAYER_LOGIN"); STUB.RunTimers()');
+  v.run('STUB.FireEvent("ADDON_LOADED", "Runback"); STUB.FireEvent("PLAYER_LOGIN"); STUB.RunTimers()');
   v.run(slot());
   v.run('STUB.now = STUB.now + 6; STUB.Tick()');
   v.run('RESEND = ANY_BUTTON("Resend"); RELOAD = ANY_BUTTON("Reload")');
@@ -69,7 +69,7 @@ test('Reload and Resend share one anchor, so they cannot overlap', () => {
 
 test('a message pending: Resend shows alone; when the slot pool runs out, Get reply replaces it', () => {
   const v = connected();
-  v.run('WoWAI.Send("how do I get to Undercity?")');
+  v.run('Runback.Send("how do I get to Undercity?")');
   assert.equal(v.get('RESEND.shown'), 'true', 'Resend while the message is in flight');
   assert.equal(v.get('RELOAD.shown'), 'false', 'no Reload next to it');
 
@@ -82,7 +82,7 @@ test('a message pending: Resend shows alone; when the slot pool runs out, Get re
 
 test('the footer names only the agent; the folder and mode are in the light\'s tooltip', () => {
   const v = connected();
-  v.run('WoWAI.Toggle(true)');
+  v.run('Runback.Toggle(true)');
   const shown = v.get('SHOWN_TEXTS()').split('\n');
   assert.ok(shown.includes('Agent: Antigravity'), shown.join(' | '));
   for (const word of ['cwd:', 'mode:', 'pixel', 'C:\\Users', 'bridge default']) {
@@ -91,6 +91,6 @@ test('the footer names only the agent; the folder and mode are in the light\'s t
 
   v.run('LIGHT().scripts.OnEnter(LIGHT())');
   const tip = v.get('GameTooltip.text');
-  assert.ok(tip.includes('cwd: C:\\Users\\pedro\\wow-mentor (bridge default)'), tip);
+  assert.ok(tip.includes('cwd: C:\\Users\\nercari\\wow-mentor (bridge default)'), tip);
   assert.ok(tip.includes('mode: pixel'), tip);
 });

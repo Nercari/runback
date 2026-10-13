@@ -1,11 +1,11 @@
 # Model and effort picker: match each CLI (backlog 41 to 46)
 
-Pedro asked (2026-10-09): "the model selection inside the addon should be exactly like their respective CLIs, with model and reasoning level." This spec turns that into six tickets, one PR each. Each ticket is written to be picked up alone; its "Needs" line names the tickets that must be merged first.
+Nercari asked (2026-10-09): "the model selection inside the addon should be exactly like their respective CLIs, with model and reasoning level." This spec turns that into six tickets, one PR each. Each ticket is written to be picked up alone; its "Needs" line names the tickets that must be merged first.
 
 ## Where it stands (backlog 28, PR #35)
 
 - `bridge/agents.js` `modelChoices()` offers `agents.<id>.models` from `config.json`. With no list, Claude gets `opus, sonnet, haiku` and every other agent gets nothing, only its own default.
-- The bridge publishes `models = { claude = { "opus", ... } }` in the inbox (`protocol.luaTable`). The addon's AI picker lists one flat row per agent and per model, up to 24 rows (`WoWAI.PoolChoices`, `WoWAI.ShowPicker`).
+- The bridge publishes `models = { claude = { "opus", ... } }` in the inbox (`protocol.luaTable`). The addon's AI picker lists one flat row per agent and per model, up to 24 rows (`Runback.PoolChoices`, `Runback.ShowPicker`).
 - A chat sends `agent=<id>;model=<name>` in its strip flags (`protocol.parseFlags`). The bridge refuses a model not on the list and passes the rest as `--model` / `-m`.
 - No reasoning or effort level exists anywhere: not in the flags, the inbox, the picker or the command lines.
 
@@ -15,7 +15,7 @@ For each agent, the picker offers the same models the CLI's own picker offers, u
 
 ## What each CLI offers (checked 2026-10-09)
 
-Labels: OBSERVED (read in the CLI's own source or run here), DOCUMENTED (official docs), UNVERIFIED (third-party or inferred). Ticket 41 confirms every UNVERIFIED line on Pedro's PC. Until it has, the catalog (ticket 42) leaves those lines out and the bridge (ticket 43) passes no flag that depends on them.
+Labels: OBSERVED (read in the CLI's own source or run here), DOCUMENTED (official docs), UNVERIFIED (third-party or inferred). Ticket 41 confirms every UNVERIFIED line on Nercari's PC. Until it has, the catalog (ticket 42) leaves those lines out and the bridge (ticket 43) passes no flag that depends on them.
 
 ### Claude Code (`claude`, 2.1.296 here)
 
@@ -64,14 +64,14 @@ Labels: OBSERVED (read in the CLI's own source or run here), DOCUMENTED (officia
 
 ### OpenCode (`opencode`, added 2026-10-11)
 
-Pedro asked (2026-10-11): "I also want to be able to use my OpenCode models and choose reasoning just like in their respective CLIs." OpenCode is not a bridge agent yet. His PC has OpenCode 1.19 updating to 2.0 (recording B, 4:20 to 5:35), signed in on a free plan; `opencode auth login opencode` failed there with "fetch() URL is invalid". The paid OpenCode Go plan was cancelled on 2026-10-04 (nercari-control CLAUDE.md), so only models his sign-in already gives him are in scope; nothing here buys a plan.
+Nercari asked (2026-10-11): "I also want to be able to use my OpenCode models and choose reasoning just like in their respective CLIs." OpenCode is not a bridge agent yet. His PC has OpenCode 1.19 updating to 2.0 (recording B, 4:20 to 5:35), signed in on a free plan; `opencode auth login opencode` failed there with "fetch() URL is invalid". The paid OpenCode Go plan was cancelled on 2026-10-04 (nercari-control CLAUDE.md), so only models his sign-in already gives him are in scope; nothing here buys a plan.
 
-- Run: `opencode run "<prompt>" --model <provider>/<model> --format json` for one non-interactive reply (UNVERIFIED for 2.0: confirm the flags and the JSON event shape on Pedro's PC).
+- Run: `opencode run "<prompt>" --model <provider>/<model> --format json` for one non-interactive reply (UNVERIFIED for 2.0: confirm the flags and the JSON event shape on Nercari's PC).
 - Models: `opencode models [provider] --verbose` lists the models his providers give him, with per-model details (UNVERIFIED: confirm the output and whether it shows reasoning variants).
 - Reasoning: OpenCode calls effort levels "variants" per model (the TUI cycles them; recording B shows "OpenCode · high"). A per-run `--variant <name>` is UNVERIFIED; confirm it, and the variant names per model, before the bridge passes it.
 - Bridge flag: `--model` always; `--variant` only after it is confirmed. Never write OpenCode's own config.
 
-## Confirmed on Pedro's PC (ticket 41, 2026-10-09)
+## Confirmed on Nercari's PC (ticket 41, 2026-10-09)
 
 Read-only: help and list commands, plus one one-line Codex run. No saved setting was changed. Account data is left out.
 
@@ -96,7 +96,7 @@ Effect on the tickets: 43 may use Hermes `--reasoning` (it is no longer conditio
 - One catalog, in the bridge. `bridge/models.js` holds, per agent, an ordered list of `{ id, label, efforts, defaultEffort }` copied from the tables above, each agent with its source URL and checked date. `agents.<id>.models` in `config.json` still overrides it; a plain string means a model with no effort levels.
 - Effort travels like model. Strip flag `effort=<level>`, the same token rule as `model=` but only `[a-z]{1,16}`. The bridge refuses a level the catalog does not list for that model, like it refuses an unknown model today, and passes nothing when the chat has no level (the CLI's own default applies).
 - The inbox adds `efforts = { claude = { opus = { "low", ... } } }` and `defaults = { ... }` next to `models`. An older addon ignores them; an older bridge sends neither, and the newer addon then shows no effort row.
-- The picker keeps one row per model and shows the effort levels of the chosen model as a second row of small buttons ("Effort: low medium [high] xhigh max"), default marked. The chat label becomes "Claude · opus · high". The typed form is `/wow-ai agent claude opus high`.
+- The picker keeps one row per model and shows the effort levels of the chosen model as a second row of small buttons ("Effort: low medium [high] xhigh max"), default marked. The chat label becomes "Claude · opus · high". The typed form is `/runback agent claude opus high`.
 - A model or effort change keeps the conversation, as a model change does today.
 
 ## Blizzard policy and combat
@@ -107,11 +107,11 @@ Checked against `docs/COMPLIANCE.md`. Nothing here touches gameplay: the picker 
 
 Each ticket: one PR into `forever`, `node tools/safety-ci.js` and `npm test` green, a test for every behaviour change, a `changes/` fragment and `docs/CONFIGURATION.md` updated when a player would notice.
 
-### 41. Confirm the CLIs on Pedro's PC
+### 41. Confirm the CLIs on Nercari's PC
 
-- Needs: nothing. Runs on Pedro's PC through Remote Control; no game.
+- Needs: nothing. Runs on Nercari's PC through Remote Control; no game.
 - Do: run and record the output (trimmed, no account data) of `claude --help`, `codex --version`, a one-line `codex exec --json -m gpt-6-sol -c model_reasoning_effort=high -` run, the head of `~/.codex/models_cache.json`, `grok --help`, `grok models`, `agy --version`, `agy --help`, `agy models --output-format json`, `hermes chat --help`. Missing CLIs are noted as missing.
-- Done when: a "Confirmed on Pedro's PC" section in this file says, for every UNVERIFIED line above and every catalog row that ticket 42 left out, confirmed, wrong (with the real value) or not installed; and the catalog in `bridge/models.js` (if ticket 42 has merged) gains the confirmed rows in the same PR.
+- Done when: a "Confirmed on Nercari's PC" section in this file says, for every UNVERIFIED line above and every catalog row that ticket 42 left out, confirmed, wrong (with the real value) or not installed; and the catalog in `bridge/models.js` (if ticket 42 has merged) gains the confirmed rows in the same PR.
 
 ### 42. Built-in model catalog
 
@@ -135,9 +135,9 @@ Each ticket: one PR into `forever`, `node tools/safety-ci.js` and `npm test` gre
 ### 45. Effort row in the AI picker
 
 - Needs: 44 for the list; 43 for the choice to take effect.
-- Do: store `c.effort` per chat; send `effort=` in the flags; show the effort row for the chosen model with the default marked; label "Agent · model · effort"; `/wow-ai agent <name> [model [effort]]` with the same checks; close the picker on combat start and refuse to open it in combat. Add the policy check to the PR body.
+- Do: store `c.effort` per chat; send `effort=` in the flags; show the effort row for the chosen model with the default marked; label "Agent · model · effort"; `/runback agent <name> [model [effort]]` with the same checks; close the picker on combat start and refuse to open it in combat. Add the policy check to the PR body.
 - Tests: flags for a chat with a level; switching to a model without that level clears it; the typed command refuses an unknown level; the picker does not open while `InCombatLockdown()` is true.
-- In game (Pedro): open the AI button, pick Codex, a model, then a level; send a question; the reply works and the chat label shows the level.
+- In game (Nercari): open the AI button, pick Codex, a model, then a level; send a question; the reply works and the chat label shows the level.
 
 ### 46. Read the CLI's own model list when it has one
 
@@ -149,9 +149,9 @@ Each ticket: one PR into `forever`, `node tools/safety-ci.js` and `npm test` gre
 ### 64. OpenCode as an agent
 
 - Needs: nothing.
-- Do: first, through Remote Control on Pedro's PC, record `opencode --version`, `opencode run --help`, `opencode models --verbose` and one `opencode run ... --format json` stream into `tests/fixtures/`; then add `opencode` to `bridge/agents.js` (detect, run, parse the JSON stream into reply, actions and errors), so it shows in the AI menu like the others. No spend: a model that needs a paid plan shows the CLI's own error.
+- Do: first, through Remote Control on Nercari's PC, record `opencode --version`, `opencode run --help`, `opencode models --verbose` and one `opencode run ... --format json` stream into `tests/fixtures/`; then add `opencode` to `bridge/agents.js` (detect, run, parse the JSON stream into reply, actions and errors), so it shows in the AI menu like the others. No spend: a model that needs a paid plan shows the CLI's own error.
 - Tests: the recorded stream parses in `tests/agents_test.js`; missing CLI gives the install hint.
-- Metric: OpenCode chats that return a reply in game, 0 → 1 (live check by Pedro).
+- Metric: OpenCode chats that return a reply in game, 0 → 1 (live check by Nercari).
 
 ### 65. OpenCode models and reasoning in the picker
 

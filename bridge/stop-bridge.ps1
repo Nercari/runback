@@ -73,5 +73,5 @@ foreach ($process in $candidates) {
 if ($ListOnly) { exit 0 }
 
 $killedPath = Join-Path $bridgeDir 'KILLED'
-$payload = @{ at = [DateTime]::UtcNow.ToString('o'); by = 'wowai-kill' } | ConvertTo-Json -Compress
+$payload = @{ at = [DateTime]::UtcNow.ToString('o'); by = 'runback-kill' } | ConvertTo-Json -Compress
 Set-Content -LiteralPath $killedPath -Value $payload -NoNewline -Encoding UTF8

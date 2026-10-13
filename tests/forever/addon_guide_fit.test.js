@@ -1,5 +1,5 @@
 // Guide fits the player's log (backlog 76): Forever_Guide.lua in a Lua VM with the real
-// Guide.lua, WoWAI.lua and the lockout module. Done and closed steps are skipped on
+// Guide.lua, Runback.lua and the lockout module. Done and closed steps are skipped on
 // load and by Next, the availability rules (requires, exclusive, rep, profession, level,
 // faction) and their fail-open behaviour, the XP pace line and time per level.
 'use strict';
@@ -9,7 +9,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { lua, lauxlib, lualib, to_luastring, to_jsstring } = require('fengari');
 
-const addon = path.join(__dirname, '..', '..', 'addon', 'WoWAI');
+const addon = path.join(__dirname, '..', '..', 'addon', 'Runback');
 const read = file => fs.readFileSync(path.join(addon, file), 'utf8');
 
 // The stub character is a level 23 Alliance Night Elf Hunter. LOG holds { id, complete };
@@ -59,21 +59,21 @@ function vm(setup = '') {
   run(fs.readFileSync(path.join(__dirname, '..', 'wow_stub.lua'), 'utf8'));
   run('unpack = table.unpack');
   run(WORLD);
-  run(`WoWAIGuideDB = { guides = { epoch = 1, version = 1, list = { ${GUIDE} } }, panel = { shown = true, guide = "g", step = { g = 1 } } }`);
+  run(`RunbackGuideDB = { guides = { epoch = 1, version = 1, list = { ${GUIDE} } }, panel = { shown = true, guide = "g", step = { g = 1 } } }`);
   run(setup);
-  for (const file of ['Codec.lua', 'Inbox.lua', 'WoWAI.lua', 'Guide.lua', 'Forever.lua', 'Forever_Lockout.lua', 'Forever_Guide.lua']) run(read(file));
-  run('STUB.FireEvent("ADDON_LOADED", "WoWAI"); STUB.FireEvent("PLAYER_LOGIN"); STUB.RunTimers()');
+  for (const file of ['Codec.lua', 'Inbox.lua', 'Runback.lua', 'Guide.lua', 'Forever.lua', 'Forever_Lockout.lua', 'Forever_Guide.lua']) run(read(file));
+  run('STUB.FireEvent("ADDON_LOADED", "Runback"); STUB.FireEvent("PLAYER_LOGIN"); STUB.RunTimers()');
   return { run, get };
 }
-const rows = v => [2, 3, 4].map(i => v.get(`WoWAIGuideFrame.children[${i}]:GetText()`));
-const step = v => v.get('WoWAIGuideDB.panel.step.g');
-const pace = v => v.get('WoWAIGuideFrame.pace:GetText()');
+const rows = v => [2, 3, 4].map(i => v.get(`RunbackGuideFrame.children[${i}]:GetText()`));
+const step = v => v.get('RunbackGuideDB.panel.step.g');
+const pace = v => v.get('RunbackGuideFrame.pace:GetText()');
 // The step text the panel shows as current after each Next, until it stops moving.
 const walk = v => {
   const seen = [rows(v)[0]];
   for (let i = 0; i < 12; i++) {
     const before = step(v);
-    v.run('WoWAIGuideFrame.next.scripts.OnClick()');
+    v.run('RunbackGuideFrame.next.scripts.OnClick()');
     if (step(v) === before) break;
     seen.push(rows(v)[0]);
   }
@@ -118,12 +118,12 @@ test('rep and profession: hidden below the need, shown once the player reaches i
   assert.equal(rows(v)[0], 'Note: The end.');
   v.run('REP[72] = 5; SKILL["First Aid"] = 50; STUB.FireEvent("QUEST_LOG_UPDATE")');
   assert.deepEqual(rows(v), ['Note: The end.'].concat(['', '']), 'the current step stays; earlier steps are not pulled back');
-  v.run('SlashCmdList.WOWAI("guide prev"); SlashCmdList.WOWAI("guide prev")');
+  v.run('SlashCmdList.RUNBACK("guide prev"); SlashCmdList.RUNBACK("guide prev")');
   assert.deepEqual(rows(v), ['Accept: Take E at Friendly.', 'Accept: Take F with First Aid 50.', 'Note: The end.']);
   v.run('SKILL = { Swords = 10 }; STUB.FireEvent("QUEST_LOG_UPDATE")');
   assert.equal(rows(v)[1], 'Note: The end.', 'a profession the player does not have is rank 0');
   v.run('LOG = { { id = 106 } }; STUB.FireEvent("QUEST_ACCEPTED", 1, 106)');
-  assert.equal(v.get('WoWAIGuidePanel.Visible({ questId = 106, profession = { name = "First Aid", skill = 50 } }, { quest = function() return 1 end, skill = function() return 0 end })'), 'true',
+  assert.equal(v.get('RunbackGuidePanel.Visible({ questId = 106, profession = { name = "First Aid", skill = 50 } }, { quest = function() return 1 end, skill = function() return 0 end })'), 'true',
     'a quest already in the log is shown whatever the rules say');
 });
 
@@ -141,10 +141,10 @@ test('missing or broken APIs fail open: every rule step shows, nothing throws', 
      GetNumSkillLines = function() return 0 end`,
     'FLAGGED[101] = true; GetSkillLineInfo = function(i) if i == 1 then return "Professions", true, false end return "Skinning", false, false, 10 end; GetNumSkillLines = function() return 2 end; REP = {}',
   ]) {
-    const v = vm(`${setup}; WoWAIGuideDB.panel.step.g = 3`);
+    const v = vm(`${setup}; RunbackGuideDB.panel.step.g = 3`);
     assert.equal(step(v), '3', setup);
     assert.deepEqual(rows(v), ['Accept: Take B, after A.', 'Accept: Take C, unless D.', 'Accept: Take E at Friendly.'], setup);
-    v.run('SlashCmdList.WOWAI("guide next"); SlashCmdList.WOWAI("guide next")');
+    v.run('SlashCmdList.RUNBACK("guide next"); SlashCmdList.RUNBACK("guide next")');
     assert.equal(rows(v)[1], 'Accept: Take F with First Aid 50.', `${setup}: unknown profession data shows the step`);
   }
 });
@@ -162,7 +162,7 @@ test('pace line: shown after five minutes of XP readings, from the game XP value
   xp(1900, 3000);
   assert.equal(pace(v), 'About 20 min to level, from your last 10 minutes', 'readings older than ten minutes are dropped: 1500 XP in 600 s');
   v.run('STUB.combat = true; STUB.FireEvent("PLAYER_REGEN_DISABLED"); STUB.now = 1950; XP = 3100; STUB.FireEvent("PLAYER_XP_UPDATE", "player")');
-  assert.equal(v.get('WoWAIGuideFrame:IsShown()'), 'false', 'no guide text, pace line included, during a fight');
+  assert.equal(v.get('RunbackGuideFrame:IsShown()'), 'false', 'no guide text, pace line included, during a fight');
 });
 
 test('pace across a level up, and time per level kept per character for the recap', () => {
@@ -172,16 +172,16 @@ test('pace across a level up, and time per level kept per character for the reca
   assert.equal(pace(v), 'About 10 min to level, from your last 10 minutes', '5400 + 600 + 600 XP across the level up in 600 s, 6400 to go: 582 s');
   v.run('STUB.now = 2800; STUB.level = 25; STUB.FireEvent("PLAYER_LEVEL_UP", 25)');
   v.run('STUB.now = 3100; STUB.FireEvent("PLAYER_LOGOUT")');
-  const rec = 'WoWAIGuideDB.levels["Testchar-Test Realm"]';
+  const rec = 'RunbackGuideDB.levels["Testchar-Test Realm"]';
   assert.equal(v.get(`${rec}[23].sec`), '600', 'level 23 counted from login to the level up');
   assert.equal(v.get(`${rec}[23].at`), 'nil', 'reached before the addon saw it');
   assert.equal(v.get(`${rec}[24].sec`), '1200');
   assert.equal(v.get(`${rec}[24].at`), String(1700000000 + 1600));
   assert.equal(v.get(`${rec}[25].sec`), '300', 'logout adds the time since the last event');
-  assert.equal(v.get('WoWAIGuidePanel.LevelMinutes()'), 'levelMinutes=24:20,25:5');
-  v.run('WoWAI.IsConnected = function() return true end; WoWAIDB.outbox = nil; WoWAI.Send("recap", nil, { cmd = "recap" })');
-  const ctx = Buffer.from(v.get('WoWAIDB.outbox.ctx'), 'hex').toString();
+  assert.equal(v.get('RunbackGuidePanel.LevelMinutes()'), 'levelMinutes=24:20,25:5');
+  v.run('Runback.IsConnected = function() return true end; RunbackDB.outbox = nil; Runback.Send("recap", nil, { cmd = "recap" })');
+  const ctx = Buffer.from(v.get('RunbackDB.outbox.ctx'), 'hex').toString();
   assert.match(ctx, /(^|\n)levelMinutes=24:20,25:5(\n|$)/, 'the recap carries the minutes per level');
-  v.run('WoWAIDB.outbox = nil; for _, c in ipairs(WoWAIDB.chats) do c.pendingId = nil end; WoWAI.Send("hello there")');
-  assert.doesNotMatch(Buffer.from(v.get('WoWAIDB.outbox.ctx or ""'), 'hex').toString(), /levelMinutes=/);
+  v.run('RunbackDB.outbox = nil; for _, c in ipairs(RunbackDB.chats) do c.pendingId = nil end; Runback.Send("hello there")');
+  assert.doesNotMatch(Buffer.from(v.get('RunbackDB.outbox.ctx or ""'), 'hex').toString(), /levelMinutes=/);
 });

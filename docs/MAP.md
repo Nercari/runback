@@ -24,18 +24,18 @@ The agent can mark your world map. What it draws are **layers**: a named list of
 
 | Command | Does |
 |---|---|
-| `/wow-ai map` | List layers, navigation and node settings |
-| `/wow-ai map ore [on\|off]`, `/wow-ai map herb [on\|off]` | Show or hide mining / herbalism nodes |
-| `/wow-ai map filter all\|skill` | Every node, or only those your skill can gather (default) |
-| `/wow-ai map hide <layer>`, `/wow-ai map show <layer>` | Hide or show a layer locally |
-| `/wow-ai map nav <layer> [n]`, `next`, `prev`, `stop` | Drive the navigator |
+| `/runback map` | List layers, navigation and node settings |
+| `/runback map ore [on\|off]`, `/runback map herb [on\|off]` | Show or hide mining / herbalism nodes |
+| `/runback map filter all\|skill` | Every node, or only those your skill can gather (default) |
+| `/runback map hide <layer>`, `/runback map show <layer>` | Hide or show a layer locally |
+| `/runback map nav <layer> [n]`, `next`, `prev`, `stop` | Drive the navigator |
 
-`/aimap` is a shorter alias for `/wow-ai map`. Everything here only reads positions and draws. Nothing moves, targets or acts for you.
+`/aimap` is a shorter alias for `/runback map`. Everything here only reads positions and draws. Nothing moves, targets or acts for you.
 
 ## Where the data comes from
 
-The bridge ships no game data: the agent has to know where things are. With just the system prompt it can place marks it knows or that you tell it about. For real routes, point the chat at a folder (`/wow-ai cd`) that holds game data and tools to query it, and describe them in that folder's `CLAUDE.md` (or the equivalent for your agent): quests, NPCs, objects and gathering spawns with their `uiMapID` and coordinates, and a script that appends `set` commands to `$WOW_AI_MAP_FILE`. Such datasets exist (QuestieDB, AtlasLootClassic, the vmangos world database) but their licences don't allow redistributing them here, so that folder stays yours.
+The bridge ships no game data: the agent has to know where things are. With just the system prompt it can place marks it knows or that you tell it about. For real routes, point the chat at a folder (`/runback cd`) that holds game data and tools to query it, and describe them in that folder's `CLAUDE.md` (or the equivalent for your agent): quests, NPCs, objects and gathering spawns with their `uiMapID` and coordinates, and a script that appends `set` commands to `$WOW_AI_MAP_FILE`. Such datasets exist (QuestieDB, AtlasLootClassic, the vmangos world database) but their licences don't allow redistributing them here, so that folder stays yours.
 
-The optional `WoWAI_Nodes` addon is the same idea for the in-game node pins: a separate addon that sets the global `WoWAINodes = { kinds = { { name, "mining"|"herbalism", requiredSkill }, ... }, maps = { [uiMapID] = { [kindIndex] = "xxxyyyxxxyyy..." } } }`, where each point is x and y in tenths of a percent, three digits each. `Map.lua` reads it if it is there and says so in `/wow-ai map` if it is not.
+The optional `WoWAI_Nodes` addon is the same idea for the in-game node pins: a separate addon that sets the global `WoWAINodes = { kinds = { { name, "mining"|"herbalism", requiredSkill }, ... }, maps = { [uiMapID] = { [kindIndex] = "xxxyyyxxxyyy..." } } }`, where each point is x and y in tenths of a percent, three digits each. `Map.lua` reads it if it is there and says so in `/runback map` if it is not.
 
 Step-by-step leveling guides use the same map coordinates (`m`, `x`, `y`); their file format is in `docs/GUIDE.md`. The guide panel's current step shows as one more layer, `guide`, which the addon keeps itself: a sync from the bridge never replaces it, and while it is set it takes the name `guide` over a bridge layer of that name. Its points can carry a radius that counts as arrived (see "On the map" in `docs/GUIDE.md`); during combat its pins and its navigator hide.

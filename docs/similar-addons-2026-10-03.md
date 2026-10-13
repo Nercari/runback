@@ -1,10 +1,10 @@
 # Ideas from similar addons (2026-10-03)
 
-Pedro asked for addons similar to wow-ai and for complementary ideas to borrow. Only ideas that stay out of combat, play nothing for the player and use the Forever client's APIs or the combat log file are kept. No code was copied; only ideas.
+Nercari asked for addons similar to runback and for complementary ideas to borrow. Only ideas that stay out of combat, play nothing for the player and use the Forever client's APIs or the combat log file are kept. No code was copied; only ideas.
 
 Sources: the CurseForge pages of WOWGPT, CombatAnalyzer, Localog and Mythic Raider Tools were opened. Details!, WoWAnalyzer, Wipefest, Warcraft Logs, Elitist Group, Questie, RestedXP and Zygor come from search results and general knowledge, not an opened page. None was checked on the Forever client.
 
-| Idea | Seen in | wow-ai today | Decision |
+| Idea | Seen in | runback today | Decision |
 |---|---|---|---|
 | Death recap: damage taken by source and spell, killing blow | Details!, Blizzard Death Recap, CombatAnalyzer, Mythic Raider Tools | `/ai death` slices the 15 s before the death; the mentor reads raw lines | Built: recap lines at the top of `.death.txt` |
 | Health before each hit, overkill at death | Mythic Raider Tools | not shown | Backlog: needs a real Forever log with advanced logging (WOW-02) |

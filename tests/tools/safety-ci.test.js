@@ -81,20 +81,20 @@ test("untrusted mode permits a clean addon with saved data and slash command", a
   assert.equal(result.ok, true, JSON.stringify(result.findings, null, 2));
 });
 
-test("untrusted mode rejects WoWAI globals from a WoW addon", async (t) => {
+test("untrusted mode rejects Runback globals from a WoW addon", async (t) => {
   const result = await untrusted(t, {
     "WoW.toc": "WoW.lua\n",
-    "WoW.lua": "WoWAIForever = {}\n",
+    "WoW.lua": "RunbackForever = {}\n",
   });
-  assert.ok(result.findings.some((item) => item.rule === "LUA-RESTRICTED" && item.text.includes("global write WoWAIForever")));
+  assert.ok(result.findings.some((item) => item.rule === "LUA-RESTRICTED" && item.text.includes("global write RunbackForever")));
 });
 
 test("untrusted mode rejects reserved SavedVariables in the toc", async (t) => {
   const result = await untrusted(t, {
-    "Demo.toc": "## SavedVariables: WoWAIDB\n## SavedVariablesPerCharacter: print, string, wOwAiDB\nDemo.lua\n",
+    "Demo.toc": "## SavedVariables: RunbackDB\n## SavedVariablesPerCharacter: print, string, wOwAiDB\nDemo.lua\n",
     "Demo.lua": "local ok = true\n",
   });
-  for (const name of ["WoWAIDB", "print", "string", "wOwAiDB"]) {
+  for (const name of ["RunbackDB", "print", "string", "wOwAiDB"]) {
     assert.ok(result.findings.some((item) => item.rule === "TOC-SV" && item.text.includes(name)));
   }
 });
@@ -220,10 +220,10 @@ test("repo mode flags replacing a Blizzard function or a method on a Blizzard fr
 test("hooks, slash commands, popups and the addon's own tables are not taint", async (t) => {
   const dir = await fixture(t);
   await fs.writeFile(path.join(dir, "clean.lua"), [
-    "WoWAI = WoWAI or {}",
-    "function WoWAI.Toggle() end",
-    "SlashCmdList.WOWAI = function(msg) end",
-    'StaticPopupDialogs["WOWAI_X"] = { OnAccept = function() end }',
+    "Runback = Runback or {}",
+    "function Runback.Toggle() end",
+    "SlashCmdList.RUNBACK = function(msg) end",
+    'StaticPopupDialogs["RUNBACK_X"] = { OnAccept = function() end }',
     'hooksecurefunc("SetItemRef", function() end)',
     "local t = {}",
     "t.f = function() end",

@@ -5,7 +5,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const luaparse = require('luaparse');
 
-const addon = path.join(__dirname, '..', '..', 'addon', 'WoWAI');
+const addon = path.join(__dirname, '..', '..', 'addon', 'Runback');
 
 test('P3 Forever modules parse as Lua 5.1 and contain no combat log hook', () => {
   for (const file of ['Forever_Lockout.lua', 'Forever_Context.lua', 'Forever_Switch.lua', 'Forever_Commands.lua']) {
@@ -17,7 +17,7 @@ test('P3 Forever modules parse as Lua 5.1 and contain no combat log hook', () =>
 });
 
 test('TOC loads the modules after the Forever registry', () => {
-  const toc = fs.readFileSync(path.join(addon, 'WoWAI.toc'), 'utf8');
+  const toc = fs.readFileSync(path.join(addon, 'Runback.toc'), 'utf8');
   const start = toc.indexOf('Forever.lua');
   for (const file of ['Forever_Lockout.lua', 'Forever_Context.lua', 'Forever_Switch.lua', 'Forever_Commands.lua']) {
     assert.ok(toc.indexOf(file) > start, `${file} must follow Forever.lua`);

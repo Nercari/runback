@@ -55,10 +55,10 @@ test("update: nothing new upstream", (t) => {
 test("update: fast-forwards and lists the changed files", (t) => {
   const { dev, player } = repos(t);
   commit(dev, "bridge/bridge.js", "x\n");
-  commit(dev, "addon/WoWAI/WoWAI.lua", "y\n");
+  commit(dev, "addon/Runback/Runback.lua", "y\n");
   const r = update(player);
   assert.equal(r.changed, true);
-  assert.deepEqual(r.files.sort(), ["addon/WoWAI/WoWAI.lua", "bridge/bridge.js"]);
+  assert.deepEqual(r.files.sort(), ["addon/Runback/Runback.lua", "bridge/bridge.js"]);
   assert.equal(r.note, "updated to the latest release (2 files changed)");
   // Windows runners check out with core.autocrlf=true.
   assert.equal(fs.readFileSync(path.join(player, "bridge/bridge.js"), "utf8").replace(/\r\n/g, "\n"), "x\n");
@@ -354,13 +354,13 @@ test("addonDiffers: missing or changed files count, the bridge-owned Inbox.lua d
   const dest = path.join(dir, "dest");
   fs.mkdirSync(src);
   fs.mkdirSync(dest);
-  fs.writeFileSync(path.join(src, "WoWAI.lua"), "a");
+  fs.writeFileSync(path.join(src, "Runback.lua"), "a");
   fs.writeFileSync(path.join(src, "Inbox.lua"), "repo");
   assert.equal(addonDiffers(src, dest), true, "missing file");
-  fs.writeFileSync(path.join(dest, "WoWAI.lua"), "a");
+  fs.writeFileSync(path.join(dest, "Runback.lua"), "a");
   fs.writeFileSync(path.join(dest, "Inbox.lua"), "written by the bridge");
   assert.equal(addonDiffers(src, dest), false);
-  fs.writeFileSync(path.join(src, "WoWAI.lua"), "b");
+  fs.writeFileSync(path.join(src, "Runback.lua"), "b");
   assert.equal(addonDiffers(src, dest), true, "changed file");
 });
 
@@ -386,11 +386,11 @@ test("plan: the game advice matches what changed", () => {
   for (const k of ["open", "relaunch", "reload", "ready"]) assert.ok(GAME_TEXT[k]);
 });
 
-test("WoW AI.cmd is one line that exits before git pull can rewrite it", () => {
+test("Runback.cmd is one line that exits before git pull can rewrite it", () => {
   // cmd.exe reads a batch file as it runs; if the update changed the rest of
   // the file, it would run whatever now sits at that offset. One line that ends
   // in exit /b is fully parsed before node starts.
-  const s = fs.readFileSync(path.resolve(__dirname, "../../WoW AI.cmd"), "utf8");
+  const s = fs.readFileSync(path.resolve(__dirname, "../../Runback.cmd"), "utf8");
   assert.equal(s.trim().split("\n").length, 1);
   assert.match(s, /^@node "%~dp0tools\\launch\.js" %\* \|\| pause & exit \/b\s*$/);
 });
@@ -456,15 +456,15 @@ test("Windows: gameRunning sees a running process by name", WIN, () => {
   assert.equal(launch.gameRunning("NoSuchGameHere"), false);
 });
 
-test("Windows: the desktop shortcut points at WoW AI.cmd and is made only once", WIN, (t) => {
+test("Windows: the desktop shortcut points at Runback.cmd and is made only once", WIN, (t) => {
   const desktop = path.join(tmp(t), "Desk top");
   fs.mkdirSync(desktop);
   const mark = path.join(desktop, "mark");
   assert.equal(launch.makeShortcut({ desktop, mark }), desktop);
-  const lnk = path.join(desktop, "WoW AI.lnk");
+  const lnk = path.join(desktop, "Runback.lnk");
   const r = spawnSync("powershell.exe", ["-NoProfile", "-Command",
     `(New-Object -ComObject WScript.Shell).CreateShortcut('${lnk.replace(/'/g, "''")}').TargetPath`], { encoding: "utf8" });
-  assert.equal(r.stdout.trim().toLowerCase(), path.resolve(__dirname, "../../WoW AI.cmd").toLowerCase());
+  assert.equal(r.stdout.trim().toLowerCase(), path.resolve(__dirname, "../../Runback.cmd").toLowerCase());
   fs.rmSync(lnk);
   assert.equal(launch.makeShortcut({ desktop, mark }), null, "a deleted shortcut stays deleted");
   assert.equal(fs.existsSync(lnk), false);

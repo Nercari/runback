@@ -6,7 +6,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { lua, lauxlib, lualib, to_luastring, to_jsstring } = require('fengari');
 
-const addon = path.join(__dirname, '..', '..', 'addon', 'WoWAI');
+const addon = path.join(__dirname, '..', '..', 'addon', 'Runback');
 const read = file => fs.readFileSync(path.join(addon, file), 'utf8');
 function vm(setup = '') {
   const L = lauxlib.luaL_newstate(); lualib.luaL_openlibs(L);
@@ -23,17 +23,17 @@ function vm(setup = '') {
   run('unpack = table.unpack');
   run(`C_Map.GetMapInfo = function(id) if id == 1420 then return { name = "Tirisfal Glades", mapID = id } end end`);
   run(setup);
-  for (const file of ['Codec.lua', 'Inbox.lua', 'WoWAI.lua', 'Forever.lua', 'Forever_Lockout.lua', 'Forever_Context.lua', 'Forever_Commands.lua', 'Forever_Known.lua']) run(read(file));
-  run('STUB.FireEvent("ADDON_LOADED", "WoWAI"); STUB.FireEvent("PLAYER_LOGIN"); STUB.RunTimers()');
-  run('WoWAI.IsConnected = function() return true end');
+  for (const file of ['Codec.lua', 'Inbox.lua', 'Runback.lua', 'Forever.lua', 'Forever_Lockout.lua', 'Forever_Context.lua', 'Forever_Commands.lua', 'Forever_Known.lua']) run(read(file));
+  run('STUB.FireEvent("ADDON_LOADED", "Runback"); STUB.FireEvent("PLAYER_LOGIN"); STUB.RunTimers()');
+  run('Runback.IsConnected = function() return true end');
   return { run, get };
 }
 const outbox = v => ({
-  cmd: v.get('WoWAIDB.outbox and WoWAIDB.outbox.cmd'),
-  text: Buffer.from(v.get('WoWAIDB.outbox and WoWAIDB.outbox.text or ""'), 'hex').toString(),
-  ctx: Buffer.from(v.get('WoWAIDB.outbox and WoWAIDB.outbox.ctx or ""'), 'hex').toString(),
+  cmd: v.get('RunbackDB.outbox and RunbackDB.outbox.cmd'),
+  text: Buffer.from(v.get('RunbackDB.outbox and RunbackDB.outbox.text or ""'), 'hex').toString(),
+  ctx: Buffer.from(v.get('RunbackDB.outbox and RunbackDB.outbox.ctx or ""'), 'hex').toString(),
 });
-const type = (v, text) => { v.run(`WoWAIInput:SetText(${JSON.stringify(text)}); WoWAI.SendFromInput()`); return outbox(v); };
+const type = (v, text) => { v.run(`RunbackInput:SetText(${JSON.stringify(text)}); Runback.SendFromInput()`); return outbox(v); };
 
 const CLASSIC_QUESTS = `
   local LOG = {
@@ -105,7 +105,7 @@ test('no quest-watch API: the line is left out and the message still goes', () =
 test('a shared /mappin gets its map name, the coordinates exactly as typed', () => {
   const v = vm();
   assert.equal(type(v, 'what is at /mappin 1420 9.7 63.9 ?').text, 'what is at /mappin 1420 9.7 63.9 (Tirisfal Glades 9.7, 63.9) ?');
-  assert.equal(v.get('WoWAI.DecodePins("/way #1420 9.70, 63.90")'), '/way #1420 9.70, 63.90 (Tirisfal Glades 9.70, 63.90)');
+  assert.equal(v.get('Runback.DecodePins("/way #1420 9.70, 63.90")'), '/way #1420 9.70, 63.90 (Tirisfal Glades 9.70, 63.90)');
 });
 
 test('a pasted pin line on its own is sent with its map name, not refused as a command', () => {
@@ -113,10 +113,10 @@ test('a pasted pin line on its own is sent with its map name, not refused as a c
   const v = vm();
   assert.equal(type(v, '/way #1420 9.7 63.9').text, '/way #1420 9.7 63.9 (Tirisfal Glades 9.7, 63.9)');
   // A bare /mappin with no coordinates is still an unknown box command and sends nothing new.
-  const before = v.get('#WoWAIDB.chats[1].history');
-  v.run('WoWAIInput:SetText("/mappin"); WoWAI.SendFromInput()');
-  assert.ok(v.get('WoWAIDB.chats[1].history[#WoWAIDB.chats[1].history].text').startsWith('Unknown command /mappin'));
-  assert.equal(Number(v.get('#WoWAIDB.chats[1].history')), Number(before) + 1);
+  const before = v.get('#RunbackDB.chats[1].history');
+  v.run('RunbackInput:SetText("/mappin"); Runback.SendFromInput()');
+  assert.ok(v.get('RunbackDB.chats[1].history[#RunbackDB.chats[1].history].text').startsWith('Unknown command /mappin'));
+  assert.equal(Number(v.get('#RunbackDB.chats[1].history')), Number(before) + 1);
 });
 
 test('a shared pin on an unknown map, or with no C_Map, stays as typed', () => {
@@ -148,12 +148,12 @@ test('rotation and build questions carry the spellbook with ranks', () => {
 
 test('the build command and a review carry the spellbook too', () => {
   let v = vm(WARLOCK_BOOK);
-  v.run('SlashCmdList["WOWAI"]("build")');
+  v.run('SlashCmdList["RUNBACK"]("build")');
   assert.equal(outbox(v).cmd, 'build');
   assert.equal(spellbookOf(outbox(v).ctx), SPELLBOOK);
 
   v = vm(WARLOCK_BOOK);
-  v.run('SlashCmdList["WOWAI"]("review")');
+  v.run('SlashCmdList["RUNBACK"]("review")');
   assert.equal(outbox(v).cmd, 'review');
   assert.equal(spellbookOf(outbox(v).ctx), SPELLBOOK);
 });

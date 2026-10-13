@@ -1,7 +1,7 @@
-# wow-ai
+# Runback
 
 <p align="center">
-  <img src="docs/screenshot.jpg" alt="The WoW AI chat window open in Goldshire, with a message on its way to a coding agent" width="900">
+  <img src="docs/screenshot.jpg" alt="The Runback chat window open in Goldshire, with a message on its way to a coding agent" width="900">
 </p>
 
 Chat with your local coding agents from inside **World of Warcraft: Forever**: [Claude Code](https://claude.com/claude-code), [OpenAI Codex](https://developers.openai.com/codex) and [xAI's Grok Build](https://docs.x.ai/build/overview). Send a task, go back to questing, get pinged in-game when the answer lands. No alt-tabbing, no `/reload` per message.
@@ -11,7 +11,7 @@ Chat with your local coding agents from inside **World of Warcraft: Forever**: [
 - Replies echoed into the game chat, with `[reply]` and `[open]` links back to the chat
 - The agent knows your character, level, zone, talents, professions and quest log (optional), and you can shift-click items, spells and quests into a message
 - The agent can draw on your world map: numbered routes, quest stops and marks, with a navigator arrow that walks you from stop to stop
-- Herb and ore spawns on the world map, filtered by your gathering skill (`/wow-ai map ore`, `/wow-ai map herb`)
+- Herb and ore spawns on the world map, filtered by your gathering skill (`/runback map ore`, `/runback map herb`)
 - An **Allow & retry** button when Claude or Grok needs a command outside your allowlist
 - A status light for the bridge, automatic retries, and recovery of your chats (and map layers) if the beta client wipes addon data
 - Runs on Windows, and on Linux with the game under Wine
@@ -34,7 +34,7 @@ The bridge drives whichever of these you have installed; each chat can use a dif
 | **Antigravity** (`agy`) | `agy -p=<prompt> --output-format stream-json`, resumed with `--conversation` | Antigravity permission switches | no |
 | **Hermes** (`hermes`) | `hermes chat --query-file -`, resumed with `--resume` | default only; the bridge never uses `--yolo` | no |
 
-`agent` in `bridge/config.json` is the default (`claude`). The **AI** button under the chat switches the current chat to any agent installed on your PC, and to any of its models (`agents.<id>.models` in the config; each CLI's own models are built in, see docs/CONFIGURATION.md). `/wow-ai agent codex` (or `/wow-ai agent claude sonnet`) does the same typed; the reply bubbles and the game-chat echo are labelled with whoever answered. A session belongs to the agent that made it, so a chat that changes agent starts a fresh session there (its transcript stays). Install notes, the exact command lines, what each permission mode means per agent, and known limits are in [docs/AGENTS.md](docs/AGENTS.md).
+`agent` in `bridge/config.json` is the default (`claude`). The **AI** button under the chat switches the current chat to any agent installed on your PC, and to any of its models (`agents.<id>.models` in the config; each CLI's own models are built in, see docs/CONFIGURATION.md). `/runback agent codex` (or `/runback agent claude sonnet`) does the same typed; the reply bubbles and the game-chat echo are labelled with whoever answered. A session belongs to the agent that made it, so a chat that changes agent starts a fresh session there (its transcript stays). Install notes, the exact command lines, what each permission mode means per agent, and known limits are in [docs/AGENTS.md](docs/AGENTS.md).
 
 ## Requirements
 
@@ -57,14 +57,14 @@ See [docs/FOREVER.md](docs/FOREVER.md) for the classic UI skin and hotkeys.
 Step-by-step for a fresh machine, with troubleshooting: [docs/INSTALL-WINDOWS.md](docs/INSTALL-WINDOWS.md). The short version:
 
 ```powershell
-git clone https://github.com/Nercari/wow-ai
-cd wow-ai
+git clone https://github.com/Nercari/runback
+cd runback
 node setup.js --project "C:\path\to\the\project\you\want\to\work\on"
 ```
 
-`setup.js` finds the client (pass `--wow "<client folder>"` if it can't), copies the addon into `Interface\AddOns\WoWAI`, writes `bridge/config.json`, reports which agent CLIs it found, and generates the slot pool and signal files (≈15,000 tiny files; that's normal — the client only discovers addon files at launch, so they have to exist up front).
+`setup.js` finds the client (pass `--wow "<client folder>"` if it can't), copies the addon into `Interface\AddOns\Runback`, writes `bridge/config.json`, reports which agent CLIs it found, and generates the slot pool and signal files (≈15,000 tiny files; that's normal — the client only discovers addon files at launch, so they have to exist up front).
 
-Then **fully quit and relaunch WoW**, enable *WoW AI* on the AddOns screen, and start the bridge:
+Then **fully quit and relaunch WoW**, enable *Runback* on the AddOns screen, and start the bridge:
 
 ```
 npm start               # in the current terminal (or: bridge\start.ps1)
@@ -73,15 +73,15 @@ bridge\start-window.cmd # double-click version: opens its own window
 
 It restarts itself if it ever crashes. Ctrl+C (or closing the window) stops it. The banner lists every agent with where its executable was found, or what to install.
 
-**One double-click instead (Windows).** `WoW AI.cmd` in the repo folder does all of the above every time: it updates the checkout (a fast-forward `git pull`, skipped when the folder has local edits or there's no network; a clean folder left on another branch goes back to `forever` first), runs `setup.js`, starts the bridge in a minimized window (or restarts it when the update changed it), and says whether the game needs a `/reload`, a relaunch, or nothing. If the game isn't running it opens the Battle.net app, where you press Play; it never starts or touches the game itself. The first run puts a **WoW AI** icon on your desktop that does the same.
+**One double-click instead (Windows).** `Runback.cmd` in the repo folder does all of the above every time: it updates the checkout (a fast-forward `git pull`, skipped when the folder has local edits or there's no network; a clean folder left on another branch goes back to `forever` first), runs `setup.js`, starts the bridge in a minimized window (or restarts it when the update changed it), and says whether the game needs a `/reload`, a relaunch, or nothing. If the game isn't running it opens the Battle.net app, where you press Play; it never starts or touches the game itself. The first run puts a **Runback** icon on your desktop that does the same.
 
 ### Linux (Wine)
 
 Details and capture troubleshooting: [docs/INSTALL-LINUX.md](docs/INSTALL-LINUX.md). The short version:
 
 ```bash
-git clone https://github.com/Nercari/wow-ai
-cd wow-ai
+git clone https://github.com/Nercari/runback
+cd runback
 node setup.js --project ~/path/to/the/project   # finds the client in $WINEPREFIX, ~/.wine...; or pass --wow "<client folder>"
 npm start
 ```
@@ -100,65 +100,69 @@ The doctor prints `PASS` or `FAIL` for Node.js 22.2 or newer, for an agent CLI t
 
 If `WAYLAND_DISPLAY` is set, or `XDG_SESSION_TYPE` is `wayland`, the doctor prints a warning. Screen capture needs X11 or XWayland.
 
-### Upgrading from wow-claude
+[Nercari/runback](https://github.com/Nercari/runback). Forked from chelinho139.
 
-This project used to be called wow-claude, with a `WoWClaude` addon and a `/wow-claude` command. `git pull` (or clone the new name) and run `node setup.js` again: it copies your chats and settings from the old addon's saved data, removes the old `WoWClaude` addon and its slot folders so the two don't fight over `/ai` and `/r`, and rewrites the paths and the Claude settings in `bridge/config.json` into the new layout. Then quit and relaunch WoW. If you had installed the command, run `npm unlink -g wow-claude` and `npm link` again, and re-do `/wow-ai bind <key>` if you had a hotkey. Your agent sessions carry on: the bridge keeps them per chat.
+### Upgrading from wow-claude or WoW AI
 
-### `wow-ai`: start it from the project folder
+`node setup.js` migrates a `WoWClaude` install (saved data and old slot folders only) and updates paths in `bridge/config.json` when needed. For a former `WoWAI` install, use the manual copy step below. Then fully quit and relaunch WoW.
+
+**One-time manual copy (game closed):** if you still have settings only in `WTF/Account/<ACCOUNT>/SavedVariables/WoWAI.lua`, copy that file to `Runback.lua` in the same folder and replace `WoWAIDB` with `RunbackDB` in the copy. On first load the addon also copies a legacy `WoWAIDB` table into `RunbackDB` when `RunbackDB` is missing.
+
+### `runback`: start the bridge from the project folder
 
 Like the agent CLIs themselves, the bridge works in the folder you start it from. Install the command once:
 
 ```powershell
-npm link          # in the wow-ai folder; makes `wow-ai` available everywhere
+npm link          # in the runback folder; makes `runback` available everywhere
 ```
 
 Then, from any project:
 
 ```powershell
 cd C:\path\to\realms
-wow-ai
+runback
 ```
 
-Every chat that hasn't picked its own folder now works in `realms`, and the status light's tooltip shows it (hover the light at the top left of the window). `wow-ai --project <dir>` names the folder explicitly; `npm start` inside this repo falls back to `defaultCwd` in the config, and to the mentor workspace (`wow-mentor`, next to this repo) when that is empty. A broad start or configured folder (Documents, Desktop, Downloads, your home folder, a drive root) is skipped in favour of the mentor workspace, because the agent would read unrelated files there. Only one bridge can run at a time (two would fight over the screen and the slot files), so this sets the default folder rather than giving you one bridge per project.
+Every chat that hasn't picked its own folder now works in `realms`, and the status light's tooltip shows it (hover the light at the top left of the window). `runback --project <dir>` names the folder explicitly; `npm start` inside this repo falls back to `defaultCwd` in the config, and to the mentor workspace (`wow-mentor`, next to this repo) when that is empty. A broad start or configured folder (Documents, Desktop, Downloads, your home folder, a drive root) is skipped in favour of the mentor workspace, because the agent would read unrelated files there. Only one bridge can run at a time (two would fight over the screen and the slot files), so this sets the default folder rather than giving you one bridge per project.
 
 ## Use
 
-In game: `/wow-ai` opens the window. Until the bridge has answered, a **Connect** button sits where Send would be: start the bridge, click it, and the light turns green (a message typed before that stays in the box). Then click the input box, type, Enter. The reply arrives with the whisper sound; the window's light shows the bridge state (green/yellow/red, hover for details), and **Reconnect** shows up if the bridge goes quiet.
+In game: `/runback` opens the window (`/wowai` is the same command; `/rb` too when nothing else registered it at load). Until the bridge has answered, a **Connect** button sits where Send would be: start the bridge, click it, and the light turns green (a message typed before that stays in the box). Then click the input box, type, Enter. The reply arrives with the whisper sound; the window's light shows the bridge state (green/yellow/red, hover for details), and **Reconnect** shows up if the bridge goes quiet.
 
-Right-clicking a chat in the left panel opens a small menu with **Rename...**, **Folder...** and **AI / model...** (right-click again to close it); the trash can on the row deletes the chat after an OK/Cancel confirm. **Folder...** sets the folder this chat's agent works in (same as `/wow-ai cd` below), **AI / model...** which agent and model answers it (same as the AI button and `/wow-ai agent`); each chat keeps its own, so you can have chats on different projects, with different agents, side by side.
+Right-clicking a chat in the left panel opens a small menu with **Rename...**, **Folder...** and **AI / model...** (right-click again to close it); the trash can on the row deletes the chat after an OK/Cancel confirm. **Folder...** sets the folder this chat's agent works in (same as `/runback cd` below), **AI / model...** which agent and model answers it (same as the AI button and `/runback agent`); each chat keeps its own, so you can have chats on different projects, with different agents, side by side.
 
 | Command | What it does |
 |---|---|
-| `/wow-ai` | toggle the window (`/ai`, `/wowai` and the old `/wow-claude` are the same command); the minimize button (top right) or Esc collapses it to a small bar, click the bar to expand |
-| `/ai <text>` | send from the normal chat box (`/wow-ai <text>` is the same). `/ai` is a full alias, so `/ai agent grok` or `/ai cd realms` work too; a message that merely starts with a command word, like `/ai help me with this macro` or `/ai delete the unused imports`, is still sent as a message because the rest of the line doesn't fit that command |
-| `/wow-ai new [name]` | new chat = new agent session. Unnamed chats take their title from your first message |
-| `/wow-ai chat <n\|name>` | switch chats (or click the left panel; right-click a row for Rename, Folder and Agent, its trash can deletes it) |
-| `/wow-ai agent [claude\|codex\|grok\|agy\|hermes] [model]` | which agent (and model) this chat talks to; `default` goes back to the bridge's. A chat that changes agent starts a fresh session with it; a model change keeps the conversation |
-| `/wow-ai cd <folder>` | folder this chat's agent works in (**Folder...** after right-clicking the chat opens the same thing as a dialog). Relative to the bridge's folder (`/wow-ai cd realms`, `/wow-ai cd ../other`), `~` works, a full path too; `/wow-ai cd` alone goes back to the bridge's default. A chat that changes folder starts a fresh session there |
-| `/wow-ai reset` | wipe this chat's agent memory, keep the transcript |
-| `/wow-ai context [on\|off]` | show what the agent is told about your character and location, or turn it on/off |
-| `/wow-ai rename`, `/wow-ai delete`, `/wow-ai clear` | manage the current chat |
-| `/wow-ai echo summary\|full\|short\|off\|<chars>` | how much of each reply to print into the game chat. `summary` (the default) prints only the agent's closing TL;DR lines, the full reply is in the window behind `[open]`; `full` prints up to 4000 chars, `short` one preview line |
-| `/wow-ai longchat on` | let the game chat box take 4000 characters, for long `/ai` messages |
-| `/wow-ai bind <key>` | hotkey: checks for a reply while waiting, otherwise toggles the window |
-| `/wow-ai cancel` | stop waiting on this chat's reply |
-| `/wow-ai resend` | show the strip again if the bridge missed it |
-| `/wow-ai reload` | reload the UI now (also frees the slot pool) |
-| `/wow-ai mode reload` | fallback transport that costs a `/reload` per step, if pixels or slots can't work |
-| `/wow-ai diag`, `/wow-ai slots` | transport diagnostics, and each change of the combat log this session |
-| `/wow-ai help` | the full list |
+| `/runback` | toggle the window (`/wowai`, `/ai`, `/ask`, `/rb` when free, and the old `/wow-claude` are aliases); the minimize button (top right) or Esc collapses it to a small bar, click the bar to expand |
+| `/ai <text>` | send from the normal chat box (`/runback <text>` is the same). `/ai` is a full alias, so `/ai agent grok` or `/ai cd realms` work too; a message that merely starts with a command word, like `/ai help me with this macro` or `/ai delete the unused imports`, is still sent as a message because the rest of the line doesn't fit that command |
+| `/runback new [name]` | new chat = new agent session. Unnamed chats take their title from your first message |
+| `/runback chat <n\|name>` | switch chats (or click the left panel; right-click a row for Rename, Folder and Agent, its trash can deletes it) |
+| `/runback agent [claude\|codex\|grok\|agy\|hermes] [model]` | which agent (and model) this chat talks to; `default` goes back to the bridge's. A chat that changes agent starts a fresh session with it; a model change keeps the conversation |
+| `/runback cd <folder>` | folder this chat's agent works in (**Folder...** after right-clicking the chat opens the same thing as a dialog). Relative to the bridge's folder (`/runback cd realms`, `/runback cd ../other`), `~` works, a full path too; `/runback cd` alone goes back to the bridge's default. A chat that changes folder starts a fresh session there |
+| `/runback reset` | wipe this chat's agent memory, keep the transcript |
+| `/runback context [on\|off]` | show what the agent is told about your character and location, or turn it on/off |
+| `/runback rename`, `/runback delete`, `/runback clear` | manage the current chat |
+| `/runback echo summary\|full\|short\|off\|<chars>` | how much of each reply to print into the game chat. `summary` (the default) prints only the agent's closing TL;DR lines, the full reply is in the window behind `[open]`; `full` prints up to 4000 chars, `short` one preview line |
+| `/runback longchat on` | let the game chat box take 4000 characters, for long `/ai` messages |
+| `/runback bind <key>` | hotkey: checks for a reply while waiting, otherwise toggles the window |
+| `/runback cancel` | stop waiting on this chat's reply |
+| `/runback resend` | show the strip again if the bridge missed it |
+| `/runback reload` | reload the UI now (also frees the slot pool) |
+| `/runback mode reload` | fallback transport that costs a `/reload` per step, if pixels or slots can't work |
+| `/runback diag`, `/runback slots` | transport diagnostics, and each change of the combat log this session |
+| `/runback help` | the full list |
 
-Click any message, or `/wow-ai copy` for the last reply, to open it in a selectable box for Ctrl+C.
+Click any message, or `/runback copy` for the last reply, to open it in a selectable box for Ctrl+C.
 
 ### Short in the chat, full in the window
 
-Every run tells the agent that only a short summary of its reply is printed in the game chat, and asks it to end each reply with a `TL;DR:` block of one or two lines. The bridge splits that block off and the addon prints just those lines under `[Claude · chat]`, with the `[open]` link to the whole reply in the window (the window keeps the full text, TL;DR included). When an agent forgets the block, the first two lines of the reply are printed instead, with a hint to open the rest. `/wow-ai echo full` goes back to printing the whole reply.
+Every run tells the agent that only a short summary of its reply is printed in the game chat, and asks it to end each reply with a `TL;DR:` block of one or two lines. The bridge splits that block off and the addon prints just those lines under `[Claude · chat]`, with the `[open]` link to the whole reply in the window (the window keeps the full text, TL;DR included). When an agent forgets the block, the first two lines of the reply are printed instead, with a hint to open the rest. `/runback echo full` goes back to printing the whole reply.
 
 ### The agent knows where you are
 
-The addon tells the agent which game and client you are on, your character (name, realm, level, race, class, faction, guild), where you are (zone, subzone and the map coordinates the minimap shows), your money, talents, professions with their skill, your quest log (quest ids, marking the ones ready to turn in), and the quests you watch with their objectives. A question about your rotation, build, talents or spells (and `/ai build` or a review) also carries your spellbook with the highest rank of each spell, so the agent does not guess what you have learned. A few lines, sent with the addon's hello and again whenever they change, and put into the agent's system prompt by the bridge (Claude and Grok take a system prompt; for Codex the bridge puts it at the top of the message, marked as context), so you can ask "what should I be doing at my level around here?" or "write me a macro for my class" without explaining yourself first. It is only a hint: for a chat about an unrelated project it changes nothing. `/wow-ai context` shows exactly what is sent; `/wow-ai context off` stops sending it (the bridge forgets it too), and `"gameContext": false` in `bridge/config.json` turns it off for good.
+The addon tells the agent which game and client you are on, your character (name, realm, level, race, class, faction, guild), where you are (zone, subzone and the map coordinates the minimap shows), your money, talents, professions with their skill, your quest log (quest ids, marking the ones ready to turn in), and the quests you watch with their objectives. A question about your rotation, build, talents or spells (and `/ai build` or a review) also carries your spellbook with the highest rank of each spell, so the agent does not guess what you have learned. A few lines, sent with the addon's hello and again whenever they change, and put into the agent's system prompt by the bridge (Claude and Grok take a system prompt; for Codex the bridge puts it at the top of the message, marked as context), so you can ask "what should I be doing at my level around here?" or "write me a macro for my class" without explaining yourself first. It is only a hint: for a chat about an unrelated project it changes nothing. `/runback context` shows exactly what is sent; `/runback context off` stops sending it (the bridge forgets it too), and `"gameContext": false` in `bridge/config.json` turns it off for good.
 
-Along with it, every run gets [docs/WOW-ADDON-PRIMER.md](docs/WOW-ADDON-PRIMER.md): a short reference on writing addons and macros for this client (TOC layout, sandbox rules, common frames and events, where to verify an API), so "write me an addon that..." works from any folder, not just this repo. Edit the file to suit your setup; the bridge re-reads it on every run. `"primerFile": ""` in the config drops it, and `/wow-ai context off` turns it off together with the character context.
+Along with it, every run gets [docs/WOW-ADDON-PRIMER.md](docs/WOW-ADDON-PRIMER.md): a short reference on writing addons and macros for this client (TOC layout, sandbox rules, common frames and events, where to verify an API), so "write me an addon that..." works from any folder, not just this repo. Edit the file to suit your setup; the bridge re-reads it on every run. `"primerFile": ""` in the config drops it, and `/runback context off` turns it off together with the character context.
 
 ### Link items, spells and quests
 
@@ -176,11 +180,11 @@ The system prompt tells every agent how to hand marks to the bridge: append comm
 
 | Command | What it does |
 |---|---|
-| `/wow-ai map` | list the layers, navigation and node settings |
-| `/wow-ai map ore [on\|off]`, `/wow-ai map herb [on\|off]` | show or hide mining / herbalism spawns on the world map |
-| `/wow-ai map filter all\|skill` | every spawn, or only what your skill can gather (default) |
-| `/wow-ai map hide <layer>`, `/wow-ai map show <layer>` | hide or show one of the agent's layers |
-| `/wow-ai map nav <layer> [n]`, `next`, `prev`, `stop` | drive the navigator |
+| `/runback map` | list the layers, navigation and node settings |
+| `/runback map ore [on\|off]`, `/runback map herb [on\|off]` | show or hide mining / herbalism spawns on the world map |
+| `/runback map filter all\|skill` | every spawn, or only what your skill can gather (default) |
+| `/runback map hide <layer>`, `/runback map show <layer>` | hide or show one of the agent's layers |
+| `/runback map nav <layer> [n]`, `next`, `prev`, `stop` | drive the navigator |
 
 `/aimap` is a shorter alias. To remove layers for good, ask the agent ("clear the map", "remove the mining route").
 
@@ -194,8 +198,8 @@ The keys you are most likely to touch. Every key, flag and environment variable 
 
 | Key | Meaning |
 |---|---|
-| `defaultCwd` | folder for chats that haven't been given one with `/wow-ai cd`; empty = the mentor workspace |
-| `agent` | the agent for chats that haven't picked one with `/wow-ai agent` (`claude`, `codex`, `grok`, `agy` or `hermes`) |
+| `defaultCwd` | folder for chats that haven't been given one with `/runback cd`; empty = the mentor workspace |
+| `agent` | the agent for chats that haven't picked one with `/runback agent` (`claude`, `codex`, `grok`, `agy` or `hermes`) |
 | `agents.<id>.permissionMode`, `.allowedTools`, `.deniedTools`, `.model` | that agent's permissions, allowlist, denylist and model; `.path` where its executable is if the bridge can't find it, `.extraArgs` anything else to pass it |
 | `agents.codex.networkAccess` | let Codex's sandbox reach the network (default `false`) |
 | `maxParallel` | how many chats may run an agent at once (default 3) |
@@ -203,21 +207,21 @@ The keys you are most likely to touch. Every key, flag and environment variable 
 | `primerFile` | the addon/macro primer appended with the context (default `docs/WOW-ADDON-PRIMER.md`; `""` = none) |
 | `capture.processName` | the game exe without `.exe` (`WowB` for Forever); set by `setup.js` |
 | `capture.keepComposited`, `capture.windowName` | Linux: keep the compositor drawing the game window (if the probe sees black), or find the window by title |
-| `slots`, `actMax`, `presenceMax` | pool sizes; must match the constants at the top of `WoWAI.lua` if you change them |
+| `slots`, `actMax`, `presenceMax` | pool sizes; must match the constants at the top of `Runback.lua` if you change them |
 | `timeoutMs` | kill a run that takes longer than this (default 30 min) |
 
 ## Troubleshooting
 
 - **Connect says "No answer from the bridge" / light stays red** — is the bridge running? Is the game window on screen and not minimized? Exclusive fullscreen blocks capture. `bridge.log` shows `strip #N` when a message is decoded and `strip seen but rejected: ...` when one is misread.
 - **Linux: `bridge.log` keeps saying `waiting for WowB window`** — the game isn't running or its window has another name: set `capture.processName` to the exe name, or `capture.windowName` to part of the window title. On Wayland the capture can't see other windows; use an X11 session.
-- **Linux: `npm run probe` shows a black or stale picture** — the compositor is letting the game present on its own. Try `"keepComposited": true` under `capture`, then windowed mode, then `nvidia-settings -a AllowFlipping=0` on NVIDIA; `/wow-ai mode reload` works without any capture.
-- **No herb/ore pins after `/wow-ai map ore`** — `/wow-ai map` says whether the `WoWAI_Nodes` data addon is installed; pins show on zone maps only, and with `filter skill` only what your skill can gather.
+- **Linux: `npm run probe` shows a black or stale picture** — the compositor is letting the game present on its own. Try `"keepComposited": true` under `capture`, then windowed mode, then `nvidia-settings -a AllowFlipping=0` on NVIDIA; `/runback mode reload` works without any capture.
+- **No herb/ore pins after `/runback map ore`** — `/runback map` says whether the `WoWAI_Nodes` data addon is installed; pins show on zone maps only, and with `filter skill` only what your skill can gather.
 - **The reply says "X is not installed on the bridge PC"** — the bridge's banner shows where it looked for each agent. Install the CLI, or put the full path of its executable in `agents.<id>.path` in `bridge/config.json` and restart the bridge.
 - **A reply says the agent is not logged in, or asks for a login** — run the CLI once by hand on the bridge PC (`claude`, `codex`, or `grok login`) and log in; the bridge reuses that.
-- **Reply never appears but `bridge.log` says `done`** — `/wow-ai slots`; if the pool is empty, `/wow-ai reload` frees it and picks the reply up via the fallback path.
+- **Reply never appears but `bridge.log` says `done`** — `/runback slots`; if the pool is empty, `/runback reload` frees it and picks the reply up via the fallback path.
 - **"Reply slots not installed"** — `node bridge/install-slots.js`, then restart WoW.
 - **Chats vanished after a reload** — the beta client sometimes wipes addon saved data. The bridge keeps `transcripts.json` and sends your chats back automatically on the next message.
-- **`/wow-ai diag` says the sound channel is unusable** — the cheap readiness checks and heartbeat are off; everything still works through slot polls, just with coarser progress and a slower check after the first minute (about 2 minutes apart), and the light turns grey while idle instead of checking. The `slots used` line shows how many slots each reply cost. If it says a valid file reports as unplayable, WoW hasn't been restarted since the files were created.
+- **`/runback diag` says the sound channel is unusable** — the cheap readiness checks and heartbeat are off; everything still works through slot polls, just with coarser progress and a slower check after the first minute (about 2 minutes apart), and the light turns grey while idle instead of checking. The `slots used` line shows how many slots each reply cost. If it says a valid file reports as unplayable, WoW hasn't been restarted since the files were created.
 
 ## Documentation
 
@@ -238,7 +242,7 @@ npm test          # everything except the live test; CI runs it on Windows (.git
 npm run test:live # runs the bridge in a sandbox with a real agent call (add -- --agent codex or grok)
 ```
 
-Layout: `addon/WoWAI` is the addon (`WoWAI.lua` the chat and transport, `Map.lua` the map layers, navigator and nodes), `bridge/` the companion (`bridge.js` does I/O and processes, `protocol.js` is the pure part, `agents.js` knows how to launch and read each agent, `capture.ps1` / `capture_x11.py` the screen capture per platform), `docs/` the design and reference, `tests/` the checks (`map_test.js` and `map_addon_test.js` cover the map protocol and `Map.lua` in a Lua VM). After editing the addon, copy it into the game folder (`node setup.js` does that too) and `/reload`. What each test covers, and the conventions for changes, are in [CONTRIBUTING.md](CONTRIBUTING.md).
+Layout: `addon/Runback` is the addon (`Runback.lua` the chat and transport, `Map.lua` the map layers, navigator and nodes), `bridge/` the companion (`bridge.js` does I/O and processes, `protocol.js` is the pure part, `agents.js` knows how to launch and read each agent, `capture.ps1` / `capture_x11.py` the screen capture per platform), `docs/` the design and reference, `tests/` the checks (`map_test.js` and `map_addon_test.js` cover the map protocol and `Map.lua` in a Lua VM). After editing the addon, copy it into the game folder (`node setup.js` does that too) and `/reload`. What each test covers, and the conventions for changes, are in [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## Credits
 

@@ -346,7 +346,7 @@ function hermesParser() {
 // short context-only version on a resumed one (the primer is already in the
 // thread).
 function contextBlock(text) {
-  return `[Context from the WoW AI bridge, not written by the user]\n${text}\n[End of context]\n\n`;
+  return `[Context from the Runback bridge, not written by the user]\n${text}\n[End of context]\n\n`;
 }
 
 const AGENTS = {
@@ -354,7 +354,7 @@ const AGENTS = {
     name: 'Claude',
     command: 'claude',
     install: 'https://claude.com/claude-code, then run `claude` once and log in',
-    takesEffort: true, // --effort, confirmed on Pedro's PC 2026-10-09 (docs/model-picker-spec.md)
+    takesEffort: true, // --effort, confirmed on Nercari's PC 2026-10-09 (docs/model-picker-spec.md)
     takesImages: true, // a screenshot path it reads with its Read tool
     windowsPaths: () => [path.join(os.homedir(), '.local', 'bin', 'claude.exe')],
     posixPaths: () => [path.join(os.homedir(), '.local', 'bin', 'claude')],
@@ -472,7 +472,7 @@ const AGENTS = {
   hermes: {
     name: 'Hermes', command: 'hermes',
     install: 'Install Hermes Agent and run `hermes setup` once.',
-    takesEffort: true, // chat --reasoning, confirmed on Pedro's PC 2026-10-09
+    takesEffort: true, // chat --reasoning, confirmed on Nercari's PC 2026-10-09
     takesImages: true, // chat --image <image>
     windowsPaths: () => [], posixPaths: () => [],
     stream: 'text',

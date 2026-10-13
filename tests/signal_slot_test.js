@@ -54,6 +54,6 @@ test('a bad message id does not produce a null.wav path', () => {
   }
   writes.length = 0;
   signal('sig', 1, true);
-  assert.ok(writes[0].endsWith(path.join('WoWAI', 'sig', '001.wav')));
-  assert.ok(String(actFile(201, 3)).endsWith(path.join('WoWAI', 'act', '001', '03.wav')));
+  assert.ok(writes[0].endsWith(path.join('Runback', 'sig', '001.wav')));
+  assert.ok(String(actFile(201, 3)).endsWith(path.join('Runback', 'act', '001', '03.wav')));
 });

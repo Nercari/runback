@@ -15,20 +15,20 @@ const phone = require('../../bridge/forever/modules/50-phone');
 const kill = require('../../bridge/forever/modules/01-killswitch');
 
 test('safe Lua parser handles fields, escapes, comments, arrays, and truncation', () => {
-  const source = 'WoWAI_Bulk = { -- hi\n ah = { version=2, at=3, items = { ' +
+  const source = 'Runback_Bulk = { -- hi\n ah = { version=2, at=3, items = { ' +
     '{ id=1, name="a\\n\\034", ok=true, price=-1.5e2, }, }, }, }';
-  const out = lua.parseGlobal(source, 'WoWAI_Bulk');
+  const out = lua.parseGlobal(source, 'Runback_Bulk');
   assert.equal(out.ah.items[0].name, 'a\n"');
   assert.equal(out.ah.items[0].price, -150);
   assert.equal(out.ah.items[0].ok, true);
-  assert.throws(() => lua.parseGlobal('WoWAI_Bulk = { ah = {', 'WoWAI_Bulk'), e => e.name === 'LuaParseError' && e.truncated);
-  assert.equal(lua.parseGlobal('Other = {}', 'WoWAI_Bulk'), undefined);
+  assert.throws(() => lua.parseGlobal('Runback_Bulk = { ah = {', 'Runback_Bulk'), e => e.name === 'LuaParseError' && e.truncated);
+  assert.equal(lua.parseGlobal('Other = {}', 'Runback_Bulk'), undefined);
 });
 
 test('command prefix and mentor argument rewrites', () => {
   const job = { cmd: 'journal', text: 'go' };
   assert.equal(command.intercept(job), false);
-  assert.equal(job.text, '[wowai cmd=journal]\ngo');
+  assert.equal(job.text, '[runback cmd=journal]\ngo');
   const claude = mentor.rewrite('claude', ['--permission-mode', 'default', '--allowedTools', 'Bash(*)', '--resume', 'x'], '/mentor', '/repo');
   assert.deepEqual(claude.slice(0, 3), ['--resume', 'x', '--permission-mode']);
   assert.ok(claude.includes('Read') && claude.includes(`Bash(node ${path.join('/repo', 'tools', 'slice-fight.js')}:*)`) && claude.includes(`Bash(node ${path.join('/repo', 'tools', 'check-citations.js')}:*)`) && claude.includes(`Bash(node ${path.join('/repo', 'tools', 'theorycraft.js')}:*)`) && claude.includes(`Bash(node ${path.join('/repo', 'tools', 'practice-compare.js')}:*)`) && claude.includes(`Bash(node ${path.join('/repo', 'tools', 'session-recap.js')}:*)`));
@@ -73,8 +73,8 @@ test('bulk writes newer tables once and invokes logout journal handler', () => {
   } };
   const ctx = { HERE: dir, cfg,
     state: { forever: { bulk: {} } }, atomicWrite: (file, body) => fs.writeFileSync(file, body), saveState() {}, runAgentOnce(opts) { this.once = opts; } };
-  bulk.onSavedVariables('WoWAI_Bulk = { ah = { version=1, at=2, items={} }, journal = { version=1, at=2, logout=true, events={} }, }', ctx);
-  bulk.onSavedVariables('WoWAI_Bulk = { ah = { version=1, at=2, items={} }, }', ctx);
+  bulk.onSavedVariables('Runback_Bulk = { ah = { version=1, at=2, items={} }, journal = { version=1, at=2, logout=true, events={} }, }', ctx);
+  bulk.onSavedVariables('Runback_Bulk = { ah = { version=1, at=2, items={} }, }', ctx);
   assert.ok(fs.existsSync(path.join(dir, 'bulk', 'ah.json')));
   assert.equal(ctx.once.chat, 'journal');
   assert.equal(ctx.state.forever.bulk.ah.version, 1);
@@ -106,7 +106,7 @@ test('council owns the job and tolerates agent timeout', async () => {
   const ctx = { cfg: { agents: { claude: {}, codex: {} }, forever: { council: { agents: ['claude', 'codex'], timeoutMs: 1, synthesizer: 'claude' } } },
     async runAgentOnce(o) { calls.push(o); return o.agentId === 'codex' ? { status: 'error', text: 'timeout' } : { status: 'done', text: 'answer' }; },
     finish(job, status, text) { this.result = text; } };
-  const job = { cmd: 'council', text: '[wowai cmd=council]\nquestion', cwd: '.' };
+  const job = { cmd: 'council', text: '[runback cmd=council]\nquestion', cwd: '.' };
   // The claim is synchronous so the bridge can ack before the agents answer.
   assert.equal(council.intercept(job, ctx), true);
   await council.run(job, ctx);
@@ -173,7 +173,7 @@ test('Sol review: rules, junctions, journal single-flight, kill switch stops age
   // Blank lines don't make the SavedVariables search quadratic.
   const { parseGlobal } = require('../../bridge/forever/lua-table');
   const before = Date.now();
-  assert.equal(parseGlobal('\n'.repeat(200000), 'WoWAI_Bulk'), undefined);
+  assert.equal(parseGlobal('\n'.repeat(200000), 'Runback_Bulk'), undefined);
   assert.ok(Date.now() - before < 1000);
 
   // Two journal logouts in a row start one agent.
@@ -183,14 +183,14 @@ test('Sol review: rules, junctions, journal single-flight, kill switch stops age
     state: { forever: { bulk: {} } }, saveState() {}, atomicWrite: (f, t) => fs.writeFileSync(f, t),
     runAgentOnce() { runs++; return new Promise(r => { release = r; }); } };
   bulk.init(ctx);
-  bulk.onSavedVariables('WoWAI_Bulk = { ["journal"] = { ["version"] = 1, ["at"] = 1, ["logout"] = true } }', ctx);
-  bulk.onSavedVariables('WoWAI_Bulk = { ["journal"] = { ["version"] = 2, ["at"] = 2, ["logout"] = true } }', ctx);
+  bulk.onSavedVariables('Runback_Bulk = { ["journal"] = { ["version"] = 1, ["at"] = 1, ["logout"] = true } }', ctx);
+  bulk.onSavedVariables('Runback_Bulk = { ["journal"] = { ["version"] = 2, ["at"] = 2, ["logout"] = true } }', ctx);
   assert.equal(runs, 1);
   release({ status: 'done' });
   await new Promise(r => setImmediate(r));
   fs.rmSync(dir, { recursive: true, force: true });
 
-  // /wowai off stops running agents.
+  // /runback off stops running agents.
   const killDir = fs.mkdtempSync(path.join(os.tmpdir(), 'p2-kill2-'));
   let stopped = 0;
   const kctx = { HERE: killDir, capture: { stop() {}, start() {} }, stopRunning() { stopped++; }, finish() {} };

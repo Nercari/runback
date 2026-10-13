@@ -5,7 +5,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { lua, lauxlib, lualib, to_luastring, to_jsstring } = require('fengari');
 
-const addon = path.join(__dirname, '..', '..', 'addon', 'WoWAI');
+const addon = path.join(__dirname, '..', '..', 'addon', 'Runback');
 const read = file => fs.readFileSync(path.join(addon, file), 'utf8');
 function vm() {
   const L = lauxlib.luaL_newstate(); lualib.luaL_openlibs(L);
@@ -25,41 +25,41 @@ function vm() {
     function GetNumQuestChoices() return #QUEST end
     function GetQuestItemLink(kind, i) return "|cff1eff00|Hitem:" .. i .. "|h[" .. QUEST[i] .. "]|h|r" end
     QuestFrame = CreateFrame("Frame", "QuestFrame", UIParent)`);
-  for (const file of ['Codec.lua', 'Inbox.lua', 'WoWAI.lua', 'Forever.lua', 'Forever_Lockout.lua', 'Forever_Quest.lua']) run(read(file));
-  run('STUB.FireEvent("ADDON_LOADED", "WoWAI"); STUB.FireEvent("PLAYER_LOGIN"); STUB.RunTimers()');
+  for (const file of ['Codec.lua', 'Inbox.lua', 'Runback.lua', 'Forever.lua', 'Forever_Lockout.lua', 'Forever_Quest.lua']) run(read(file));
+  run('STUB.FireEvent("ADDON_LOADED", "Runback"); STUB.FireEvent("PLAYER_LOGIN"); STUB.RunTimers()');
   return { run, get };
 }
 
 test('quest reward button: shows with a choice, fills the box with the item names and sends nothing', () => {
   const v = vm();
   v.run('STUB.FireEvent("QUEST_COMPLETE")');
-  assert.equal(v.get('WoWAIQuestAsk.shown'), 'true');
-  v.run('WoWAIQuestAsk.scripts.OnClick()');
-  assert.equal(v.get('WoWAIFrame.shown'), 'true');
+  assert.equal(v.get('RunbackQuestAsk.shown'), 'true');
+  v.run('RunbackQuestAsk.scripts.OnClick()');
+  assert.equal(v.get('RunbackFrame.shown'), 'true');
   const texts = v.get('table.concat(STUB.texts, "|")');
   assert.ok(texts.includes('Executor Staff, Forsaken Dagger'));
-  assert.equal(v.get('WoWAIDB.chats[1].pendingId'), 'nil', 'the player still has to press Enter');
+  assert.equal(v.get('RunbackDB.chats[1].pendingId'), 'nil', 'the player still has to press Enter');
   v.run('STUB.FireEvent("QUEST_FINISHED")');
-  assert.equal(v.get('WoWAIQuestAsk.shown'), 'false');
+  assert.equal(v.get('RunbackQuestAsk.shown'), 'false');
 });
 
 test('quest reward button: hidden with one reward, in combat, and while the AI is off', () => {
   let v = vm();
   v.run('QUEST = { "Only Item" }; STUB.FireEvent("QUEST_COMPLETE")');
-  assert.equal(v.get('WoWAIQuestAsk'), 'nil');
+  assert.equal(v.get('RunbackQuestAsk'), 'nil');
 
   v = vm();
   v.run('STUB.combat = true; STUB.FireEvent("PLAYER_REGEN_DISABLED"); STUB.FireEvent("QUEST_COMPLETE")');
-  assert.equal(v.get('WoWAIQuestAsk'), 'nil');
+  assert.equal(v.get('RunbackQuestAsk'), 'nil');
 
   v = vm();
-  v.run('WoWAIForeverDB = WoWAIForeverDB or {}; WoWAIForeverDB.off = true; STUB.FireEvent("QUEST_COMPLETE")');
-  assert.equal(v.get('WoWAIQuestAsk'), 'nil');
+  v.run('RunbackForeverDB = RunbackForeverDB or {}; RunbackForeverDB.off = true; STUB.FireEvent("QUEST_COMPLETE")');
+  assert.equal(v.get('RunbackQuestAsk'), 'nil');
 });
 
 test('quest reward button: a click does nothing once a fight has started', () => {
   const v = vm();
   v.run('STUB.FireEvent("QUEST_COMPLETE")');
-  v.run('STUB.combat = true; STUB.FireEvent("PLAYER_REGEN_DISABLED"); WoWAIQuestAsk.scripts.OnClick()');
+  v.run('STUB.combat = true; STUB.FireEvent("PLAYER_REGEN_DISABLED"); RunbackQuestAsk.scripts.OnClick()');
   assert.ok(!v.get('table.concat(STUB.texts, "|")').includes('Executor Staff, Forsaken Dagger'));
 });

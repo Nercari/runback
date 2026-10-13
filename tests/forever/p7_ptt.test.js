@@ -8,7 +8,7 @@ const path = require('path');
 const ptt = require('../../bridge/forever/modules/70-ptt');
 
 function fixture(t) {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'wowai-ptt-'));
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'runback-ptt-'));
   const ctx = {
     HERE: root, REPO: root, state: {}, submitted: [], logs: [],
     lastStripSeenAt: () => Date.now(),

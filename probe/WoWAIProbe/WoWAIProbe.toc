@@ -1,5 +1,0 @@
-## Interface: 16001
-## Title: WoW AI Probe
-## Notes: User-operated capability probe for WoW AI
-## SavedVariables: WoWAIProbeDB
-WoWAIProbe.lua

@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 'use strict';
-// One double-click to update, install and start WoW AI (the "WoW AI.cmd" file
+// One double-click to update, install and start Runback (the "Runback.cmd" file
 // in the repo root, or the desktop shortcut it makes on first run).
 //
 //   node tools/launch.js [--no-update] [--no-shortcut]
@@ -22,7 +22,7 @@ const { spawnSync, spawn } = require('child_process');
 
 const ROOT = path.join(__dirname, '..');
 const BRIDGE = path.join(ROOT, 'bridge');
-const ADDON_SRC = path.join(ROOT, 'addon', 'WoWAI');
+const ADDON_SRC = path.join(ROOT, 'addon', 'Runback');
 const CONFIG = path.join(BRIDGE, 'config.json');
 const SHORTCUT_MARK = path.join(BRIDGE, '.shortcut-made');
 const WIN = process.platform === 'win32';
@@ -118,7 +118,7 @@ function update(root) {
 }
 
 const count = fs_ => `${fs_.length} file${fs_.length === 1 ? '' : 's'}`;
-const pendingFile = (root, git) => path.resolve(root, git('rev-parse', '--git-path', 'wowai-unfinished').out);
+const pendingFile = (root, git) => path.resolve(root, git('rev-parse', '--git-path', 'runback-unfinished').out);
 
 // Finishes an update that left files behind (see the end of update()). A file
 // is replaced only while it still holds exactly what the previous checkout
@@ -199,8 +199,8 @@ function stopBridge(bridgeDir = BRIDGE) {
 }
 
 function startBridge(bridgeDir = BRIDGE) {
-  // --on: a launch means "AI on", even if it was switched off with wowai-kill.
-  spawn('cmd.exe', ['/c', 'start', '"WoW AI bridge"', '/min', 'cmd', '/k', 'node', `"${path.join(bridgeDir, 'supervisor.js')}"`, '--on'],
+  // --on: a launch means "AI on", even if it was switched off with runback-kill.
+  spawn('cmd.exe', ['/c', 'start', '"Runback bridge"', '/min', 'cmd', '/k', 'node', `"${path.join(bridgeDir, 'supervisor.js')}"`, '--on'],
     { cwd: bridgeDir, detached: true, stdio: 'ignore', windowsVerbatimArguments: true }).unref();
 }
 
@@ -219,20 +219,20 @@ function openBattleNet() {
   return true;
 }
 
-// A "WoW AI" icon on the desktop pointing at WoW AI.cmd. Made once: if the
+// A "Runback" icon on the desktop pointing at Runback.cmd. Made once: if the
 // player deletes it, it stays deleted (bridge/.shortcut-made remembers).
 // desktop and mark are for the tests.
 function makeShortcut({ desktop = '', mark = SHORTCUT_MARK } = {}) {
   if (fs.existsSync(mark)) return null;
-  const target = path.join(ROOT, 'WoW AI.cmd');
+  const target = path.join(ROOT, 'Runback.cmd');
   const q = s => `'${s.replace(/'/g, "''")}'`;
   const r = powershell([
     desktop ? `$d = ${q(desktop)}` : `$d = [Environment]::GetFolderPath('Desktop')`,
-    `$l = (New-Object -ComObject WScript.Shell).CreateShortcut((Join-Path $d 'WoW AI.lnk'))`,
+    `$l = (New-Object -ComObject WScript.Shell).CreateShortcut((Join-Path $d 'Runback.lnk'))`,
     `$l.TargetPath = ${q(target)}`,
     `$l.WorkingDirectory = ${q(ROOT)}`,
     `$l.WindowStyle = 7`,
-    `$l.Description = 'Update and start WoW AI'`,
+    `$l.Description = 'Update and start Runback'`,
     `$l.Save()`,
     `Write-Output $d`,
   ].join('; '));
@@ -244,7 +244,7 @@ function makeShortcut({ desktop = '', mark = SHORTCUT_MARK } = {}) {
 // --- main ------------------------------------------------------------------
 
 // Success: the window closes by itself. Failure: it waits for Enter so the
-// message can be read (exit 0 then, so WoW AI.cmd doesn't pause a second time).
+// message can be read (exit 0 then, so Runback.cmd doesn't pause a second time).
 function closeSoon(code) {
   if (!process.stdin.isTTY) process.exit(code);
   if (code !== 0) {
@@ -257,7 +257,7 @@ function closeSoon(code) {
 }
 
 function main(argv) {
-  console.log('WoW AI\n');
+  console.log('Runback\n');
   const firstInstall = !fs.existsSync(CONFIG);
 
   const up = argv.includes('--no-update') ? { changed: false, files: [], note: 'skipped (--no-update)' } : update(ROOT);
@@ -265,7 +265,7 @@ function main(argv) {
 
   let addonChanged = true;
   if (!firstInstall) {
-    try { addonChanged = addonDiffers(ADDON_SRC, path.join(JSON.parse(fs.readFileSync(CONFIG, 'utf8')).addonDir, 'WoWAI')); } catch {}
+    try { addonChanged = addonDiffers(ADDON_SRC, path.join(JSON.parse(fs.readFileSync(CONFIG, 'utf8')).addonDir, 'Runback')); } catch {}
   }
 
   console.log('install: checking the addon in the game folder...');
@@ -293,13 +293,13 @@ function main(argv) {
     newFiles,
   });
 
-  if (p.bridge === 'restart') { stopBridge(); startBridge(); console.log('bridge : restarted with the new version (minimized window "WoW AI bridge")'); }
-  else if (p.bridge === 'start') { startBridge(); console.log('bridge : started (minimized window "WoW AI bridge"; close it to stop the AI)'); }
+  if (p.bridge === 'restart') { stopBridge(); startBridge(); console.log('bridge : restarted with the new version (minimized window "Runback bridge")'); }
+  else if (p.bridge === 'start') { startBridge(); console.log('bridge : started (minimized window "Runback bridge"; close it to stop the AI)'); }
   else console.log('bridge : already running');
 
   if (!argv.includes('--no-shortcut')) {
     const desk = makeShortcut();
-    if (desk) console.log(`shortcut: added "WoW AI" to your desktop; next time just double-click it`);
+    if (desk) console.log(`shortcut: added "Runback" to your desktop; next time just double-click it`);
   }
 
   if (p.game === 'open' && openBattleNet()) console.log('game   : opened the Battle.net app; press Play there.');

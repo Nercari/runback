@@ -42,7 +42,7 @@ test('runAgentOnce spawns and parses an agent without bridge chat state', async 
 
 test('reload outbox carries cmd', () => {
   const P = require('../../bridge/protocol');
-  const src = 'WoWAIDB = {\n["outbox"] = {\n["id"] = 5,\n["text"] = "6869",\n["cmd"] = "review",\n},\n}';
+  const src = 'RunbackDB = {\n["outbox"] = {\n["id"] = 5,\n["text"] = "6869",\n["cmd"] = "review",\n},\n}';
   assert.equal(P.parseOutbox(src).cmd, 'review');
   assert.equal(P.parseOutbox(src.replace('review', 'BAD CMD')).cmd, undefined);
 });

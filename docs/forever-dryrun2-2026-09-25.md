@@ -21,8 +21,8 @@ Fixtures are synthetic (Brakka-Testrealm, Warrior 18, Westfall): `bulk/gear.json
 Prompt:
 
 ```
-[wowai cmd=build]
-[Context from the WoW AI bridge, not written by the user]
+[runback cmd=build]
+[Context from the Runback bridge, not written by the user]
 character=Brakka-Testrealm class=Warrior level=18 zone=Westfall
 build=1.60.1
 logging=true
@@ -55,8 +55,8 @@ Spend 5 in Deflection and 4 in Improved Tactical Mastery now. Take its final poi
 Prompt:
 
 ```
-[wowai cmd=level]
-[Context from the WoW AI bridge, not written by the user]
+[runback cmd=level]
+[Context from the Runback bridge, not written by the user]
 character=Brakka-Testrealm class=Warrior level=18 zone=Westfall
 build=1.60.1
 logging=true
@@ -91,8 +91,8 @@ Finish Westfall, level around Lakeshire, then use Deadmines or early Wetlands if
 Prompt:
 
 ```
-[wowai cmd=gear]
-[Context from the WoW AI bridge, not written by the user]
+[runback cmd=gear]
+[Context from the Runback bridge, not written by the user]
 character=Brakka-Testrealm class=Warrior level=18 zone=Westfall
 build=1.60.1
 logging=true
@@ -124,7 +124,7 @@ Run Deadmines for Smite’s hammer first; watch for VanCleef’s chest and Strip
 Prompt:
 
 ```
-[Context from the WoW AI bridge, not written by the user]
+[Context from the Runback bridge, not written by the user]
 character=Brakka-Testrealm class=Warrior level=18 zone=Westfall
 build=1.60.1
 logging=true
@@ -156,7 +156,7 @@ Prompt:
 
 ```
 [translate]
-[Context from the WoW AI bridge, not written by the user]
+[Context from the Runback bridge, not written by the user]
 character=Brakka-Testrealm class=Warrior level=18 zone=Westfall
 build=1.60.1
 logging=true
@@ -222,7 +222,7 @@ Arms is the better-supported pick; plan for Sweeping Strikes at 31.
 Prompt:
 
 ```
-[wowai cmd=journal]
+[runback cmd=journal]
 Write today's session story per AGENTS.md (Journal) from bulk/journal.json into <mentor>\journal\2026-09-25.md. Screenshots folder: C:/WoW/_classic_beta_/Screenshots.
 ```
 
@@ -240,7 +240,7 @@ Today’s journal entry is saved.
 Prompt:
 
 ```
-[Context from the WoW AI bridge, not written by the user]
+[Context from the Runback bridge, not written by the user]
 character=Brakka-Testrealm class=Warrior level=18 zone=Westfall
 build=1.60.1
 logging=true
@@ -264,7 +264,7 @@ Shield Bash: 12-second cooldown in the cited Forever beta build.
 Prompt:
 
 ```
-[Context from the WoW AI bridge, not written by the user]
+[Context from the Runback bridge, not written by the user]
 character=Brakka-Testrealm class=Warrior level=18 zone=Westfall
 build=1.60.1
 logging=true

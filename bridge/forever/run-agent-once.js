@@ -15,7 +15,7 @@ function runAgentOnce({ agentId, cwd, prompt, timeoutMs }, deps) {
   // Grok reads its prompt from a file.
   let promptFile = '';
   if (input.promptFile !== undefined) {
-    promptFile = path.join(os.tmpdir(), `wowai-once-${process.pid}-${Date.now()}-${Math.random().toString(36).slice(2)}.txt`);
+    promptFile = path.join(os.tmpdir(), `runback-once-${process.pid}-${Date.now()}-${Math.random().toString(36).slice(2)}.txt`);
     fs.writeFileSync(promptFile, input.promptFile);
   }
   let args = [...cmd.args, ...agent.args({

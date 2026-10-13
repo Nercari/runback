@@ -1,0 +1,36 @@
+## Interface: 16001
+## Title: Runback
+## Notes: Talk to Claude Code, Codex or Grok from inside the game, one session per chat. Needs the companion bridge (see README).
+## Author: chelinho139, Nercari
+## Version: 0.4.0
+## SavedVariables: RunbackDB, RunbackMapDB, RunbackGuideDB, RunbackForeverDB, Runback_Bulk, WoWAIDB, WoWAIMapDB, WoWAIGuideDB, WoWAIForeverDB, WoWAI_Bulk
+## OptionalDeps: WoWAI_Nodes
+
+Codec.lua
+Inbox.lua
+Runback.lua
+Map.lua
+Guide.lua
+Forever.lua
+Forever_Lockout.lua
+Forever_Calm.lua
+Forever_Context.lua
+Forever_Switch.lua
+Forever_Commands.lua
+Forever_Speech.lua
+Forever_Macro.lua
+Forever_Bulk.lua
+Forever_DeathShot.lua
+Forever_Translate.lua
+Forever_Jobs.lua
+Forever_Banner.lua
+Forever_Builder.lua
+Forever_Skin.lua
+Forever_Keys.lua
+Forever_Nudge.lua
+Forever_Quest.lua
+Forever_Recap.lua
+Forever_CombatLog.lua
+Forever_Known.lua
+Forever_Bags.lua
+Forever_Guide.lua
