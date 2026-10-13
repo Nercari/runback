@@ -47,7 +47,7 @@ node setup.js --project "C:\path\to\your\project"
 Then:
 
 1. Fully quit and restart WoW. The client only discovers new addon files at launch. On the character-select AddOns screen, enable **Runback**. Leave the Runback slot entries enabled.
-2. If you used WoW AI before, disable the old `WoWAI` folder in `Interface\AddOns` so the two addons do not run side by side. `setup.js` does not move or remove that folder.
+2. If you used WoW AI before, `node setup.js` moves the old `WoWAI` folder out of `Interface\AddOns` into `Runback-backup-<date>` next to the game client, so the two addons do not run side by side.
 3. In this repo, start the bridge with `npm start`. On Windows, `bridge\start-window.cmd` opens its own window. Leave it running while you play. In game, `/runback` opens the window.
 4. On Linux, use the same steps. Once, while the colored strip is in the top-left of the game window, run `npm run probe`. It saves what the capture sees to `bridge/probe.png` and says whether it decoded the strip.
 5. `npm run doctor` any time. It only reads. It prints PASS or FAIL for Node.js 22.2 or newer, for a logged-in `claude`, `codex`, or `grok`, and for X11 (`DISPLAY` set). Windows passes the X11 check. A FAIL line includes a one-line fix, and the process exits with an error if any check fails.
@@ -67,7 +67,7 @@ Step-by-step with troubleshooting: [docs/INSTALL-WINDOWS.md](docs/INSTALL-WINDOW
 
 ## Migrating from WoW AI
 
-Close the game. Copy `WTF/Account/<ACCOUNT>/SavedVariables/WoWAI.lua` to `Runback.lua` in the same folder. Start the game.
+Close the game and run `node setup.js`. It copies each account's `WTF/Account/<ACCOUNT>/SavedVariables/WoWAI.lua` to `Runback.lua` in the same folder when `Runback.lua` is not there yet, and leaves `WoWAI.lua` in place. Start the game.
 
 Leave the names inside that file as they are. On load, when a new saved table is missing, the addon copies it from the legacy table (`WoWAIDB` into `RunbackDB`, and the same for the map, guide, forever and bulk tables).
 
