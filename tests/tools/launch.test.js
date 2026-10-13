@@ -386,11 +386,11 @@ test("plan: the game advice matches what changed", () => {
   for (const k of ["open", "relaunch", "reload", "ready"]) assert.ok(GAME_TEXT[k]);
 });
 
-test("WoW AI.cmd is one line that exits before git pull can rewrite it", () => {
+test("Runback.cmd is one line that exits before git pull can rewrite it", () => {
   // cmd.exe reads a batch file as it runs; if the update changed the rest of
   // the file, it would run whatever now sits at that offset. One line that ends
   // in exit /b is fully parsed before node starts.
-  const s = fs.readFileSync(path.resolve(__dirname, "../../WoW AI.cmd"), "utf8");
+  const s = fs.readFileSync(path.resolve(__dirname, "../../Runback.cmd"), "utf8");
   assert.equal(s.trim().split("\n").length, 1);
   assert.match(s, /^@node "%~dp0tools\\launch\.js" %\* \|\| pause & exit \/b\s*$/);
 });
@@ -456,15 +456,15 @@ test("Windows: gameRunning sees a running process by name", WIN, () => {
   assert.equal(launch.gameRunning("NoSuchGameHere"), false);
 });
 
-test("Windows: the desktop shortcut points at WoW AI.cmd and is made only once", WIN, (t) => {
+test("Windows: the desktop shortcut points at Runback.cmd and is made only once", WIN, (t) => {
   const desktop = path.join(tmp(t), "Desk top");
   fs.mkdirSync(desktop);
   const mark = path.join(desktop, "mark");
   assert.equal(launch.makeShortcut({ desktop, mark }), desktop);
-  const lnk = path.join(desktop, "WoW AI.lnk");
+  const lnk = path.join(desktop, "Runback.lnk");
   const r = spawnSync("powershell.exe", ["-NoProfile", "-Command",
     `(New-Object -ComObject WScript.Shell).CreateShortcut('${lnk.replace(/'/g, "''")}').TargetPath`], { encoding: "utf8" });
-  assert.equal(r.stdout.trim().toLowerCase(), path.resolve(__dirname, "../../WoW AI.cmd").toLowerCase());
+  assert.equal(r.stdout.trim().toLowerCase(), path.resolve(__dirname, "../../Runback.cmd").toLowerCase());
   fs.rmSync(lnk);
   assert.equal(launch.makeShortcut({ desktop, mark }), null, "a deleted shortcut stays deleted");
   assert.equal(fs.existsSync(lnk), false);

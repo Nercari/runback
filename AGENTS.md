@@ -1,6 +1,6 @@
 # Runback (WoW: Forever mentor)
 
-Nercari's fork of `chelinho139/wow-ai` (MIT): chat with local coding agents from inside World of Warcraft: Forever, plus an after-combat mentor. Goals and backlog: `docs/spec.md`. How it works: `docs/ARCHITECTURE.md`, `docs/FOREVER.md`. Conventions and the test table: `CONTRIBUTING.md`.
+Nercari's Runback (`https://github.com/Nercari/runback`, MIT), forked from chelinho139: chat with local coding agents from inside World of Warcraft: Forever, plus an after-combat mentor. Goals and backlog: `docs/spec.md`. How it works: `docs/ARCHITECTURE.md`, `docs/FOREVER.md`. Conventions and the test table: `CONTRIBUTING.md`.
 
 `mentor/AGENTS.md` and `docs/AGENTS.md` are product files (the in-game coach's prompt and the agent-CLI guide), not instructions for working on this repo.
 

@@ -21,7 +21,7 @@ Open a new terminal after installing Node or Git so the `PATH` change is picked 
 
 ```powershell
 cd C:\Users\<you>\Documents          # or wherever you keep projects
-git clone https://github.com/chelinho139/runback
+git clone https://github.com/Nercari/runback
 cd runback
 npm install
 ```
@@ -140,7 +140,7 @@ Then `/reload` in game and restart the bridge. If `setup.js` reports that it cre
 The project was called wow-claude until it learned to drive Codex and Grok; the addon was `WoWClaude` and the command `/wow-claude`. To move an existing install:
 
 ```powershell
-cd C:\Users\<you>\Documents\wow-claude   # or clone https://github.com/chelinho139/runback next to it
+cd C:\Users\<you>\Documents\wow-claude   # or clone https://github.com/Nercari/runback next to it
 git pull
 node setup.js
 ```

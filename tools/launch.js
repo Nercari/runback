@@ -219,16 +219,16 @@ function openBattleNet() {
   return true;
 }
 
-// A "WoW AI" icon on the desktop pointing at WoW AI.cmd. Made once: if the
+// A "Runback" icon on the desktop pointing at Runback.cmd. Made once: if the
 // player deletes it, it stays deleted (bridge/.shortcut-made remembers).
 // desktop and mark are for the tests.
 function makeShortcut({ desktop = '', mark = SHORTCUT_MARK } = {}) {
   if (fs.existsSync(mark)) return null;
-  const target = path.join(ROOT, 'WoW AI.cmd');
+  const target = path.join(ROOT, 'Runback.cmd');
   const q = s => `'${s.replace(/'/g, "''")}'`;
   const r = powershell([
     desktop ? `$d = ${q(desktop)}` : `$d = [Environment]::GetFolderPath('Desktop')`,
-    `$l = (New-Object -ComObject WScript.Shell).CreateShortcut((Join-Path $d 'WoW AI.lnk'))`,
+    `$l = (New-Object -ComObject WScript.Shell).CreateShortcut((Join-Path $d 'Runback.lnk'))`,
     `$l.TargetPath = ${q(target)}`,
     `$l.WorkingDirectory = ${q(ROOT)}`,
     `$l.WindowStyle = 7`,
@@ -299,7 +299,7 @@ function main(argv) {
 
   if (!argv.includes('--no-shortcut')) {
     const desk = makeShortcut();
-    if (desk) console.log(`shortcut: added "WoW AI" to your desktop; next time just double-click it`);
+    if (desk) console.log(`shortcut: added "Runback" to your desktop; next time just double-click it`);
   }
 
   if (p.game === 'open' && openBattleNet()) console.log('game   : opened the Battle.net app; press Play there.');

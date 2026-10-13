@@ -14,7 +14,7 @@ Baseline (2026-10-03, `forever` at cbebd5a): `npm test` 187/187 pass, codec roun
 
 4. **Current game and policy.** `tools/policy-watch.js` alerts on a Blizzard policy change; read the diff and say whether the tool is affected. A new Forever client build gets its TOC and API checks.
 
-5. **Upstream.** Compare with `chelinho139/runback` main; bring in useful upstream fixes by PR, keeping `forever` behaviour.
+5. **Upstream.** Compare with `https://github.com/Nercari/runback` main; bring in useful upstream fixes by PR, keeping `forever` behaviour.
 
 6. **Measured improvement.** Each improvement PR names one number (a test count, a gate passed, a failure fixed) before and after.
 

@@ -20,7 +20,7 @@ The agent can mark your world map. What it draws are **layers**: a named list of
 
 - **World map:** pins for every visible layer on the map you are looking at, projected onto continent maps too. Hover for the label; click a pin to navigate to it.
 - **Navigator:** a small frame with an arrow and the distance in yards to the current stop of the route. It starts on a route as soon as one arrives (unless you are already following another one), advances when you get within 12 yards, and wraps around on loops. Drag it to move it; right-click skips a stop. It shows "no position here" in instances, where the game gives addons no coordinates.
-- **Herb and ore nodes:** with a `Runback_Nodes` data addon installed (see below), every herb and ore spawn point of the zone on the world map, filtered to what your skill can gather.
+- **Herb and ore nodes:** with a `WoWAI_Nodes` data addon installed (see below), every herb and ore spawn point of the zone on the world map, filtered to what your skill can gather.
 
 | Command | Does |
 |---|---|
@@ -36,6 +36,6 @@ The agent can mark your world map. What it draws are **layers**: a named list of
 
 The bridge ships no game data: the agent has to know where things are. With just the system prompt it can place marks it knows or that you tell it about. For real routes, point the chat at a folder (`/runback cd`) that holds game data and tools to query it, and describe them in that folder's `CLAUDE.md` (or the equivalent for your agent): quests, NPCs, objects and gathering spawns with their `uiMapID` and coordinates, and a script that appends `set` commands to `$WOW_AI_MAP_FILE`. Such datasets exist (QuestieDB, AtlasLootClassic, the vmangos world database) but their licences don't allow redistributing them here, so that folder stays yours.
 
-The optional `Runback_Nodes` addon is the same idea for the in-game node pins: a separate addon that sets the global `RunbackNodes = { kinds = { { name, "mining"|"herbalism", requiredSkill }, ... }, maps = { [uiMapID] = { [kindIndex] = "xxxyyyxxxyyy..." } } }`, where each point is x and y in tenths of a percent, three digits each. `Map.lua` reads it if it is there and says so in `/runback map` if it is not.
+The optional `WoWAI_Nodes` addon is the same idea for the in-game node pins: a separate addon that sets the global `WoWAINodes = { kinds = { { name, "mining"|"herbalism", requiredSkill }, ... }, maps = { [uiMapID] = { [kindIndex] = "xxxyyyxxxyyy..." } } }`, where each point is x and y in tenths of a percent, three digits each. `Map.lua` reads it if it is there and says so in `/runback map` if it is not.
 
 Step-by-step leveling guides use the same map coordinates (`m`, `x`, `y`); their file format is in `docs/GUIDE.md`. The guide panel's current step shows as one more layer, `guide`, which the addon keeps itself: a sync from the bridge never replaces it, and while it is set it takes the name `guide` over a bridge layer of that name. Its points can carry a radius that counts as arrived (see "On the map" in `docs/GUIDE.md`); during combat its pins and its navigator hide.

@@ -57,8 +57,8 @@ See [docs/FOREVER.md](docs/FOREVER.md) for the classic UI skin and hotkeys.
 Step-by-step for a fresh machine, with troubleshooting: [docs/INSTALL-WINDOWS.md](docs/INSTALL-WINDOWS.md). The short version:
 
 ```powershell
-git clone https://github.com/Nercari/wow-ai
-cd wow-ai
+git clone https://github.com/Nercari/runback
+cd runback
 node setup.js --project "C:\path\to\the\project\you\want\to\work\on"
 ```
 
@@ -73,15 +73,15 @@ bridge\start-window.cmd # double-click version: opens its own window
 
 It restarts itself if it ever crashes. Ctrl+C (or closing the window) stops it. The banner lists every agent with where its executable was found, or what to install.
 
-**One double-click instead (Windows).** `WoW AI.cmd` in the repo folder does all of the above every time: it updates the checkout (a fast-forward `git pull`, skipped when the folder has local edits or there's no network; a clean folder left on another branch goes back to `forever` first), runs `setup.js`, starts the bridge in a minimized window (or restarts it when the update changed it), and says whether the game needs a `/reload`, a relaunch, or nothing. If the game isn't running it opens the Battle.net app, where you press Play; it never starts or touches the game itself. The first run puts a **WoW AI** icon on your desktop that does the same (the in-game addon is named Runback).
+**One double-click instead (Windows).** `Runback.cmd` in the repo folder does all of the above every time: it updates the checkout (a fast-forward `git pull`, skipped when the folder has local edits or there's no network; a clean folder left on another branch goes back to `forever` first), runs `setup.js`, starts the bridge in a minimized window (or restarts it when the update changed it), and says whether the game needs a `/reload`, a relaunch, or nothing. If the game isn't running it opens the Battle.net app, where you press Play; it never starts or touches the game itself. The first run puts a **Runback** icon on your desktop that does the same.
 
 ### Linux (Wine)
 
 Details and capture troubleshooting: [docs/INSTALL-LINUX.md](docs/INSTALL-LINUX.md). The short version:
 
 ```bash
-git clone https://github.com/Nercari/wow-ai
-cd wow-ai
+git clone https://github.com/Nercari/runback
+cd runback
 node setup.js --project ~/path/to/the/project   # finds the client in $WINEPREFIX, ~/.wine...; or pass --wow "<client folder>"
 npm start
 ```
@@ -100,7 +100,7 @@ The doctor prints `PASS` or `FAIL` for Node.js 22.2 or newer, for an agent CLI t
 
 If `WAYLAND_DISPLAY` is set, or `XDG_SESSION_TYPE` is `wayland`, the doctor prints a warning. Screen capture needs X11 or XWayland.
 
-Forked from [chelinho139/wow-ai](https://github.com/chelinho139/wow-ai).
+[Nercari/runback](https://github.com/Nercari/runback). Forked from chelinho139.
 
 ### Upgrading from wow-claude or WoW AI
 
@@ -108,22 +108,22 @@ Forked from [chelinho139/wow-ai](https://github.com/chelinho139/wow-ai).
 
 **One-time manual copy (game closed):** if you still have settings only in `WTF/Account/<ACCOUNT>/SavedVariables/WoWAI.lua`, copy that file to `Runback.lua` in the same folder and replace `WoWAIDB` with `RunbackDB` in the copy. On first load the addon also copies a legacy `WoWAIDB` table into `RunbackDB` when `RunbackDB` is missing.
 
-### `wow-ai`: start the bridge from the project folder
+### `runback`: start the bridge from the project folder
 
 Like the agent CLIs themselves, the bridge works in the folder you start it from. Install the command once:
 
 ```powershell
-npm link          # in the wow-ai folder; makes `wow-ai` available everywhere
+npm link          # in the runback folder; makes `runback` available everywhere
 ```
 
 Then, from any project:
 
 ```powershell
 cd C:\path\to\realms
-wow-ai
+runback
 ```
 
-Every chat that hasn't picked its own folder now works in `realms`, and the status light's tooltip shows it (hover the light at the top left of the window). `wow-ai --project <dir>` names the folder explicitly; `npm start` inside this repo falls back to `defaultCwd` in the config, and to the mentor workspace (`wow-mentor`, next to this repo) when that is empty. A broad start or configured folder (Documents, Desktop, Downloads, your home folder, a drive root) is skipped in favour of the mentor workspace, because the agent would read unrelated files there. Only one bridge can run at a time (two would fight over the screen and the slot files), so this sets the default folder rather than giving you one bridge per project.
+Every chat that hasn't picked its own folder now works in `realms`, and the status light's tooltip shows it (hover the light at the top left of the window). `runback --project <dir>` names the folder explicitly; `npm start` inside this repo falls back to `defaultCwd` in the config, and to the mentor workspace (`wow-mentor`, next to this repo) when that is empty. A broad start or configured folder (Documents, Desktop, Downloads, your home folder, a drive root) is skipped in favour of the mentor workspace, because the agent would read unrelated files there. Only one bridge can run at a time (two would fight over the screen and the slot files), so this sets the default folder rather than giving you one bridge per project.
 
 ## Use
 
@@ -174,7 +174,7 @@ The agent can draw on your world map. Ask *"route me through copper and tin arou
 
 - **Layers on the world map:** numbered pins joined by lines for routes, and pins for quest givers, objectives, turn-ins, trainers, dungeon entrances or any mark. They show on the zone map and on the continent map; hover a pin for its label, click it to navigate there.
 - **A navigator:** a small frame with an arrow and the distance in yards to the current stop. It starts as soon as a route on your continent arrives (unless you are already following one), advances when you get within 12 yards, and loops on farming circuits. Drag it to move it; right-click skips a stop.
-- **Herb and ore spawns:** with an optional `Runback_Nodes` data addon installed, every gathering spawn point of the zone you are looking at, filtered to what your skill can gather.
+- **Herb and ore spawns:** with an optional `WoWAI_Nodes` data addon installed, every gathering spawn point of the zone you are looking at, filtered to what your skill can gather.
 
 The system prompt tells every agent how to hand marks to the bridge: append commands to the file named in `WOW_AI_MAP_FILE` (set for every run), or end the reply with a small ```` ```wowmap ```` block. The bridge validates the marks, keeps them in `state.json` and ships them to the game, so they survive a UI reload and the beta's saved-data wipes. Where the agent gets its coordinates from is up to the folder the chat works in: [docs/MAP.md](docs/MAP.md) describes the command format and how to feed it game data.
 
@@ -215,7 +215,7 @@ The keys you are most likely to touch. Every key, flag and environment variable 
 - **Connect says "No answer from the bridge" / light stays red** — is the bridge running? Is the game window on screen and not minimized? Exclusive fullscreen blocks capture. `bridge.log` shows `strip #N` when a message is decoded and `strip seen but rejected: ...` when one is misread.
 - **Linux: `bridge.log` keeps saying `waiting for WowB window`** — the game isn't running or its window has another name: set `capture.processName` to the exe name, or `capture.windowName` to part of the window title. On Wayland the capture can't see other windows; use an X11 session.
 - **Linux: `npm run probe` shows a black or stale picture** — the compositor is letting the game present on its own. Try `"keepComposited": true` under `capture`, then windowed mode, then `nvidia-settings -a AllowFlipping=0` on NVIDIA; `/runback mode reload` works without any capture.
-- **No herb/ore pins after `/runback map ore`** — `/runback map` says whether the `Runback_Nodes` data addon is installed; pins show on zone maps only, and with `filter skill` only what your skill can gather.
+- **No herb/ore pins after `/runback map ore`** — `/runback map` says whether the `WoWAI_Nodes` data addon is installed; pins show on zone maps only, and with `filter skill` only what your skill can gather.
 - **The reply says "X is not installed on the bridge PC"** — the bridge's banner shows where it looked for each agent. Install the CLI, or put the full path of its executable in `agents.<id>.path` in `bridge/config.json` and restart the bridge.
 - **A reply says the agent is not logged in, or asks for a login** — run the CLI once by hand on the bridge PC (`claude`, `codex`, or `grok login`) and log in; the bridge reuses that.
 - **Reply never appears but `bridge.log` says `done`** — `/runback slots`; if the pool is empty, `/runback reload` frees it and picks the reply up via the fallback path.

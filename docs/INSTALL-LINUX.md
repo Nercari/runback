@@ -11,7 +11,7 @@ The addon is the same; only the bridge's screen capture differs. On Linux the br
 ## Install
 
 ```bash
-git clone https://github.com/chelinho139/runback
+git clone https://github.com/Nercari/runback
 cd runback
 npm ci                      # only needed to run the tests
 node setup.js --wow "$HOME/.wine/drive_c/Program Files (x86)/World of Warcraft/_classic_beta_" --project ~/path/to/the/project
