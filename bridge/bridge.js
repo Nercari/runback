@@ -416,7 +416,9 @@ function publish(key, record, urgent) {
 }
 
 function signal(kind, id, on) {
-  const file = path.join(cfg.addonDir, 'WoWAI', kind, pad3(slotNumber(id)) + '.wav');
+  const slot = slotNumber(id);
+  if (slot == null) return;
+  const file = path.join(cfg.addonDir, 'WoWAI', kind, pad3(slot) + '.wav');
   try { atomicWrite(file, on ? SILENT_WAV : Buffer.alloc(0)); } catch {}
 }
 
@@ -425,15 +427,23 @@ function signal(kind, id, on) {
 // without spending a reply slot.
 const ACT_MAX = cfg.actMax || 60;
 function actFile(id, k) {
-  return path.join(cfg.addonDir, 'WoWAI', 'act', pad3(slotNumber(id)), String(k).padStart(2, '0') + '.wav');
+  const slot = slotNumber(id);
+  if (slot == null) return null;
+  return path.join(cfg.addonDir, 'WoWAI', 'act', pad3(slot), String(k).padStart(2, '0') + '.wav');
 }
 function resetBeats(id) {
-  for (let k = 1; k <= ACT_MAX; k++) { try { atomicWrite(actFile(id, k), Buffer.alloc(0)); } catch {} }
+  for (let k = 1; k <= ACT_MAX; k++) {
+    const file = actFile(id, k);
+    if (file == null) return;
+    try { atomicWrite(file, Buffer.alloc(0)); } catch {}
+  }
 }
 function beat(job) {
   job.beats = (job.beats || 0) + 1;
   if (job.beats > ACT_MAX) return;
-  try { atomicWrite(actFile(job.id, job.beats), SILENT_WAV); } catch {}
+  const file = actFile(job.id, job.beats);
+  if (file == null) return;
+  try { atomicWrite(file, SILENT_WAV); } catch {}
 }
 
 // Presence: every 30 s flip the next presence/NNNN.wav valid so the game can tell
