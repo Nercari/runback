@@ -57,7 +57,7 @@ See [docs/FOREVER.md](docs/FOREVER.md) for the classic UI skin and hotkeys.
 Step-by-step for a fresh machine, with troubleshooting: [docs/INSTALL-WINDOWS.md](docs/INSTALL-WINDOWS.md). The short version:
 
 ```powershell
-git clone https://github.com/chelinho139/wow-ai
+git clone https://github.com/Nercari/wow-ai
 cd wow-ai
 node setup.js --project "C:\path\to\the\project\you\want\to\work\on"
 ```
@@ -80,13 +80,25 @@ It restarts itself if it ever crashes. Ctrl+C (or closing the window) stops it. 
 Details and capture troubleshooting: [docs/INSTALL-LINUX.md](docs/INSTALL-LINUX.md). The short version:
 
 ```bash
-git clone https://github.com/chelinho139/wow-ai
+git clone https://github.com/Nercari/wow-ai
 cd wow-ai
 node setup.js --project ~/path/to/the/project   # finds the client in $WINEPREFIX, ~/.wine...; or pass --wow "<client folder>"
 npm start
 ```
 
 The bridge captures the game window through X11 (`bridge/capture_x11.py`, no packages needed) and writes the slot files straight into the Wine prefix. Check the capture once: send any message from the game and, while the strip of colored squares is in the top-left corner, run `npm run probe` in a second terminal. It saves what the capture sees to `bridge/probe.png` and says whether it decoded the strip.
+
+### Check the machine
+
+From the repo folder, on Windows or Linux:
+
+```bash
+npm run doctor
+```
+
+The doctor prints `PASS` or `FAIL` for Node.js 22.2 or newer, for an agent CLI that is already logged in (`claude`, `codex`, or `grok`), and for X11 (`DISPLAY` set). A `FAIL` line includes a one-line fix, and the process exits with an error if any check fails. It only reads. It does not install software, log in, or write files. Windows passes the X11 check, because capture there does not use X11.
+
+If `WAYLAND_DISPLAY` is set, or `XDG_SESSION_TYPE` is `wayland`, the doctor prints a warning. Screen capture needs X11 or XWayland.
 
 ### Upgrading from wow-claude
 

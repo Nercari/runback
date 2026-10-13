@@ -27,6 +27,7 @@
   },
   "scripts": {
     "setup": "node setup.js",
+    "doctor": "node tools/doctor.js",
     "start": "node bridge/supervisor.js",
     "slots": "node bridge/install-slots.js",
     "test": "node tests/run_all.js",
