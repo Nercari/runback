@@ -104,7 +104,7 @@ Forked from [chelinho139/wow-ai](https://github.com/chelinho139/wow-ai).
 
 ### Upgrading from wow-claude or WoW AI
 
-`node setup.js` migrates older installs: it copies saved data from `WoWClaude.lua` or `WoWAI.lua` into `Runback.lua`, removes legacy addon and slot folders, and updates paths in `bridge/config.json`. Then fully quit and relaunch WoW.
+`node setup.js` migrates a `WoWClaude` install (saved data and old slot folders only) and updates paths in `bridge/config.json` when needed. For a former `WoWAI` install, use the manual copy step below. Then fully quit and relaunch WoW.
 
 **One-time manual copy (game closed):** if you still have settings only in `WTF/Account/<ACCOUNT>/SavedVariables/WoWAI.lua`, copy that file to `Runback.lua` in the same folder and replace `WoWAIDB` with `RunbackDB` in the copy. On first load the addon also copies a legacy `WoWAIDB` table into `RunbackDB` when `RunbackDB` is missing.
 

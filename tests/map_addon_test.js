@@ -185,7 +185,7 @@ test('the navigator is clamped to the screen so a drag cannot lose it', () => {
 
 test('herb/ore nodes toggle and follow the gathering skill', () => {
   const vm = newVM();
-  vm.run(`RunbackNodes = { kinds = { { "Copper Vein", "mining", 1 }, { "Tin Vein", "mining", 65 }, { "Peacebloom", "herbalism", 1 } },
+  vm.run(`WoWAINodes = { kinds = { { "Copper Vein", "mining", 1 }, { "Tin Vein", "mining", 65 }, { "Peacebloom", "herbalism", 1 } },
     maps = { [1432] = { [1] = "100200300400", [2] = "500500", [3] = "999999" } } }`);
   vm.run('RunbackMap.Refresh()');
   assert.equal(shownPins(vm).length, 0, 'off by default');

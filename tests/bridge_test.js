@@ -243,7 +243,7 @@ test('cmd flags accept only lowercase constrained names', () => {
 });
 
 test('isBroadFolder: drive root, home and above, Documents/Desktop/Downloads; a project folder is not', () => {
-  const home = path.join(os.tmpdir(), 'runback-home', 'pedro');
+  const home = path.join(os.tmpdir(), 'runback-home', 'nercari');
   for (const d of [path.parse(home).root, home, path.dirname(home), path.join(home, 'Documents'), path.join(home, 'desktop'), path.join(home, 'Downloads'), path.join(home, 'OneDrive'), path.join(home, 'OneDrive - Work', 'Documents')]) {
     assert.equal(P.isBroadFolder(d, home), true, d);
   }
@@ -253,7 +253,7 @@ test('isBroadFolder: drive root, home and above, Documents/Desktop/Downloads; a 
 });
 
 test('pickDefaultCwd: explicit wins, broad start and config folders fall back to the mentor workspace', () => {
-  const home = path.join(os.tmpdir(), 'runback-home', 'pedro');
+  const home = path.join(os.tmpdir(), 'runback-home', 'nercari');
   const docs = path.join(home, 'Documents'), proj = path.join(docs, 'realms'), mentorDir = path.join(docs, 'wow-mentor');
   const pick = o => P.pickDefaultCwd({ mentorDir, home, ...o });
   assert.deepEqual(pick({ project: docs, env: proj, started: proj }), { dir: docs, source: '--project' });
@@ -327,7 +327,7 @@ test('plainProgress turns every kind of raw progress line into one of a fixed se
     '$ cd "C:/Users/x/wow-mentor" && node "C:/repo/tools/slice-fight.js" --start 1',
     '$ node C:/repo/tools/check-citations.js --review r.txt',
     '$ ls /tmp', '$ cat WoWCombatLog-101126.txt | head', 'read WoWCombatLog-101126_174100.txt', 'read toolu_01GxbuPG6Cvh8vs1VMiofAJe.txt',
-    'read pedro-realm.md', 'read warlock.md', 'edit a.js, b.js', 'write new.md', 'delete old.md',
+    'read nercari-realm.md', 'read warlock.md', 'edit a.js, b.js', 'write new.md', 'delete old.md',
     'grep ^10/11/2026 17:4(1:(2[5-9]|[3-5]\\d)|2:(0\\d|1[0-5]))', 'grep: foo', 'glob {characters,reviews}/', 'ls src',
     'search: warlock wand', 'fetch https://example.com/x', 'tool: fs.list', 'agent: look around', 'todo list',
     '~ Looking at the tests first', 'Let me look at the file.', 'ToolSearch', 'TodoWrite', '', undefined,

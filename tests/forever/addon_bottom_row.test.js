@@ -46,7 +46,7 @@ function vm() {
   return { run, get };
 }
 
-const slot = replies => `STUB.onLoadAddOn = function() Runback_SlotData = { now = time(), cwd = "C:\\\\Users\\\\pedro\\\\wow-mentor", agent = "agy", agents = { "claude", "agy" }, replies = { ${replies || ''} } } end`;
+const slot = replies => `STUB.onLoadAddOn = function() Runback_SlotData = { now = time(), cwd = "C:\\\\Users\\\\nercari\\\\wow-mentor", agent = "agy", agents = { "claude", "agy" }, replies = { ${replies || ''} } } end`;
 
 function connected() {
   const v = vm();
@@ -91,6 +91,6 @@ test('the footer names only the agent; the folder and mode are in the light\'s t
 
   v.run('LIGHT().scripts.OnEnter(LIGHT())');
   const tip = v.get('GameTooltip.text');
-  assert.ok(tip.includes('cwd: C:\\Users\\pedro\\wow-mentor (bridge default)'), tip);
+  assert.ok(tip.includes('cwd: C:\\Users\\nercari\\wow-mentor (bridge default)'), tip);
   assert.ok(tip.includes('mode: pixel'), tip);
 });

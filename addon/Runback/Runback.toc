@@ -3,8 +3,8 @@
 ## Notes: Talk to Claude Code, Codex or Grok from inside the game, one session per chat. Needs the companion bridge (see README).
 ## Author: chelinho139, Nercari
 ## Version: 0.4.0
-## SavedVariables: RunbackDB, RunbackMapDB, RunbackGuideDB, RunbackForeverDB, Runback_Bulk
-## OptionalDeps: Runback_Nodes
+## SavedVariables: RunbackDB, RunbackMapDB, RunbackGuideDB, RunbackForeverDB, Runback_Bulk, WoWAIDB, WoWAIMapDB, WoWAIGuideDB, WoWAIForeverDB, WoWAI_Bulk
+## OptionalDeps: WoWAI_Nodes
 
 Codec.lua
 Inbox.lua

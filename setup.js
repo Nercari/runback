@@ -78,26 +78,20 @@ function migrateOldInstall(client, account) {
   const addons = path.join(client, 'Interface', 'AddOns');
   const savedDir = path.join(client, 'WTF', 'Account', account, 'SavedVariables');
   const oldSaved = path.join(savedDir, 'WoWClaude.lua');
-  const wowaiSaved = path.join(savedDir, 'WoWAI.lua');
   const newSaved = path.join(savedDir, 'Runback.lua');
   if (fs.existsSync(oldSaved) && !fs.existsSync(newSaved)) {
     const src = fs.readFileSync(oldSaved, 'utf8').replace(/^WoWClaudeDB\s*=/m, 'RunbackDB =');
     fs.writeFileSync(newSaved, src);
     console.log(`migrate  : chats and settings copied from ${path.basename(oldSaved)} to ${path.basename(newSaved)}`);
   }
-  if (fs.existsSync(wowaiSaved) && !fs.existsSync(newSaved)) {
-    const src = fs.readFileSync(wowaiSaved, 'utf8').replace(/^WoWAIDB\s*=/m, 'RunbackDB =');
-    fs.writeFileSync(newSaved, src);
-    console.log(`migrate  : chats and settings copied from ${path.basename(wowaiSaved)} to ${path.basename(newSaved)}`);
-  }
   let removed = 0;
   for (const name of fs.existsSync(addons) ? fs.readdirSync(addons) : []) {
-    if (name === 'WoWClaude' || /^WoWClaude_S\d{3}$/.test(name) || name === 'WoWAI' || /^WoWAI_S\d{3}$/.test(name)) {
+    if (name === 'WoWClaude' || /^WoWClaude_S\d{3}$/.test(name)) {
       fs.rmSync(path.join(addons, name), { recursive: true, force: true });
       removed++;
     }
   }
-  if (removed) console.log(`migrate  : removed legacy addon and slot folders (${removed} folder(s))`);
+  if (removed) console.log(`migrate  : removed the old WoWClaude addon and slot folders (${removed} folder(s))`);
 }
 
 function copyAddon(client) {
@@ -125,14 +119,6 @@ function upgradeConfig(cfg, example) {
   if (/WoWClaude\.lua$/.test(cfg.savedVariablesFile || '')) {
     cfg.savedVariablesFile = cfg.savedVariablesFile.replace(/WoWClaude\.lua$/, 'Runback.lua');
     notes.push('savedVariablesFile');
-  }
-  if (/WoWAI\.lua$/.test(cfg.savedVariablesFile || '')) {
-    cfg.savedVariablesFile = cfg.savedVariablesFile.replace(/WoWAI\.lua$/, 'Runback.lua');
-    notes.push('savedVariablesFile');
-  }
-  if (/\/WoWAI\//.test(cfg.inboxFile || '')) {
-    cfg.inboxFile = cfg.inboxFile.replace(/\/WoWAI\//g, '/Runback/').replace(/\\WoWAI\\/g, '\\Runback\\');
-    notes.push('inboxFile');
   }
   if (!cfg.agents) {
     const claude = { ...example.agents.claude };

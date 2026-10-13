@@ -236,11 +236,14 @@ local function AnyPending()
 	return false
 end
 
-local function DeepCopy(value)
+local function DeepCopy(value, seen)
 	if type(value) ~= "table" then return value end
+	seen = seen or {}
+	if seen[value] then return seen[value] end
 	local copy = {}
+	seen[value] = copy
 	for k, v in pairs(value) do
-		copy[k] = DeepCopy(v)
+		copy[k] = DeepCopy(v, seen)
 	end
 	return copy
 end
@@ -256,8 +259,8 @@ local LEGACY_SAVED = {
 local function MigrateLegacySaved(newName, oldName)
 	if _G[newName] ~= nil then return end
 	local legacy = _G[oldName]
-	if legacy == nil then return end
-	_G[newName] = DeepCopy(legacy)
+	if legacy == nil or type(legacy) ~= "table" then return end
+	_G[newName] = DeepCopy(legacy, {})
 	_G[newName].migratedFrom = "WoWAI"
 end
 
@@ -3562,6 +3565,7 @@ end
 
 local function RbSlashFree()
 	if SlashCmdList.RB then return false end
+	if hash_SlashCmdList and (hash_SlashCmdList["/rb"] or hash_SlashCmdList["/RB"]) then return false end
 	for i = 1, 256 do
 		if _G["SLASH_RB" .. i] == "/rb" then return false end
 	end

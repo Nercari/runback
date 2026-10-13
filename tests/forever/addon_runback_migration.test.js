@@ -84,3 +84,55 @@ test('slash commands: /runback primary, /wow-ai and /wowai kept, /rb when free',
   assert.equal(v.get('SLASH_RUNBACK3'), '/wow-ai');
   assert.equal(v.get('SLASH_RUNBACK7'), '/rb');
 });
+
+test('slash /rb is not registered when hash_SlashCmdList already owns /rb', () => {
+  const L = lauxlib.luaL_newstate();
+  lualib.luaL_openlibs(L);
+  const run = (code, arg) => {
+    const loaded = lauxlib.luaL_loadstring(L, to_luastring(code));
+    assert.equal(loaded, lua.LUA_OK);
+    let nargs = 0;
+    if (arg !== undefined) { lua.lua_pushstring(L, to_luastring(arg)); nargs = 1; }
+    assert.equal(lua.lua_pcall(L, nargs, 0, 0), lua.LUA_OK);
+  };
+  const get = expr => {
+    run(`RESULT = tostring(${expr})`);
+    lua.lua_getglobal(L, to_luastring('RESULT'));
+    const value = to_jsstring(lua.lua_tolstring(L, -1));
+    lua.lua_pop(L, 1);
+    return value;
+  };
+  run(fs.readFileSync(path.join(__dirname, '..', 'wow_stub.lua'), 'utf8'));
+  run('unpack = table.unpack');
+  run('hash_SlashCmdList["/rb"] = "OTHER"');
+  for (const file of ['Codec.lua', 'Inbox.lua', 'Forever.lua']) run(read(file));
+  run(read('Runback.lua'), 'Runback');
+  assert.equal(get('SLASH_RUNBACK7'), 'nil');
+});
+
+test('Runback.toc declares Runback and legacy SavedVariables', () => {
+  const toc = read('Runback.toc');
+  for (const name of [
+    'RunbackDB', 'RunbackMapDB', 'RunbackGuideDB', 'RunbackForeverDB', 'Runback_Bulk',
+    'WoWAIDB', 'WoWAIMapDB', 'WoWAIGuideDB', 'WoWAIForeverDB', 'WoWAI_Bulk',
+  ]) {
+    assert.match(toc, new RegExp(`\\b${name}\\b`), name);
+  }
+});
+
+test('non-table legacy saved data is skipped', () => {
+  const v = vm();
+  v.run('WoWAIDB = "not-a-table"');
+  v.load();
+  assert.equal(v.truthy('RunbackDB.migratedFrom == nil'), true);
+  assert.equal(v.get('WoWAIDB'), 'not-a-table');
+});
+
+test('migration deep copy is cycle-safe', () => {
+  const v = vm();
+  v.run('local t = { marker = 5 }; t.loop = t; WoWAIDB = t');
+  v.load();
+  assert.equal(v.get('RunbackDB.marker'), '5');
+  assert.equal(v.truthy('RunbackDB.loop == RunbackDB'), true);
+  assert.equal(v.truthy('WoWAIDB.loop == WoWAIDB'), true);
+});

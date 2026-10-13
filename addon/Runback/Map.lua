@@ -1,5 +1,5 @@
 -- Runback map: layers the agent draws (routes, quest stops, marks), synced from the
--- bridge, plus herb and ore locations from the optional Runback_Nodes addon.
+-- bridge, plus herb and ore locations from the optional WoWAI_Nodes addon.
 --
 -- Layers arrive in slot files as { epoch, version, layers = { { name, title,
 -- ordered, loop, points = { { uiMapID, x, y, label, kind }, ... } } } }; x/y are
@@ -243,7 +243,7 @@ local function NodeFilter()
 end
 
 local function DrawNodes(mapID, scale)
-	local data = RunbackNodes
+	local data = WoWAINodes
 	local want, filter = NodeFilter()
 	if not data or not next(want) then return end
 	local perMap = data.maps and data.maps[mapID]
@@ -603,7 +603,7 @@ local function Status()
 		Print(string.format("%s%s|r  guide step (%d point(s))%s", mdb.hidden[GUIDE] and "|cff888888" or "|cffffffff", GUIDE, #guide.points, (mdb.nav and mdb.nav.layer == GUIDE) and string.format("  navigating %d/%d", mdb.nav.index, #guide.points) or ""))
 	end
 	local n = mdb.nodes
-	Print(string.format("nodes: ore %s, herb %s, filter %s%s", n.ore and "on" or "off", n.herb and "on" or "off", n.filter, RunbackNodes and "" or "  (Runback_Nodes data addon not installed)"))
+	Print(string.format("nodes: ore %s, herb %s, filter %s%s", n.ore and "on" or "off", n.herb and "on" or "off", n.filter, WoWAINodes and "" or "  (WoWAI_Nodes data addon not installed)"))
 	Print("commands: /runback map ore|herb [on|off], filter all|skill, show|hide <layer>, nav <layer> [n], next, prev, stop  (/aimap is the same)")
 end
 

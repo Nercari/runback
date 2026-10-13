@@ -159,6 +159,7 @@ NUM_CHAT_WINDOWS = 1
 StaticPopupDialogs = {}
 function StaticPopup_Show(which, a, b, data) STUB.popup = { which = which, data = data } end
 SlashCmdList = {}
+hash_SlashCmdList = {}
 UISpecialFrames = {}
 tinsert = table.insert
 function wipe(t) for k in pairs(t) do t[k] = nil end return t end
