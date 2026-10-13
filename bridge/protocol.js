@@ -30,7 +30,12 @@ function comparableWindowsPath(p) {
 }
 
 // Reply slot / signal file number for a message id (1-based, wraps at `slots`).
-function slotNumber(id, slots) { return ((id - 1) % slots) + 1; }
+function slotNumber(id, slots) {
+  const n = Number(id);
+  const max = Number(slots);
+  if (!Number.isInteger(n) || n < 1 || !Number.isInteger(max) || max < 1) return null;
+  return ((n - 1) % max) + 1;
+}
 
 // A chat as the bridge tracks it: the addon's session token plus the chat id.
 function chatKey(job) { return `${job.session || ''}:${job.chat || 'default'}`; }
@@ -169,18 +174,28 @@ function parseFlags(flags) {
 // `cwd` is left as typed; the bridge resolves it against its default folder.
 // The ctx field is only there when the flags say "c" (older addons never set
 // it), so a separator inside the text can't be mistaken for it.
+function stripId(raw) {
+  const s = String(raw ?? '');
+  if (!/^\d+$/.test(s)) return null;
+  const canon = s.replace(/^0+/, '') || '0';
+  const n = Number(canon);
+  if (!Number.isSafeInteger(n) || String(n) !== canon) return null;
+  return n;
+}
+
 function jobsFromStrip(headerId, payload) {
   const jobs = [];
   for (const rec of String(payload).split('\x1E')) {
     const p = rec.split('\x1F');
-    if (p.length >= 7 && /^\d+$/.test(p[2])) {
+    const id = stripId(p[2]);
+    if (p.length >= 7 && id !== null) {
       const flags = parseFlags(p[4]);
       const withCtx = flags.context && p.length >= 8;
-      const job = { session: p[0], chat: p[1], id: Number(p[2]), cwd: p[3], ...flags, name: p[5], text: p.slice(withCtx ? 7 : 6).join('\x1F'), via: 'pixel' };
+      const job = { session: p[0], chat: p[1], id, cwd: p[3], ...flags, name: p[5], text: p.slice(withCtx ? 7 : 6).join('\x1F'), via: 'pixel' };
       if (withCtx) job.ctx = p[6];
       jobs.push(job);
-    } else if (p.length === 6 && /^\d+$/.test(p[2])) { // previous format without the chat name
-      jobs.push({ session: p[0], chat: p[1], id: Number(p[2]), cwd: p[3], ...parseFlags(p[4]), name: '', text: p[5], via: 'pixel' });
+    } else if (p.length === 6 && id !== null) { // previous format without the chat name
+      jobs.push({ session: p[0], chat: p[1], id, cwd: p[3], ...parseFlags(p[4]), name: '', text: p[5], via: 'pixel' });
     } else if (p.length === 4) { // pre-chat format: session, cwd, flags, text
       jobs.push({ session: p[0], chat: '', id: headerId, cwd: p[1], ...parseFlags(p[2]), text: p[3], via: 'pixel' });
     }
@@ -440,6 +455,7 @@ function rulesFor(d) {
 // One progress line per Claude tool call, as shown in the game's "working"
 // bubble (Codex and Grok have their own in agents.js).
 function describeToolUse(block) {
+  if (!block || typeof block !== 'object') return '';
   const inp = block.input || {};
   switch (block.name) {
     case 'Bash': return `$ ${String(inp.command || '').split('\n')[0].slice(0, 110)}`;
@@ -643,6 +659,14 @@ function luaStr(s) {
     + '"';
 }
 
+const LUA_KEYWORDS = new Set(['and', 'break', 'do', 'else', 'elseif', 'end', 'false', 'for', 'function', 'if', 'in', 'local', 'nil', 'not', 'or', 'repeat', 'return', 'then', 'true', 'until', 'while']);
+
+function luaKey(id) {
+  const name = String(id);
+  if (/^[A-Za-z_][A-Za-z0-9_]*$/.test(name) && !LUA_KEYWORDS.has(name)) return name;
+  return '[' + luaStr(name) + ']';
+}
+
 // Stalled runs (backlog 52). A run that has shown no new action for STALL_QUIET_MS,
 // or has lasted STALL_TOTAL_MS, is marked "quiet" or "long" in its working record so
 // the game can offer Stop and "Ask Claude instead". A run that ends with no reply
@@ -658,11 +682,12 @@ function stallReason(startedAt, lastActionAt, now) {
 
 // The reply for a run that ended with no text: what it did, from its action lines.
 function noReplyText(agentName, actions, total) {
-  const n = Number(total) || actions.length;
+  const list = actions == null ? [] : actions;
+  const n = Number(total) || list.length;
   if (!n) return `${agentName} finished without doing anything and without a reply.`;
-  const shown = actions.length < n ? `, the last ${actions.length} shown` : '';
+  const shown = list.length < n ? `, the last ${list.length} shown` : '';
   return `${agentName} finished without a reply. It did ${n} ${n === 1 ? 'action' : 'actions'}${shown}:\n` +
-    actions.map(a => `- ${a}`).join('\n') +
+    list.map(a => `- ${a}`).join('\n') +
     '\nIt may have changed files even so. Click Ask Claude instead to send the same question to Claude, or ask again.';
 }
 
@@ -681,10 +706,10 @@ function luaTable(globalName, records, opts = {}) {
     `\tcwd = ${luaStr(opts.cwd || '')},`,
     `\tagent = ${luaStr(opts.agent || '')},`,
     `\tagents = { ${agents.map(luaStr).join(', ')} },`,
-    `\tmodels = { ${Object.entries(opts.models || {}).filter(([id, list]) => /^[a-z0-9_-]+$/.test(id) && Array.isArray(list)).map(([id, list]) => `${id} = { ${list.map(luaStr).join(', ')} }`).join(', ')} },`,
+    `\tmodels = { ${Object.entries(opts.models || {}).filter(([, list]) => Array.isArray(list)).map(([id, list]) => `${luaKey(id)} = { ${list.map(luaStr).join(', ')} }`).join(', ')} },`,
     '\treplies = {',
   ];
-  for (const r of records) {
+  for (const r of (Array.isArray(records) ? records : [])) {
     lines.push('\t\t{');
     lines.push(`\t\t\tchat = ${luaStr(r.chat || '')},`);
     lines.push(`\t\t\tid = ${Number(r.id) || 0},`);
@@ -708,10 +733,12 @@ function luaTable(globalName, records, opts = {}) {
   if (opts.guides) lines.push(luaGuides(opts.guides));
   const restore = opts.restore;
   if (restore) {
+    const chats = Array.isArray(restore.chats) ? restore.chats : [];
     lines.push('\trestore = {', `\t\ttoken = ${luaStr(restore.token)},`, '\t\tchats = {');
-    for (const c of restore.chats) {
-      lines.push('\t\t\t{', `\t\t\t\tid = ${luaStr(c.id)},`, `\t\t\t\tname = ${luaStr(c.name)},`, `\t\t\t\tcwd = ${luaStr(c.cwd)},`, '\t\t\t\tmessages = {');
-      for (const m of c.messages) {
+    for (const c of chats) {
+      const messages = c && Array.isArray(c.messages) ? c.messages : [];
+      lines.push('\t\t\t{', `\t\t\t\tid = ${luaStr(c && c.id)},`, `\t\t\t\tname = ${luaStr(c && c.name)},`, `\t\t\t\tcwd = ${luaStr(c && c.cwd)},`, '\t\t\t\tmessages = {');
+      for (const m of messages) {
         lines.push(`\t\t\t\t\t{ role = ${luaStr(m.role)}, id = ${Number(m.id) || 0}, t = ${Number(m.t) || 0}, agent = ${luaStr(m.agent || '')}, text = ${luaStr(m.text)} },`);
       }
       lines.push('\t\t\t\t},', '\t\t\t},');
