@@ -14,7 +14,7 @@ Baseline (2026-10-03, `forever` at cbebd5a): `npm test` 187/187 pass, codec roun
 
 4. **Current game and policy.** `tools/policy-watch.js` alerts on a Blizzard policy change; read the diff and say whether the tool is affected. A new Forever client build gets its TOC and API checks.
 
-5. **Upstream.** Compare with `https://github.com/Nercari/runback` main; bring in useful upstream fixes by PR, keeping `forever` behaviour.
+5. **Upstream.** Compare with `https://github.com/chelinho139/wow-ai` main; bring in useful upstream fixes by PR, keeping `forever` behaviour.
 
 6. **Measured improvement.** Each improvement PR names one number (a test count, a gate passed, a failure fixed) before and after.
 
@@ -201,7 +201,7 @@ Items 77 to 83 come from the fourth video review of 2026-10-11 (recording "Grava
 
 Items 85 to 91 are the Runback roadmap, requested by the Grok Director on nercari-control #97 (2026-10-13 08:18Z) for Nercari. Now: the rename. Next: the R1 must-fixes, mockups before code. Later: coaching. Rules for all seven: the optional `WoWAI_Nodes` data addon keeps its name; credit the owner as Nercari only; every PR passes `npm test` and `node tools/safety-ci.js` on node 22 and is checked against `docs/COMPLIANCE.md`; anything only the game can show goes on Nercari's live checklist (item 90). Baseline at `forever` 9bc2c87: `npm test` 637 pass, 0 fail (640 tests); safety CI exit 0.
 
-85. **Rename to Runback (R0)** (done, PRs #113 and #115). The addon folder, TOC, saved variables and slash commands are Runback, the README shows the icon, and the GitHub repo is already `Nercari/runback` (checked 2026-10-13: `git ls-remote https://github.com/Nercari/runback HEAD` returns `forever` 9bc2c87, and pushes to the old `Nercari/wow-ai` URL redirect there). Left: goal 5 above still says to compare with `Nercari/runback` as upstream, which is now this repo; the upstream is `chelinho139/wow-ai`. Fix that line and any clone URL that still says `wow-ai` in the next docs PR.
+85. **Rename to Runback (R0)** (done, PRs #113 and #115). The addon folder, TOC, saved variables and slash commands are Runback, the README shows the icon, and the GitHub repo is already `Nercari/runback` (checked 2026-10-13: `git ls-remote https://github.com/Nercari/runback HEAD` returns `forever` 9bc2c87, and pushes to the old `Nercari/wow-ai` URL redirect there). Goal 5 now compares with `https://github.com/chelinho139/wow-ai` main. Clone commands in the README, CONTRIBUTING and both install docs already use `https://github.com/Nercari/runback`; none still say `wow-ai`.
 
 86. **R1 upgrade must-fixes** (done, PR #116; live check pending). Checked on `forever` 9bc2c87:
     - Old `WoWClaude`, `WoWClaude_Sxxx` and `WoWAI` folders are moved into `Runback-backup-YYYY-MM-DD`, never deleted (`setup.js` `moveAside`, line 83; caller line 132; no `rmSync` left in `setup.js`).
@@ -209,7 +209,7 @@ Items 85 to 91 are the Runback roadmap, requested by the Grok Director on nercar
     - `SlashCmdList["WOWAI"]` stays as an alias (`Runback.lua` line 3805), with `/wowai`, `/wow-ai`, `/wow-claude`, `/ai` and `/ask`.
     - `/rb` is rechecked at login; when another addon owns it, one chat line says `/runback` still works (`RecheckRbSlash`, line 3584, called at line 3824).
     - One desktop shortcut, `Runback.lnk`, with `docs/assets/runback.ico` as its icon; this launcher's old shortcuts move into the backup folder (`tools/launch.js` lines 299 to 323).
-    Open: the director's brief says "icon v3 .ico". The file in the repo has six sizes (16 to 256 px) and came in PR #115; whether it is v3 is not recorded anywhere in the repo. Confirm with the Grok crew, and replace the file if it is not.
+    Icon v3, confirmed and left in place: `docs/assets/runback.ico`, `runback-icon.png` and `runback-social.png` are the files from ec13690, byte-identical to the v3 masters (sha1 prefixes fe904ba0, 0248e435, b6451974). The desktop shortcut already uses the `.ico` (`tools/launch.js`) and the README already shows `runback-icon.png`.
 
 87. **Two-SHA install proof** (the gate for 86 and every later rename-related PR). Script it as `tools/upgrade-proof.js` so it runs the same way every time, in temporary folders, without touching a real client:
     - Clean install: run `setup.js` from the PR head into an empty client folder. Expect `Interface/AddOns/Runback` and no `WoWAI` folder.
