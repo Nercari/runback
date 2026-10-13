@@ -8,10 +8,9 @@
 // bridge/config.json from the example (if missing), and builds the slot pool.
 // Re-running is safe: existing config and generated files are kept.
 //
-// An install of this project under its old name (wow-claude: the WoWClaude
-// addon, WoWClaude_S### slots, WoWClaude.lua saved data) is migrated: the saved
-// data is carried over so chats survive, the old folders are removed so two
-// addons don't fight over /ai and /r, and config.json is brought up to date.
+// An install under an old name is migrated: saved data is copied when
+// Runback.lua is absent, and the old addon folders are moved to a dated
+// backup outside Interface\AddOns so two addons don't fight over /ai and /r.
 
 const fs = require('fs');
 const os = require('os');
@@ -70,11 +69,53 @@ function findAccount(client) {
   return names[0];
 }
 
-// The previous name of this project. Chats live in the addon's saved data, so
-// carry that over (renaming the global inside), then remove the old addon and
-// its slot pool: the game only needs one of each, and the old one would still
-// answer /ai, /r and the shift-click hook.
-function migrateOldInstall(client, account) {
+function backupName(now = new Date()) {
+  const when = now instanceof Date ? now : new Date();
+  const month = String(when.getMonth() + 1).padStart(2, '0');
+  const day = String(when.getDate()).padStart(2, '0');
+  return `Runback-backup-${when.getFullYear()}-${month}-${day}`;
+}
+
+function backupDir(client, now) {
+  return path.join(client, backupName(now));
+}
+
+function moveAside(src, backup) {
+  if (!fs.existsSync(src)) return false;
+  fs.mkdirSync(backup, { recursive: true });
+  const base = path.basename(src);
+  let dest = path.join(backup, base);
+  if (fs.existsSync(dest)) {
+    let n = 2;
+    while (fs.existsSync(path.join(backup, base + '-' + n))) n++;
+    dest = path.join(backup, base + '-' + n);
+  }
+  fs.renameSync(src, dest);
+  return true;
+}
+
+function copyWoWAISaved(client) {
+  const accounts = path.join(client, 'WTF', 'Account');
+  let names = [];
+  try { names = fs.readdirSync(accounts); } catch { return 0; }
+  let copied = 0;
+  for (const name of names) {
+    const accountDir = path.join(accounts, name);
+    let st;
+    try { st = fs.statSync(accountDir); } catch { continue; }
+    if (!st.isDirectory()) continue;
+    const savedDir = path.join(accountDir, 'SavedVariables');
+    const oldSaved = path.join(savedDir, 'WoWAI.lua');
+    const newSaved = path.join(savedDir, 'Runback.lua');
+    if (!fs.existsSync(oldSaved) || fs.existsSync(newSaved)) continue;
+    fs.copyFileSync(oldSaved, newSaved);
+    copied++;
+  }
+  if (copied) console.log(`migrate  : copied WoWAI.lua to Runback.lua for ${copied} account(s); WoWAI.lua kept`);
+  return copied;
+}
+
+function migrateOldInstall(client, account, now = new Date()) {
   const addons = path.join(client, 'Interface', 'AddOns');
   const savedDir = path.join(client, 'WTF', 'Account', account, 'SavedVariables');
   const oldSaved = path.join(savedDir, 'WoWClaude.lua');
@@ -84,14 +125,14 @@ function migrateOldInstall(client, account) {
     fs.writeFileSync(newSaved, src);
     console.log(`migrate  : chats and settings copied from ${path.basename(oldSaved)} to ${path.basename(newSaved)}`);
   }
-  let removed = 0;
+  copyWoWAISaved(client);
+  const backup = backupDir(client, now);
+  let moved = 0;
   for (const name of fs.existsSync(addons) ? fs.readdirSync(addons) : []) {
-    if (name === 'WoWClaude' || /^WoWClaude_S\d{3}$/.test(name)) {
-      fs.rmSync(path.join(addons, name), { recursive: true, force: true });
-      removed++;
-    }
+    if ((name === 'WoWClaude' || name === 'WoWAI' || /^WoWClaude_S\d{3}$/.test(name)) && moveAside(path.join(addons, name), backup)) moved++;
   }
-  if (removed) console.log(`migrate  : removed the old WoWClaude addon and slot folders (${removed} folder(s))`);
+  if (moved) console.log(`migrate  : moved ${moved} old addon folder(s) to ${backup}`);
+  return backup;
 }
 
 function copyAddon(client) {
@@ -170,6 +211,7 @@ function agentReport(cfg) {
   return lines.join('\n');
 }
 
+function main() {
 try {
   const client = findClient();
   console.log(`client   : ${client}`);
@@ -196,3 +238,8 @@ Done. Next:
   console.error('setup failed:', e.message);
   process.exit(1);
 }
+}
+
+if (require.main === module) main();
+
+module.exports = { migrateOldInstall, backupName };

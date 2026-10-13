@@ -3563,13 +3563,33 @@ local function ApplyLongChat()
 	box:SetMaxLetters(db.settings.longchat and 4000 or 255)
 end
 
-local function RbSlashFree()
-	if SlashCmdList.RB then return false end
-	if hash_SlashCmdList and (hash_SlashCmdList["/rb"] or hash_SlashCmdList["/RB"]) then return false end
-	for i = 1, 256 do
-		if _G["SLASH_RB" .. i] == "/rb" then return false end
+local rbSlashNoted = false
+
+local function RbTakenByOther()
+	if SlashCmdList.RB then return true end
+	if hash_SlashCmdList then
+		local owner = hash_SlashCmdList["/rb"] or hash_SlashCmdList["/RB"]
+		if owner and owner ~= SlashCmdList.RUNBACK then return true end
 	end
-	return true
+	for i = 1, 256 do
+		if _G["SLASH_RB" .. i] == "/rb" then return true end
+	end
+	return false
+end
+
+local function RbSlashFree()
+	return not RbTakenByOther()
+end
+
+local function RecheckRbSlash()
+	if not RbTakenByOther() then
+		if not SLASH_RUNBACK7 then SLASH_RUNBACK7 = "/rb" end
+		return
+	end
+	SLASH_RUNBACK7 = nil
+	if rbSlashNoted then return end
+	rbSlashNoted = true
+	print("|cff7ec8ff[Runback]|r /rb is used by another addon. /runback still works.")
 end
 
 SLASH_RUNBACK1 = "/runback"
@@ -3782,6 +3802,7 @@ SlashCmdList["RUNBACK"] = function(msg)
 		Runback.Toggle(true)
 	end
 end
+SlashCmdList["WOWAI"] = SlashCmdList["RUNBACK"]
 
 Runback.internal = { AddHistory = AddHistory, Finish = Finish, ActiveChat = ActiveChat, Render = Runback.Render, RefreshStrip = RefreshStrip, FindChat = FindChat, Chats = function() return db.chats end, SwitchChat = Runback.SwitchChat }
 
@@ -3800,6 +3821,7 @@ ev:SetScript("OnEvent", function(self, event, arg1)
 		end
 	elseif event == "PLAYER_LOGIN" then
 		if not db then InitDB() end
+		RecheckRbSlash()
 		BuildUI()
 		run = { outbound = {}, slotsUsed = {}, startedAt = GetTime() }
 		SelfTestSignals()

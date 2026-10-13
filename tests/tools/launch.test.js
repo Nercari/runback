@@ -456,6 +456,74 @@ test("Windows: gameRunning sees a running process by name", WIN, () => {
   assert.equal(launch.gameRunning("NoSuchGameHere"), false);
 });
 
+test("our old WoW AI shortcuts move into the backup and other files stay", (t) => {
+  const desktop = path.join(tmp(t), "Desk");
+  const backup = path.join(tmp(t), "Runback-backup-2026-10-13");
+  fs.mkdirSync(desktop);
+  const mark = path.join(desktop, "mark");
+  fs.writeFileSync(mark, "done\n");
+  fs.writeFileSync(path.join(desktop, "Runback.lnk"), "runback");
+  const launcher = path.resolve(__dirname, "../../tools/launch.js");
+  const cmd = `@node "${launcher}" %*\n`;
+  fs.writeFileSync(path.join(desktop, "WoW AI.cmd"), cmd);
+  fs.writeFileSync(path.join(desktop, "WoW AI.lnk"), Buffer.from(path.resolve(__dirname, "../../Runback.cmd"), "utf16le"));
+  fs.writeFileSync(path.join(desktop, "notes.txt"), "leave");
+  assert.equal(launch.makeShortcut({ desktop, mark, backup }), null);
+  assert.equal(fs.existsSync(path.join(desktop, "WoW AI.lnk")), false);
+  assert.equal(fs.existsSync(path.join(desktop, "WoW AI.cmd")), false);
+  assert.equal(fs.readFileSync(path.join(backup, "WoW AI.cmd"), "utf8"), cmd);
+  assert.equal(fs.readFileSync(path.join(backup, "WoW AI.lnk")).equals(Buffer.from(path.resolve(__dirname, "../../Runback.cmd"), "utf16le")), true);
+  assert.equal(fs.readFileSync(path.join(desktop, "Runback.lnk"), "utf8"), "runback");
+  assert.equal(fs.readFileSync(path.join(desktop, "notes.txt"), "utf8"), "leave");
+});
+
+test("a WoW AI file that does not point at this launcher is left alone", (t) => {
+  const desktop = path.join(tmp(t), "Desk");
+  const backup = path.join(tmp(t), "Runback-backup-2026-10-13");
+  fs.mkdirSync(desktop);
+  const mark = path.join(desktop, "mark");
+  fs.writeFileSync(mark, "done\n");
+  fs.writeFileSync(path.join(desktop, "Runback.lnk"), "runback");
+  fs.writeFileSync(path.join(desktop, "WoW AI.cmd"), "@echo off\r\nrem my own file\r\n");
+  fs.writeFileSync(path.join(desktop, "WoW AI.lnk"), Buffer.from("C:\\Games\\Other\\Wow.exe", "utf16le"));
+  assert.equal(launch.makeShortcut({ desktop, mark, backup }), null);
+  assert.equal(fs.readFileSync(path.join(desktop, "WoW AI.cmd"), "utf8"), "@echo off\r\nrem my own file\r\n");
+  assert.equal(fs.existsSync(path.join(backup, "WoW AI.lnk")), false);
+  assert.equal(fs.existsSync(backup), false);
+});
+
+test("our old shortcut stays put when no backup folder is available", (t) => {
+  const desktop = path.join(tmp(t), "Desk");
+  fs.mkdirSync(desktop);
+  const mark = path.join(desktop, "mark");
+  fs.writeFileSync(mark, "done\n");
+  fs.writeFileSync(path.join(desktop, "Runback.lnk"), "runback");
+  const cmd = `@node "${path.resolve(__dirname, "../../tools/launch.js")}"\n`;
+  fs.writeFileSync(path.join(desktop, "WoW AI.cmd"), cmd);
+  assert.equal(launch.makeShortcut({ desktop, mark, backup: null }), null);
+  assert.equal(fs.readFileSync(path.join(desktop, "WoW AI.cmd"), "utf8"), cmd);
+});
+
+test("IconLocation is the repo ico when present and omitted when absent", (t) => {
+  const icon = path.resolve(__dirname, "../../docs/assets/runback.ico");
+  assert.equal(fs.existsSync(icon), true);
+  assert.equal(launch.shortcutIconPath(), icon);
+  const present = launch.shortcutScript("C:\\Desk", icon);
+  assert.match(present, /\$l\.IconLocation = '/);
+  assert.ok(present.includes(icon.replace(/'/g, "''")));
+  const absentRoot = tmp(t);
+  assert.equal(launch.shortcutIconPath(absentRoot), null);
+  const absent = launch.shortcutScript("C:\\Desk", launch.shortcutIconPath(absentRoot));
+  assert.equal(absent.includes("IconLocation"), false);
+});
+
+test("a previous WoW AI shortcut is replaced by Runback when Runback.lnk is missing", () => {
+  assert.equal(launch.shouldCreateShortcut(false, false, false), true);
+  assert.equal(launch.shouldCreateShortcut(true, false, false), false);
+  assert.equal(launch.shouldCreateShortcut(true, true, true), false);
+  assert.equal(launch.shouldCreateShortcut(true, true, false), true);
+});
+
 test("Windows: the desktop shortcut points at Runback.cmd and is made only once", WIN, (t) => {
   const desktop = path.join(tmp(t), "Desk top");
   fs.mkdirSync(desktop);
@@ -465,6 +533,12 @@ test("Windows: the desktop shortcut points at Runback.cmd and is made only once"
   const r = spawnSync("powershell.exe", ["-NoProfile", "-Command",
     `(New-Object -ComObject WScript.Shell).CreateShortcut('${lnk.replace(/'/g, "''")}').TargetPath`], { encoding: "utf8" });
   assert.equal(r.stdout.trim().toLowerCase(), path.resolve(__dirname, "../../Runback.cmd").toLowerCase());
+  const icon = path.resolve(__dirname, "../../docs/assets/runback.ico");
+  const iconRead = spawnSync("powershell.exe", ["-NoProfile", "-Command",
+    `(New-Object -ComObject WScript.Shell).CreateShortcut('${lnk.replace(/'/g, "''")}').IconLocation`], { encoding: "utf8" });
+  const iconGot = iconRead.stdout.trim().toLowerCase();
+  if (fs.existsSync(icon)) assert.ok(iconGot.startsWith(icon.toLowerCase()), iconGot);
+  else assert.equal(iconGot.replace(/,0$/, ""), "");
   fs.rmSync(lnk);
   assert.equal(launch.makeShortcut({ desktop, mark }), null, "a deleted shortcut stays deleted");
   assert.equal(fs.existsSync(lnk), false);

@@ -123,7 +123,7 @@ Run `bridge\start-hidden.vbs` to start the bridge without a console window. Pass
 
 ### Updating
 
-Double-click **Runback** on your desktop (or `Runback.cmd` in the repo folder). It updates, re-installs the addon, restarts the bridge if its code changed, and tells you whether the game needs `/reload` or a relaunch. It only fast-forwards: a folder with local edits is left as it is and the window says so. A clean folder left on another branch (an agent's work branch, say) is switched back to `forever` first; that branch is kept. The first run creates the desktop icon; delete it and it stays deleted.
+Double-click **Runback** on your desktop (or `Runback.cmd` in the repo folder). It updates, re-installs the addon, restarts the bridge if its code changed, and tells you whether the game needs `/reload` or a relaunch. It only fast-forwards: a folder with local edits is left as it is and the window says so. A clean folder left on another branch (an agent's work branch, say) is switched back to `forever` first; that branch is kept. The first run creates the desktop icon; delete it and it stays deleted. A previous **WoW AI** shortcut that points at this launcher is moved into `Runback-backup-<date>` when that backup folder can be created, so it does not sit beside the Runback shortcut. If `docs/assets/runback.ico` is in the checkout, the shortcut uses it.
 
 By hand:
 
@@ -145,7 +145,7 @@ git pull
 node setup.js
 ```
 
-`setup.js` copies your chats and settings from `WoWClaude.lua` to `Runback.lua` in the game's SavedVariables, removes the old `WoWClaude` addon and its 200 `WoWClaude_S###` slot folders (two addons would both answer `/ai` and `/r`), rewrites the addon paths in `bridge\config.json`, moves the Claude settings under `agents.claude` and adds the `codex` and `grok` blocks, then builds the new slot pool. Quit and relaunch the game, and enable *Runback* on the AddOns screen. Your agent sessions carry on, since the bridge keeps them per chat.
+`setup.js` copies your chats and settings from `WoWClaude.lua` to `Runback.lua` in the game's SavedVariables when `Runback.lua` is not there yet, and copies each account's `WoWAI.lua` the same way without changing that file. It moves the old `WoWClaude` addon, its `WoWClaude_S###` slot folders and the `WoWAI` addon to `Runback-backup-YYYY-MM-DD` next to the game client (outside `Interface\AddOns`) so two addons would not both answer `/ai`. `WoWAI_Nodes` is left in place. It rewrites the addon paths in `bridge\config.json`, moves the Claude settings under `agents.claude` and adds the `codex` and `grok` blocks, then builds the new slot pool. Quit and relaunch the game, and enable *Runback* on the AddOns screen. Your agent sessions carry on, since the bridge keeps them per chat.
 
 Then, if you had installed the command: `npm unlink -g wow-claude`, and `npm link` again from the repo folder (rename the folder to `runback` first if you like; `npm link` follows whatever it is called). A hotkey set with `/wow-claude bind` needs `/runback bind <key>` again, since it pointed at the old addon's button. `/wow-claude` itself keeps working as an alias of `/runback`.
 
