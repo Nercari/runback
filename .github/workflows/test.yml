@@ -4,6 +4,10 @@ on:
   push:
   pull_request:
 
+permissions:
+  contents: read
+  actions: write
+
 jobs:
   test:
     # Windows: the codec round-trip runs the real capture.ps1 decoder.
