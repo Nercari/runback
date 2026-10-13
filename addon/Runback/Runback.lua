@@ -3569,7 +3569,7 @@ local function RbTakenByOther()
 	if SlashCmdList.RB then return true end
 	if hash_SlashCmdList then
 		local owner = hash_SlashCmdList["/rb"] or hash_SlashCmdList["/RB"]
-		if owner and owner ~= "RUNBACK" then return true end
+		if owner and owner ~= SlashCmdList.RUNBACK then return true end
 	end
 	for i = 1, 256 do
 		if _G["SLASH_RB" .. i] == "/rb" then return true end

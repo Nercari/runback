@@ -69,9 +69,15 @@ function findAccount(client) {
   return names[0];
 }
 
+function backupName(now = new Date()) {
+  const when = now instanceof Date ? now : new Date();
+  const month = String(when.getMonth() + 1).padStart(2, '0');
+  const day = String(when.getDate()).padStart(2, '0');
+  return `Runback-backup-${when.getFullYear()}-${month}-${day}`;
+}
+
 function backupDir(client, now) {
-  const day = (now instanceof Date ? now : new Date()).toISOString().slice(0, 10);
-  return path.join(client, 'Runback-backup-' + day);
+  return path.join(client, backupName(now));
 }
 
 function moveAside(src, backup) {
@@ -236,4 +242,4 @@ Done. Next:
 
 if (require.main === module) main();
 
-module.exports = { migrateOldInstall };
+module.exports = { migrateOldInstall, backupName };

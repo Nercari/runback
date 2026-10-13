@@ -123,7 +123,7 @@ Run `bridge\start-hidden.vbs` to start the bridge without a console window. Pass
 
 ### Updating
 
-Double-click **Runback** on your desktop (or `Runback.cmd` in the repo folder). It updates, re-installs the addon, restarts the bridge if its code changed, and tells you whether the game needs `/reload` or a relaunch. It only fast-forwards: a folder with local edits is left as it is and the window says so. A clean folder left on another branch (an agent's work branch, say) is switched back to `forever` first; that branch is kept. The first run creates the desktop icon; delete it and it stays deleted. A previous **WoW AI** shortcut is removed when the Runback shortcut is there, so the two are not both on the desktop. If `docs/assets/runback.ico` is in the checkout, the shortcut uses it.
+Double-click **Runback** on your desktop (or `Runback.cmd` in the repo folder). It updates, re-installs the addon, restarts the bridge if its code changed, and tells you whether the game needs `/reload` or a relaunch. It only fast-forwards: a folder with local edits is left as it is and the window says so. A clean folder left on another branch (an agent's work branch, say) is switched back to `forever` first; that branch is kept. The first run creates the desktop icon; delete it and it stays deleted. A previous **WoW AI** shortcut that points at this launcher is moved into `Runback-backup-<date>` when that backup folder can be created, so it does not sit beside the Runback shortcut. If `docs/assets/runback.ico` is in the checkout, the shortcut uses it.
 
 By hand:
 

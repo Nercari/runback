@@ -19,6 +19,7 @@ const fs = require('fs');
 const os = require('os');
 const path = require('path');
 const { spawnSync, spawn } = require('child_process');
+const { backupName } = require('../setup');
 
 const ROOT = path.join(__dirname, '..');
 const BRIDGE = path.join(ROOT, 'bridge');
@@ -230,21 +231,86 @@ function shouldCreateShortcut(marked, hadOld, hasRunback) {
   return !marked || (hadOld && !hasRunback);
 }
 
-function clearOldShortcuts(desktop) {
-  let n = 0;
-  for (const name of OLD_SHORTCUTS) {
-    const file = path.join(desktop, name);
-    if (!fs.existsSync(file)) continue;
-    fs.unlinkSync(file);
-    n++;
+function launcherNeedles(root = ROOT) {
+  const rels = ['Runback.cmd', 'WoW AI.cmd', path.join('tools', 'launch.js')];
+  const needles = [];
+  for (const rel of rels) {
+    const abs = path.resolve(root, rel);
+    needles.push(abs, abs.replaceAll('/', '\\'));
   }
-  return n;
+  return needles;
+}
+
+function refersToLauncher(file, root = ROOT) {
+  let buf;
+  try { buf = fs.readFileSync(file); } catch { return false; }
+  const utf8 = buf.toString('utf8');
+  const utf16 = buf.toString('utf16le');
+  return launcherNeedles(root).some(needle => utf8.includes(needle) || utf16.includes(needle));
+}
+
+function ourOldShortcuts(desktop, root = ROOT) {
+  return OLD_SHORTCUTS
+    .map(name => path.join(desktop, name))
+    .filter(file => fs.existsSync(file) && refersToLauncher(file, root));
+}
+
+function clientBackup(now = new Date()) {
+  try {
+    const cfg = JSON.parse(fs.readFileSync(CONFIG, 'utf8'));
+    if (!cfg.addonDir) return null;
+    return path.join(path.resolve(cfg.addonDir, '..', '..'), backupName(now));
+  } catch {
+    return null;
+  }
+}
+
+function moveIntoBackup(src, backup) {
+  try {
+    fs.mkdirSync(backup, { recursive: true });
+    const base = path.basename(src);
+    let dest = path.join(backup, base);
+    if (fs.existsSync(dest)) {
+      let n = 2;
+      while (fs.existsSync(`${dest}-${n}`)) n++;
+      dest = `${dest}-${n}`;
+    }
+    fs.renameSync(src, dest);
+    return dest;
+  } catch {
+    return null;
+  }
+}
+
+function parkOldShortcuts(desktop, backup, root = ROOT) {
+  if (!backup) return [];
+  const moved = [];
+  for (const file of ourOldShortcuts(desktop, root)) {
+    const dest = moveIntoBackup(file, backup);
+    if (dest) moved.push(dest);
+  }
+  return moved;
+}
+
+function shortcutScript(desk, icon) {
+  const target = path.join(ROOT, 'Runback.cmd');
+  const q = s => `'${String(s).replace(/'/g, "''")}'`;
+  const lines = [
+    `$l = (New-Object -ComObject WScript.Shell).CreateShortcut(${q(path.join(desk, 'Runback.lnk'))})`,
+    `$l.TargetPath = ${q(target)}`,
+    `$l.WorkingDirectory = ${q(ROOT)}`,
+    `$l.WindowStyle = 7`,
+    `$l.Description = 'Update and start Runback'`,
+  ];
+  if (icon) lines.push(`$l.IconLocation = ${q(icon)}`);
+  lines.push('$l.Save()', `Write-Output ${q(desk)}`);
+  return lines.join('; ');
 }
 
 // A "Runback" icon on the desktop pointing at Runback.cmd. Made once: if the
 // player deletes it, it stays deleted (bridge/.shortcut-made remembers).
 // desktop and mark are for the tests.
-function makeShortcut({ desktop = '', mark = SHORTCUT_MARK } = {}) {
+function makeShortcut({ desktop = '', mark = SHORTCUT_MARK, backup } = {}) {
   let desk = desktop;
   if (!desk) {
     if (!WIN) return null;
@@ -252,28 +318,18 @@ function makeShortcut({ desktop = '', mark = SHORTCUT_MARK } = {}) {
     if (!found.ok || !found.out) return null;
     desk = found.out.trim();
   }
-  const hadOld = OLD_SHORTCUTS.some(name => fs.existsSync(path.join(desk, name)));
+  const dest = backup === undefined ? clientBackup() : (backup || null);
+  const hadOld = ourOldShortcuts(desk).length > 0;
   const hasRunback = fs.existsSync(path.join(desk, 'Runback.lnk'));
   if (shouldCreateShortcut(fs.existsSync(mark), hadOld, hasRunback)) {
-    const target = path.join(ROOT, 'Runback.cmd');
     const icon = shortcutIconPath();
-    const q = s => `'${s.replace(/'/g, "''")}'`;
-    const lines = [
-      `$l = (New-Object -ComObject WScript.Shell).CreateShortcut(${q(path.join(desk, 'Runback.lnk'))})`,
-      `$l.TargetPath = ${q(target)}`,
-      `$l.WorkingDirectory = ${q(ROOT)}`,
-      `$l.WindowStyle = 7`,
-      `$l.Description = 'Update and start Runback'`,
-    ];
-    if (icon) lines.push(`$l.IconLocation = ${q(icon)}`);
-    lines.push('$l.Save()', `Write-Output ${q(desk)}`);
-    const r = powershell(lines.join('; '));
+    const r = powershell(shortcutScript(desk, icon));
     if (!r.ok) return null;
     if (!fs.existsSync(mark)) fs.writeFileSync(mark, new Date().toISOString() + '\n');
-    clearOldShortcuts(desk);
+    parkOldShortcuts(desk, dest);
     return r.out;
   }
-  clearOldShortcuts(desk);
+  parkOldShortcuts(desk, dest);
   return null;
 }
 
@@ -357,5 +413,8 @@ module.exports = {
   gameRunning,
   makeShortcut,
   shortcutIconPath,
+  shortcutScript,
   shouldCreateShortcut,
+  refersToLauncher,
+  parkOldShortcuts,
 };

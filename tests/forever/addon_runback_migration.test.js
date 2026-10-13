@@ -100,6 +100,28 @@ test('SlashCmdList.WOWAI is the Runback slash handler', () => {
   assert.notEqual(v.get('#RunbackDB.chats[1].history'), before);
 });
 
+test('hash_SlashCmdList stores handlers: own function keeps /rb, another function hints once', () => {
+  const own = vm();
+  own.load();
+  own.run('hash_SlashCmdList["/rb"] = nil');
+  own.run('hash_SlashCmdList["/RB"] = SlashCmdList.RUNBACK');
+  own.run('STUB.prints = {}');
+  own.run('STUB.FireEvent("PLAYER_LOGIN")');
+  assert.equal(own.get('SLASH_RUNBACK7'), '/rb');
+  assert.equal(rbNotes(own).length, 0);
+
+  const other = vm();
+  other.load();
+  other.run('hash_SlashCmdList["/RB"] = function() end');
+  other.run('STUB.prints = {}');
+  other.run('STUB.FireEvent("PLAYER_LOGIN")');
+  assert.equal(other.get('SLASH_RUNBACK7'), 'nil');
+  const once = rbNotes(other);
+  assert.equal(once.length, 1);
+  other.run('STUB.FireEvent("PLAYER_LOGIN")');
+  assert.equal(rbNotes(other).length, 1);
+});
+
 test('PLAYER_LOGIN rechecks /rb and says once when another addon owns it', () => {
   const taken = vm();
   taken.load();

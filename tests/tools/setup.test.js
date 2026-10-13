@@ -4,7 +4,8 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
-const { migrateOldInstall } = require('../../setup');
+const { spawnSync } = require('node:child_process');
+const { migrateOldInstall, backupName } = require('../../setup');
 
 const NOW = new Date('2026-10-13T15:00:00Z');
 const LEGACY = [
@@ -83,4 +84,35 @@ test('the WoWAI addon folder moves to that backup and WoWAI_Nodes stays', (t) =>
   assert.equal(fs.readFileSync(path.join(backup, 'WoWClaude', 'marker.txt'), 'utf8'), 'claude');
   assert.equal(fs.readFileSync(path.join(addons, 'WoWAI_Nodes', 'Nodes.lua'), 'utf8'), 'nodes\n');
   assert.equal(fs.readFileSync(path.join(addons, 'WoWAI_S001', 'slot.txt'), 'utf8'), 'leave-slot');
+});
+
+test('backup folder date uses the local calendar day', (t) => {
+  const when = new Date('2026-10-14T00:30:00Z');
+  const month = String(when.getMonth() + 1).padStart(2, '0');
+  const day = String(when.getDate()).padStart(2, '0');
+  assert.equal(backupName(when), `Runback-backup-${when.getFullYear()}-${month}-${day}`);
+
+  const root = client(t);
+  write(root, path.join('Interface', 'AddOns', 'WoWClaude', 'marker.txt'), 'user-data');
+  const setup = path.join(__dirname, '..', '..', 'setup.js');
+  const script = `
+    const path = require('path');
+    const { migrateOldInstall } = require(${JSON.stringify(setup)});
+    const when = new Date('2026-10-14T00:30:00Z');
+    const month = String(when.getMonth() + 1).padStart(2, '0');
+    const day = String(when.getDate()).padStart(2, '0');
+    const local = 'Runback-backup-' + when.getFullYear() + '-' + month + '-' + day;
+    const backup = migrateOldInstall(${JSON.stringify(root)}, 'Alpha', when);
+    if (path.basename(backup) !== local) {
+      console.error('got ' + path.basename(backup) + ' want ' + local);
+      process.exit(1);
+    }
+    if (local === 'Runback-backup-2026-10-14') process.exit(2);
+    if (require('fs').readFileSync(path.join(backup, 'WoWClaude', 'marker.txt'), 'utf8') !== 'user-data') process.exit(3);
+  `;
+  const r = spawnSync(process.execPath, ['-e', script], {
+    env: { ...process.env, TZ: 'America/Sao_Paulo' },
+    encoding: 'utf8',
+  });
+  assert.equal(r.status, 0, `${r.stdout}\n${r.stderr}`);
 });
