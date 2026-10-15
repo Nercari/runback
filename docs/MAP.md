@@ -27,6 +27,7 @@ The agent can mark your world map. What it draws are **layers**: a named list of
 | `/runback map` | List layers, navigation and node settings |
 | `/runback map ore [on\|off]`, `/runback map herb [on\|off]` | Show or hide mining / herbalism nodes |
 | `/runback map filter all\|skill` | Every node, or only those your skill can gather (default) |
+| `/runback map colors safe\|classic` | Pin colours: colourblind-safe (Okabe-Ito based, default) or the old set |
 | `/runback map hide <layer>`, `/runback map show <layer>` | Hide or show a layer locally |
 | `/runback map nav <layer> [n]`, `next`, `prev`, `stop` | Drive the navigator |
 
