@@ -152,6 +152,7 @@ Keys under `forever` configure the bridge side of Forever modules. `disabled` sk
 | `mentorDir` | `<repo>/../wow-mentor` | Mentor project root; its chats receive mentor agent restrictions. |
 | `combatLogDir` | The `Combat logs:` line of `<mentorDir>/LOCAL.md` | Folder the review wait reads (read-only) to see whether the combat log has reached the end of the last fight. Empty and no such line: reviews start at once. |
 | `reviewWait.timeoutMs` | `120000` | How long a review waits for the log before it starts anyway, saying so. `reviewWait.pollMs` (`2000`) is the check interval. |
+| `coachGate.mode` | `"shadow"` | `off`, `shadow` or `on`. Decides whether a finished fight gets a review: clear cases by code, middle cases by one Jev question of numbers. `shadow` logs the decision and runs the mentor as before; `on` answers a quiet fight with one plain line. Also `coachGate.trivialSec` (45), `longSec` (180), `lowHpPct` (30), `dropRatio` (0.6), `askAbove` (0.5). |
 | `clientDir` | Derived from `addonDir` | WoW client root used for screenshot and journal paths. |
 | `screenshotsDir` | `<clientDir>/Screenshots` | Screenshot scan and watch directory. |
 | `journal.enabled` | `true` | Generate a journal story on logout bulk data. |

@@ -26,6 +26,7 @@
     "mentorDir": "",
     "clientDir": "",
     "screenshotsDir": "",
+    "coachGate": { "mode": "shadow" },
     "journal": { "enabled": true, "dir": "", "agent": "" },
     "council": { "agents": ["claude", "codex"], "synthesizer": "claude", "timeoutMs": 240000 },
     "phone": { "target": "", "command": "hermes", "notifyAfterMs": 60000 }
