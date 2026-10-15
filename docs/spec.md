@@ -211,7 +211,7 @@ Items 85 to 91 are the Runback roadmap, requested by the Grok Director on nercar
     - One desktop shortcut, `Runback.lnk`, with `docs/assets/runback.ico` as its icon; this launcher's old shortcuts move into the backup folder (`tools/launch.js` lines 299 to 323).
     Icon v3, confirmed and left in place: `docs/assets/runback.ico`, `runback-icon.png` and `runback-social.png` are the files from ec13690, byte-identical to the v3 masters (sha1 prefixes fe904ba0, 0248e435, b6451974). The desktop shortcut already uses the `.ico` (`tools/launch.js`) and the README already shows `runback-icon.png`.
 
-87. **Two-SHA install proof** (the gate for 86 and every later rename-related PR). Script it as `tools/upgrade-proof.js` so it runs the same way every time, in temporary folders, without touching a real client:
+87. **Two-SHA install proof** (done, PR #120: `node tools/upgrade-proof.js [head] [old]`; on `forever` bba7a2c it failed 3 of 8 checks, the `WoWAI` config paths and slot folders, fixed in the same PR) (the gate for 86 and every later rename-related PR). Script it as `tools/upgrade-proof.js` so it runs the same way every time, in temporary folders, without touching a real client:
     - Clean install: run `setup.js` from the PR head into an empty client folder. Expect `Interface/AddOns/Runback` and no `WoWAI` folder.
     - Upgrade: install from `fdc5d0c` (the last commit before the rename), add sample `WoWAI*.lua` saved variables and a `WoWAI_Nodes` folder, then run `setup.js` from the PR head. Expect the old folders in the dated backup, each `Runback*.lua` present, every old file still on disk, and `WoWAI_Nodes` unchanged in place.
     The PR body pastes the script's output with both SHAs. Metric: install paths proven by a repeatable script, 0 → 2.
