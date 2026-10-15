@@ -6,6 +6,7 @@
 //      starting health, damage per second against the recent average).
 //   2. Only the middle cases ask Jev one noul question, with numbers and no text.
 //   3. Any Jev failure runs the mentor, as before the gate existed.
+// Runs before the review-wait module (04 < 06), so a quiet fight does not wait for the log.
 // forever.coachGate.mode: off (no gate) | shadow (default: log the decision, run the
 // mentor as today) | on (a quiet fight gets one plain line instead of an agent run).
 // The gate decides whether the mentor speaks. It never acts in the game, sends no input
@@ -106,7 +107,7 @@ async function askJev(f, avgDps, ctx) {
   return null;
 }
 
-const state = { dps: [], quieted: new Set() };
+const state = { dps: [], seen: new Set(), quieted: new Set() };
 function options(ctx) {
   const o = Object.assign({}, DEFAULTS, (ctx.cfg.forever || {}).coachGate || {});
   if (!['off', 'shadow', 'on'].includes(o.mode)) o.mode = 'shadow';
@@ -122,14 +123,14 @@ async function gate(job, ctx) {
   const f = parseFight(text);
   if (!f || !f.ended || !f.logging) return false; // no finished fight to judge: the mentor says what is missing
   const avg = average(state.dps);
-  if (f.dps > 0 && !state.dps.includes(f.dps + 0.5)) { state.dps.push(f.dps); if (state.dps.length > o.historyMax) state.dps.shift(); }
+  if (f.dps > 0 && !state.seen.has(f.key)) { state.seen.add(f.key); state.dps.push(f.dps); if (state.dps.length > o.historyMax) state.dps.shift(); }
   let d = decide(f, avg, o);
   let p = null;
   if (d.action === 'ask') {
     p = await askJev(f, avg, ctx);
     d = p === null ? { action: 'coach', why: 'jev unavailable' } : p >= o.askAbove ? { action: 'coach', why: `jev ${p.toFixed(2)}` } : { action: 'quiet', why: `jev ${p.toFixed(2)}` };
   }
-  const by = d.why.startsWith('jev ') ? 'jev' : 'code';
+  const by = /^jev \d/.test(d.why) ? 'jev' : d.why === 'jev unavailable' ? 'fallback' : 'code';
   const asked = state.quieted.has(f.key);
   ctx.log(`#${job.id} coach gate (${o.mode}): ${d.action} by ${by} (${d.why}); ${f.duration}s, deaths ${f.deaths}`);
   if (o.mode !== 'on' || d.action === 'coach') return false;
