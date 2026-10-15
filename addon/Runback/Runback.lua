@@ -3388,7 +3388,7 @@ end
 -- Combat log watch (backlog 83): the button once read "off" for a moment with no
 -- click. Each change of LoggingCombat() is kept with its time (the last
 -- LOG_CHANGES_KEPT, shown by /runback diag), and a switch to off that was not the
--- player's click says so once in chat. Read-only: this only reads LoggingCombat().
+-- player's click says so once per session in chat. Read-only: this only reads LoggingCombat().
 -- Runs on the existing 2 s tick and on each button refresh, no polling of its own.
 local LOG_CHANGES_KEPT = 10
 local logWatch = { changes = {} }
@@ -3401,9 +3401,12 @@ function Runback.WatchCombatLog(clicked)
 	local at = date("%H:%M:%S")
 	table.insert(logWatch.changes, { at = at, on = now, clicked = clicked and true or false })
 	while #logWatch.changes > LOG_CHANGES_KEPT do table.remove(logWatch.changes, 1) end
-	if not now and not clicked then
+	-- Once per session: on Forever the log can flip every few seconds, and a line per
+	-- flip floods the chat. Later flips are still recorded for /runback diag.
+	if not now and not clicked and not logWatch.warned then
+		logWatch.warned = true
 		print("|cff7ec8ff[Runback]|r The combat log turned off at " .. at .. " without a click on the Combat log button. "
-			.. "Something else switched it (another addon, a /combatlog command, or the game). /runback diag lists each change.")
+			.. "Something else switched it (another addon, a /combatlog command, or the game). /runback diag lists each change; this note shows once per session.")
 	end
 end
 
