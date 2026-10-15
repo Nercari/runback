@@ -129,7 +129,7 @@ function migrateOldInstall(client, account, now = new Date()) {
   const backup = backupDir(client, now);
   let moved = 0;
   for (const name of fs.existsSync(addons) ? fs.readdirSync(addons) : []) {
-    if ((name === 'WoWClaude' || name === 'WoWAI' || /^WoWClaude_S\d{3}$/.test(name)) && moveAside(path.join(addons, name), backup)) moved++;
+    if ((name === 'WoWClaude' || name === 'WoWAI' || /^(WoWClaude|WoWAI)_S\d{3}$/.test(name)) && moveAside(path.join(addons, name), backup)) moved++;
   }
   if (moved) console.log(`migrate  : moved ${moved} old addon folder(s) to ${backup}`);
   return backup;
@@ -153,12 +153,12 @@ function copyAddon(client) {
 // to the codex and grok blocks from the example. Everything else is kept.
 function upgradeConfig(cfg, example) {
   const notes = [];
-  if (/WoWClaude/.test(cfg.inboxFile || '')) {
+  if (/WoWClaude|[\\/]WoWAI[\\/]/.test(cfg.inboxFile || '')) {
     cfg.inboxFile = path.join(cfg.addonDir, 'Runback', 'Inbox.lua');
     notes.push('inboxFile');
   }
-  if (/WoWClaude\.lua$/.test(cfg.savedVariablesFile || '')) {
-    cfg.savedVariablesFile = cfg.savedVariablesFile.replace(/WoWClaude\.lua$/, 'Runback.lua');
+  if (/(WoWClaude|WoWAI)\.lua$/.test(cfg.savedVariablesFile || '')) {
+    cfg.savedVariablesFile = cfg.savedVariablesFile.replace(/(WoWClaude|WoWAI)\.lua$/, 'Runback.lua');
     notes.push('savedVariablesFile');
   }
   if (!cfg.agents) {
@@ -242,4 +242,4 @@ Done. Next:
 
 if (require.main === module) main();
 
-module.exports = { migrateOldInstall, backupName };
+module.exports = { migrateOldInstall, backupName, upgradeConfig };

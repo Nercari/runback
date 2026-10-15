@@ -5,7 +5,7 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const { spawnSync } = require('node:child_process');
-const { migrateOldInstall, backupName } = require('../../setup');
+const { migrateOldInstall, backupName, upgradeConfig } = require('../../setup');
 
 const NOW = new Date('2026-10-13T15:00:00Z');
 const LEGACY = [
@@ -71,7 +71,7 @@ test('each account WoWAI.lua is copied to Runback.lua only when Runback.lua is a
   assert.equal(fs.readFileSync(path.join(gamma, 'WoWAI.lua'), 'utf8'), LEGACY);
 });
 
-test('the WoWAI addon folder moves to that backup and WoWAI_Nodes stays', (t) => {
+test('the WoWAI addon and its slot folders move to that backup and WoWAI_Nodes stays', (t) => {
   const root = client(t);
   write(root, path.join('Interface', 'AddOns', 'WoWClaude', 'marker.txt'), 'claude');
   write(root, path.join('Interface', 'AddOns', 'WoWAI', 'WoWAI.toc'), '## Title: WoW AI\n');
@@ -83,7 +83,8 @@ test('the WoWAI addon folder moves to that backup and WoWAI_Nodes stays', (t) =>
   assert.equal(fs.readFileSync(path.join(backup, 'WoWAI', 'WoWAI.toc'), 'utf8'), '## Title: WoW AI\n');
   assert.equal(fs.readFileSync(path.join(backup, 'WoWClaude', 'marker.txt'), 'utf8'), 'claude');
   assert.equal(fs.readFileSync(path.join(addons, 'WoWAI_Nodes', 'Nodes.lua'), 'utf8'), 'nodes\n');
-  assert.equal(fs.readFileSync(path.join(addons, 'WoWAI_S001', 'slot.txt'), 'utf8'), 'leave-slot');
+  assert.equal(fs.existsSync(path.join(addons, 'WoWAI_S001')), false);
+  assert.equal(fs.readFileSync(path.join(backup, 'WoWAI_S001', 'slot.txt'), 'utf8'), 'leave-slot');
 });
 
 test('backup folder date uses the local calendar day', (t) => {
@@ -115,4 +116,20 @@ test('backup folder date uses the local calendar day', (t) => {
     encoding: 'utf8',
   });
   assert.equal(r.status, 0, `${r.stdout}\n${r.stderr}`);
+});
+
+test('a config written for WoWAI points at Runback after setup', () => {
+  const addonDir = path.join('C:', 'WoW', 'Interface', 'AddOns');
+  const cfg = {
+    addonDir,
+    inboxFile: path.join(addonDir, 'WoWAI', 'Inbox.lua'),
+    savedVariablesFile: path.join('C:', 'WoW', 'WTF', 'Account', 'A', 'SavedVariables', 'WoWAI.lua'),
+    agents: {},
+  };
+  const notes = upgradeConfig(cfg, {});
+  assert.deepEqual(notes, ['inboxFile', 'savedVariablesFile']);
+  assert.equal(cfg.inboxFile, path.join(addonDir, 'Runback', 'Inbox.lua'));
+  assert.equal(path.basename(cfg.savedVariablesFile), 'Runback.lua');
+  const nodes = { addonDir, inboxFile: path.join(addonDir, 'WoWAI_Nodes', 'x.lua'), agents: {} };
+  assert.deepEqual(upgradeConfig(nodes, {}), []);
 });

@@ -121,9 +121,9 @@ if (!cfg.forever.journal.dir) cfg.forever.journal.dir = path.join(cfg.forever.me
 cfg.forever.screenshotsDir = cfg.forever.screenshotsDir || path.join(cfg.forever.clientDir, 'Screenshots');
 cfg.forever.bulk = cfg.forever.bulk || {};
 // The game-side files. A config.json written for the addon's old name
-// (WoWClaude) still works: the paths are derived from addonDir instead.
-const INBOX_FILE = cfg.inboxFile && !/WoWClaude/.test(cfg.inboxFile) ? cfg.inboxFile : path.join(cfg.addonDir || '', 'Runback', 'Inbox.lua');
-const SAVED_VARS = String(cfg.savedVariablesFile || '').replace(/WoWClaude\.lua$/, 'Runback.lua');
+// (WoWClaude or WoWAI) still works: the paths are derived from addonDir instead.
+const INBOX_FILE = cfg.inboxFile && !/WoWClaude|[\\/]WoWAI[\\/]/.test(cfg.inboxFile) ? cfg.inboxFile : path.join(cfg.addonDir || '', 'Runback', 'Inbox.lua');
+const SAVED_VARS = String(cfg.savedVariablesFile || '').replace(/(WoWClaude|WoWAI)\.lua$/, 'Runback.lua');
 
 let state = readJson(STATE_FILE, { lastId: 0, sessions: {}, handled: {} });
 state.forever = state.forever || { bulk: {} };
