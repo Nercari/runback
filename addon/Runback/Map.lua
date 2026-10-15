@@ -32,7 +32,17 @@ local KIND_COLOR = {
 	flight = { 0.55, 0.75, 1 }, poi = { 1, 1, 1 },
 }
 
-local mdb -- RunbackMapDB: { map, hidden = { [layer] = true }, nodes = { ore, herb, filter }, nav = { layer, index }, navPos, guideKey }
+-- Colourblind-safe palette (backlog 89): Okabe-Ito hues plus light and dark steps, so
+-- every kind stays apart under deuteranopia and protanopia. Default; `colors classic`
+-- brings back KIND_COLOR. Every layer and node pin reads its colour through Color().
+local SAFE_COLOR = {
+	ore = { 0.9, 0.62, 0 }, herb = { 0, 0.62, 0.45 }, quest = { 0.94, 0.89, 0.26 }, turnin = { 0.34, 0.71, 0.91 },
+	kill = { 0.84, 0.37, 0 }, loot = { 0.88, 0.44, 0.69 }, object = { 0, 0.45, 0.7 }, explore = { 0.72, 0.9, 1 },
+	npc = { 1, 1, 1 }, trainer = { 1, 0.91, 0.69 }, vendor = { 0, 0.88, 0.69 }, dungeon = { 0.36, 0.16, 0 },
+	flight = { 0.25, 0.25, 1 }, poi = { 0.1, 0.1, 0.1 },
+}
+
+local mdb -- RunbackMapDB: { map, colors = "safe"|"classic", hidden = { [layer] = true }, nodes = { ore, herb, filter }, nav = { layer, index }, navPos, guideKey }
 local guide -- the guide step's layer, { name = GUIDE, title, ordered, points }, or nil
 
 local function Try(fn, ...)
@@ -53,6 +63,11 @@ local function DB()
 		mdb.nodes = mdb.nodes or { ore = false, herb = false, filter = "skill" }
 	end
 	return mdb
+end
+
+function M.Color(kind)
+	local palette = DB().colors == "classic" and KIND_COLOR or SAFE_COLOR
+	return palette[kind] or palette.poi
 end
 
 local function Layers()
@@ -254,7 +269,7 @@ local function DrawNodes(mapID, scale)
 		local rank = prof and want[prof]
 		local show = rank ~= nil and (filter == "all" or rank == false or kind[3] <= rank)
 		if show then
-			local color = prof == "mining" and KIND_COLOR.ore or KIND_COLOR.herb
+			local color = M.Color(prof == "mining" and "ore" or "herb")
 			for j = 1, #packed - 5, 6 do
 				local x = tonumber(packed:sub(j, j + 2)) / 1000
 				local y = tonumber(packed:sub(j + 3, j + 5)) / 1000
@@ -302,7 +317,7 @@ function M.Refresh()
 				local x, y = Project(p[1], p[2] / 100, p[3] / 100, mapID)
 				local inside = x and x >= 0 and x <= 1 and y >= 0 and y <= 1
 				if inside then
-					local color = KIND_COLOR[p[5]] or KIND_COLOR.poi
+					local color = M.Color(p[5])
 					if l.ordered and prev then AddLine(prev[1], prev[2], x, y, color, 2.5 * scale) end
 					pinCount = pinCount + 1
 					local b = pins[pinCount]
@@ -603,8 +618,9 @@ local function Status()
 		Print(string.format("%s%s|r  guide step (%d point(s))%s", mdb.hidden[GUIDE] and "|cff888888" or "|cffffffff", GUIDE, #guide.points, (mdb.nav and mdb.nav.layer == GUIDE) and string.format("  navigating %d/%d", mdb.nav.index, #guide.points) or ""))
 	end
 	local n = mdb.nodes
+	Print("pin colours: " .. (mdb.colors == "classic" and "classic" or "colourblind-safe"))
 	Print(string.format("nodes: ore %s, herb %s, filter %s%s", n.ore and "on" or "off", n.herb and "on" or "off", n.filter, WoWAINodes and "" or "  (WoWAI_Nodes data addon not installed)"))
-	Print("commands: /runback map ore|herb [on|off], filter all|skill, show|hide <layer>, nav <layer> [n], next, prev, stop  (/aimap is the same)")
+	Print("commands: /runback map ore|herb [on|off], filter all|skill, colors safe|classic, show|hide <layer>, nav <layer> [n], next, prev, stop  (/aimap is the same)")
 end
 
 function M.Command(msg)
@@ -616,6 +632,10 @@ function M.Command(msg)
 		local v = rest:lower()
 		mdb.nodes[cmd] = (v == "on") or (v ~= "off" and not mdb.nodes[cmd])
 		Print(cmd .. " nodes " .. (mdb.nodes[cmd] and "shown" or "hidden") .. " on the world map")
+		M.Refresh()
+	elseif cmd == "colors" and (rest == "safe" or rest == "classic") then
+		mdb.colors = rest
+		Print(rest == "safe" and "colourblind-safe pin colours" or "classic pin colours")
 		M.Refresh()
 	elseif cmd == "filter" and (rest == "all" or rest == "skill") then
 		mdb.nodes.filter = rest

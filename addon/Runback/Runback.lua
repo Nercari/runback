@@ -3492,7 +3492,7 @@ local HELP = table.concat({
 	"/runback reset                  next message in this chat starts a fresh agent session",
 	"/runback context [on|off]       what the agent is told about your character and where you are (no argument = show it)",
 	"/runback guide [show|hide|next|prev|list|pick <n>]   the guide panel: current step and the next two of a guide the mentor wrote (no argument = show or hide it; hidden during fights)",
-	"/runback map [...]              map layers the agent drew, the route navigator and herb/ore nodes (no argument = status and subcommands; /aimap is the same)",
+	"/runback map [...]              map layers the agent drew, the route navigator and herb/ore nodes; `colors safe|classic` picks colourblind-safe (default) or classic pin colours (no argument = status and subcommands; /aimap is the same)",
 	"/runback mode pixel             no-reload transport (default)",
 	"/runback mode reload            fallback transport: a /reload per step",
 	"/runback resend                 show the strip again if the bridge missed it",

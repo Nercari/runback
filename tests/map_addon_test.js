@@ -34,7 +34,7 @@ local T = getmetatable(canvas).__index
 MINING, HERBALISM = "Mining", "Herbalism"
 `;
 
-function newVM() {
+function newVM(saved = '') {
   const L = lauxlib.luaL_newstate();
   lualib.luaL_openlibs(L);
   const run = (code, arg) => {
@@ -65,6 +65,7 @@ function Methods.SetFrameLevel(self, l) self.level = l end
   stub = stub.replace('local function NewObject(', 'function NewObjectPublic(').replace(/NewObject\(/g, 'NewObjectPublic(');
   run(stub);
   run(MAP_STUB);
+  run(saved); // saved variables a previous session left (a reload)
   for (const f of ['Codec.lua', 'Inbox.lua', 'Runback.lua', 'Map.lua']) run(fs.readFileSync(path.join(ADDON, f), 'utf8'), 'Runback');
   run('STUB.FireEvent("ADDON_LOADED", "Runback"); STUB.FireEvent("PLAYER_LOGIN")');
   return { run, evaluate, num };
@@ -223,4 +224,57 @@ test('/runback map hide, show, nav and stop', () => {
   assert.equal(vm.evaluate('RunbackMapDB.nav'), null);
   assert.equal(vm.evaluate('RunbackNavigator.shown'), 'false');
   vm.run('SlashCmdList.RUNBACKMAP("")'); // status never errors
+});
+
+// Backlog 89: pin kinds that two colourblind viewers could not tell apart. Colours
+// are sRGB; they go through linear RGB, the Machado 2009 severity 1.0 matrices
+// (deuteranopia, protanopia), then CIE76 deltaE in Lab (D65). Below MIN_DE two
+// kinds collapse. Measured on the classic palette before the safe one existed.
+const KINDS = ['ore', 'herb', 'quest', 'turnin', 'kill', 'loot', 'object', 'explore', 'npc', 'trainer', 'vendor', 'dungeon', 'flight', 'poi'];
+const MIN_DE = 10;
+const SIM = {
+  deuteranopia: [[0.367322, 0.860646, -0.227968], [0.280085, 0.672501, 0.047413], [-0.011820, 0.042940, 0.968881]],
+  protanopia: [[0.152286, 1.052583, -0.204868], [0.114503, 0.786281, 0.099216], [-0.003882, -0.048116, 1.051998]],
+};
+function lab(rgb, m) {
+  const lin = rgb.map(c => (c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4));
+  const s = m.map(r => Math.min(1, Math.max(0, r[0] * lin[0] + r[1] * lin[1] + r[2] * lin[2])));
+  const xyz = [0.4124 * s[0] + 0.3576 * s[1] + 0.1805 * s[2], 0.2126 * s[0] + 0.7152 * s[1] + 0.0722 * s[2], 0.0193 * s[0] + 0.1192 * s[1] + 0.9505 * s[2]];
+  const f = t => (t > 0.008856 ? Math.cbrt(t) : 7.787 * t + 16 / 116);
+  const [fx, fy, fz] = [f(xyz[0] / 0.9505), f(xyz[1]), f(xyz[2] / 1.089)];
+  return [116 * fy - 16, 500 * (fx - fy), 200 * (fy - fz)];
+}
+function collapsing(vm) {
+  const col = Object.fromEntries(KINDS.map(k => [k, vm.evaluate(`table.concat(RunbackMap.Color("${k}"), ",")`).split(',').map(Number)]));
+  const out = [];
+  for (let i = 0; i < KINDS.length; i++) for (let j = i + 1; j < KINDS.length; j++) {
+    const worst = Math.min(...Object.values(SIM).map(m => Math.hypot(...lab(col[KINDS[i]], m).map((v, n) => v - lab(col[KINDS[j]], m)[n]))));
+    if (worst < MIN_DE) out.push(KINDS[i] + '/' + KINDS[j]);
+  }
+  return out;
+}
+
+test('safe pin colours keep every kind apart for deuteranopia and protanopia; classic collapses some', () => {
+  const vm = newVM();
+  assert.deepEqual(collapsing(vm), [], 'safe is the default');
+  vm.run('SlashCmdList.RUNBACKMAP("colors classic")');
+  const before = collapsing(vm);
+  console.log(`# classic palette: ${before.length} of 91 kind pairs collapse (deltaE < ${MIN_DE}): ${before.join(' ')}`);
+  assert.ok(before.length > 0);
+  vm.run('SlashCmdList.RUNBACKMAP("colors safe")');
+  assert.deepEqual(collapsing(vm), []);
+});
+
+test('/runback map colors switches the pin colours, and the choice survives a reload', () => {
+  const vm = newVM();
+  vm.run(`RunbackMap.Sync(${LAYER})`);
+  const dot = () => vm.evaluate('(function() local o = WorldMapFrame:GetCanvas().children; o = o[#o]; for _, c in ipairs(o.children) do if c.kind == "Button" and c.shown then return table.concat(c.dot.vcolor, ",", 1, 3) end end end)()');
+  assert.equal(dot(), vm.evaluate('table.concat(RunbackMap.Color("ore"), ",")'));
+  const safe = dot();
+  vm.run('SlashCmdList.RUNBACKMAP("colors classic")');
+  assert.equal(vm.evaluate('RunbackMapDB.colors'), 'classic');
+  assert.equal(dot(), '0.95,0.6,0.25');
+  assert.notEqual(dot(), safe);
+  const reloaded = newVM('RunbackMapDB = { colors = "classic" }');
+  assert.equal(reloaded.evaluate('RunbackMap.Color("ore")[1]'), '0.95');
 });
