@@ -107,7 +107,7 @@ test('the Combat log button still toggles through the shared switch', () => {
 
 // Backlog 83: the button read "off" for a moment with no click. Each change of
 // LoggingCombat() is recorded with its time for /runback diag; an off without the
-// player's click says so once in chat; nothing here switches the log.
+// player's click says so once per session in chat; nothing here switches the log.
 const flipNotes = v => prints(v).filter(line => line.includes('without a click on the Combat log button'));
 const diag = v => {
   v.run('SlashCmdList["RUNBACK"]("diag")');
@@ -125,9 +125,10 @@ test('a flip to off with no click is recorded for diag and said once in chat', (
   const notes = flipNotes(v);
   assert.equal(notes.length, 1, 'one line, not one per tick');
   assert.match(notes[0], /^\|cff7ec8ff\[Runback\]\|r The combat log turned off at 12:00 without a click/);
-  // It comes back on (by something else), then flips off again: a second flip, a second line.
+  // It comes back on (by something else), then flips off again: recorded, but no second line,
+  // since on Forever it can flip every few seconds (2026-10-14, three lines in 24 s).
   v.run('STUB.logging = true; STUB.Tick(); STUB.logging = false; STUB.Tick()');
-  assert.equal(flipNotes(v).length, 2);
+  assert.equal(flipNotes(v).length, 1, 'once per session');
   const text = diag(v);
   assert.match(text, /combat log now: off, changes this session: 12:00 off \(no click\); 12:00 on \(no click\); 12:00 off \(no click\)/);
   assert.equal(logSets(v), '', 'the watch only reads the log');
