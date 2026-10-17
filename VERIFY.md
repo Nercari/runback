@@ -18,3 +18,13 @@ Paste the real tail of each command's output in the PR body, under `PROOF OUTPUT
 When behavior changes, update this file only if a command changes (a new check to run), not to record a result.
 
 In-game behavior cannot be verified by an agent. Only Nercari can run the game; a PR that changes the addon gives him a short checklist in the PR body and says the in-game part is unverified.
+
+## Essential check
+
+GREEN for a merge. Runs the tests that need no installed packages (38 tests) and syntax-checks the safety CI script. The rest of `npm test` and `tools/safety-ci.js` need `npm ci` (luaparse, fengari), which is network access, so run the full list under Commands before merging addon changes.
+
+```bash
+node --test tests/agents_test.js tests/guide_test.js tests/signal_slot_test.js tests/starter_guide_test.js
+node --check tools/safety-ci.js
+node --check tools/upgrade-proof.js
+```
