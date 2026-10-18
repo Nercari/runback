@@ -481,6 +481,26 @@ test('the starter card offers the fast model for short questions, once; a click 
   assert.equal(vm.evaluate('RunbackDB.chats[1].pendingId'), null, 'nothing is sent by itself');
 });
 
+test('the addon still loads an inbox that carries effort levels and defaults (backlog 44)', () => {
+  const P = require('../bridge/protocol');
+  // The bridge's own text, with the addon's clock so the slot counts as fresh.
+  const body = P.luaTable('Runback_SlotData', [], {
+    agent: 'claude', agents: ['claude', 'codex'], models: { claude: ['opus', 'sonnet', 'haiku'], codex: [] },
+    efforts: { claude: { opus: ['low', 'medium', 'high', 'xhigh', 'max'], sonnet: ['low', 'medium'] } },
+    defaults: { claude: { opus: 'high', sonnet: 'medium' } },
+  }).split('\n').filter(l => !l.startsWith('--')).join('\n')
+    .replace(/^Runback_SlotData = /, '').replace(/now = \d+,/, 'now = time(),');
+  assert.ok(body.includes('efforts = { claude = {'), 'the fixture carries the new fields');
+  const vm = newVM();
+  login(vm);
+  vm.run('STUB.RunTimers()');
+  nextSlot(vm, body);
+  vm.run('STUB.now = STUB.now + 6; STUB.Tick()');
+  vm.run('Runback.Toggle(true); Runback.Render()');
+  // The model list still arrives: the fast-model offer needs haiku in it.
+  assert.equal(vm.evaluate('Runback.FastModelOffer(RunbackDB.chats[1]) ~= nil'), 'true', 'models still read');
+});
+
 test('each slash command in a reply gets a copy button that opens the copy box with only that line', () => {
   const vm = newVM();
   login(vm);

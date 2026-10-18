@@ -15,7 +15,7 @@
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
-const { describeToolUse, ruleFor, rulesFor, baseName, validModel } = require('./protocol');
+const { describeToolUse, ruleFor, rulesFor, baseName, validModel, validEffort } = require('./protocol');
 const M = require('./models');
 
 const PROGRESS_CHARS = 140;
@@ -545,6 +545,23 @@ function modelChoices(acfg, id) {
   return M.entries(acfg, id).filter(e => validModel(e.id)).map(e => e.id);
 }
 
+// The effort levels each model takes and its default, for the inbox (backlog 44).
+// Only for an agent whose CLI takes a level from here, and only valid names, so the
+// addon never offers a level the bridge would refuse.
+function modelLevels(acfg, id) {
+  const efforts = {};
+  const defaults = {};
+  if (!AGENTS[id] || !AGENTS[id].takesEffort) return { efforts, defaults };
+  for (const e of M.entries(acfg, id)) {
+    if (!validModel(e.id)) continue;
+    const levels = e.efforts.filter(validEffort);
+    if (!levels.length) continue;
+    efforts[e.id] = levels;
+    if (levels.includes(e.defaultEffort)) defaults[e.id] = e.defaultEffort;
+  }
+  return { efforts, defaults };
+}
+
 // Why a chat's effort level cannot run: '' when it can. The level must be one the
 // catalog (or config.json) lists for the model the chat runs on, and the agent's CLI
 // must take one from here. No level, no flag, so this is only asked for a level.
@@ -658,6 +675,7 @@ module.exports = {
   lookFor,
   agentConfig,
   modelChoices,
+  modelLevels,
   modelEntries: M.entries,
   effortProblem,
   grokRules,

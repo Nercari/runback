@@ -111,7 +111,7 @@ Items 41 to 46 make the AI picker match each CLI's own models and effort levels 
 
 43. **Effort on the command line** (done for Claude `--effort` and Hermes `--reasoning`, this PR; Codex waits for `codex login` and one rerun, Grok for an install on Nercari's PC, agy keeps the level in the model id). `effort=` flag, checked per model, passed as each CLI's own flag.
 
-44. **Effort levels in the inbox.** The bridge tells the addon which levels each model takes and its default.
+44. **Effort levels in the inbox** (done; `pools()` and `protocol.luaTable`, tests in `tests/bridge_test.js`, `tests/agents_test.js`, `tests/addon_test.js`). The bridge tells the addon which levels each model takes and its default.
 
 45. **Effort row in the AI picker.** Pick a level after the model; chat label "Agent · model · effort"; closed in combat. Live look by Nercari.
 
