@@ -693,7 +693,8 @@ function noReplyText(agentName, actions, total) {
 
 // The slot file / Inbox.lua body: the latest record of every chat, the bridge's
 // clock, default folder and default agent (plus the agents installed on this
-// PC and the models each can switch to), and
+// PC, the models each can switch to, and the effort levels and default of each
+// model that takes one), and
 // (right after a saved-data reset) a restore bundle.
 function luaTable(globalName, records, opts = {}) {
   const now = opts.now || Date.now();
@@ -707,8 +708,19 @@ function luaTable(globalName, records, opts = {}) {
     `\tagent = ${luaStr(opts.agent || '')},`,
     `\tagents = { ${agents.map(luaStr).join(', ')} },`,
     `\tmodels = { ${Object.entries(opts.models || {}).filter(([, list]) => Array.isArray(list)).map(([id, list]) => `${luaKey(id)} = { ${list.map(luaStr).join(', ')} }`).join(', ')} },`,
-    '\treplies = {',
   ];
+  // Effort levels per agent and model (backlog 44). An older addon ignores both.
+  const levels = (opts.efforts && typeof opts.efforts === 'object') ? opts.efforts : {};
+  const effortRows = Object.entries(levels).filter(([, byModel]) => byModel && typeof byModel === 'object')
+    .map(([id, byModel]) => `${luaKey(id)} = { ${Object.entries(byModel).filter(([m, list]) => validModel(m) && Array.isArray(list))
+      .map(([m, list]) => `${luaKey(m)} = { ${list.filter(validEffort).map(luaStr).join(', ')} }`).join(', ')} }`);
+  lines.push(`\tefforts = { ${effortRows.join(', ')} },`);
+  const defs = (opts.defaults && typeof opts.defaults === 'object') ? opts.defaults : {};
+  const defaultRows = Object.entries(defs).filter(([, byModel]) => byModel && typeof byModel === 'object')
+    .map(([id, byModel]) => `${luaKey(id)} = { ${Object.entries(byModel).filter(([m, e]) => validModel(m) && validEffort(e))
+      .map(([m, e]) => `${luaKey(m)} = ${luaStr(e)}`).join(', ')} }`);
+  lines.push(`\tdefaults = { ${defaultRows.join(', ')} },`);
+  lines.push('\treplies = {');
   for (const r of (Array.isArray(records) ? records : [])) {
     lines.push('\t\t{');
     lines.push(`\t\t\tchat = ${luaStr(r.chat || '')},`);

@@ -28,6 +28,20 @@ test('agent ids, display names and the legacy Claude config keys', () => {
   assert.deepEqual(A.agentConfig({ agents: { grok: { model: 'grok-build' } } }, 'grok'), { model: 'grok-build' });
 });
 
+test('modelLevels: the effort levels and default of each model, only where the CLI takes a level', () => {
+  const claude = A.modelLevels({}, 'claude');
+  assert.deepEqual(claude.efforts.opus, ['low', 'medium', 'high', 'xhigh', 'max']);
+  assert.equal(claude.efforts.haiku, undefined, 'a model without levels is left out');
+  assert.equal(typeof claude.defaults.opus, 'string');
+  assert.ok(claude.efforts.opus.includes(claude.defaults.opus));
+  // From config.json: bad levels dropped, a default outside the list dropped.
+  const own = A.modelLevels({ models: [{ id: 'm1', efforts: ['low', 'BAD'], defaultEffort: 'high' }, 'm2'] }, 'claude');
+  assert.deepEqual(own.efforts, { m1: ['low'] });
+  assert.deepEqual(own.defaults, {});
+  // Codex takes no level from here yet, so nothing is offered for it.
+  assert.deepEqual(A.modelLevels({}, 'codex'), { efforts: {}, defaults: {} });
+});
+
 test('modelChoices: the models a chat can switch an agent to in game', () => {
   // Claude offers its own aliases when agents.claude.models is not set.
   assert.deepEqual(A.modelChoices({}, 'claude'), ['fable', 'opus', 'sonnet', 'haiku']);

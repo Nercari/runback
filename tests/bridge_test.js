@@ -115,6 +115,16 @@ test('splitSummary takes the last TL;DR block for the game chat and keeps the wh
   const pools = P.luaTable('Runback_SlotData', [], { agent: 'claude', agents: ['claude', 'codex'], models: { claude: ['opus', 'sonnet'], codex: [], 'bad id': ['x'] } });
   assert.ok(pools.includes('agents = { "claude", "codex" },'));
   assert.ok(pools.includes('models = { claude = { "opus", "sonnet" }, codex = {  }, ["bad id"] = { "x" } },'));
+  // No levels: both tables are empty, so an older addon reads the same slot as before.
+  assert.ok(pools.includes('efforts = {  },'));
+  assert.ok(pools.includes('defaults = {  },'));
+  // With levels (backlog 44): per agent and model, bad names and levels dropped.
+  const lv = P.luaTable('Runback_SlotData', [], {
+    efforts: { claude: { opus: ['low', 'high', 'Bad!'], 'gpt-5.1': ['medium'], 'bad model;': ['low'] }, 'bad id': { x: ['low'] } },
+    defaults: { claude: { opus: 'high', sonnet: 'NOPE!' } },
+  });
+  assert.ok(lv.includes('efforts = { claude = { opus = { "low", "high" }, ["gpt-5.1"] = { "medium" } }, ["bad id"] = { x = { "low" } } },'));
+  assert.ok(lv.includes('defaults = { claude = { opus = "high" } },'));
 });
 
 test('the shipped primer exists, mentions the essentials, and stays small enough to send on every run', () => {
