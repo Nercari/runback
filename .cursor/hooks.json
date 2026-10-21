@@ -1,0 +1,21 @@
+{
+  "version": 1,
+  "hooks": {
+    "beforeShellExecution": [
+      {
+        "command": "node .cursor/hooks/merge-gate.mjs",
+        "matcher": "merge|push",
+        "timeout": 10,
+        "failClosed": true
+      }
+    ],
+    "beforeMCPExecution": [
+      {
+        "command": "node .cursor/hooks/merge-gate.mjs",
+        "matcher": "merge",
+        "timeout": 10,
+        "failClosed": true
+      }
+    ]
+  }
+}
