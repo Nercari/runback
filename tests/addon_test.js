@@ -139,14 +139,15 @@ test('the game context describes the character and rides on the hello, then only
   vm.run('STUB.RunTimers()');
   const hello = stripRecords(vm)[0];
   assert.deepEqual(hello.ctx.split('\n'), [
-    'Game: World of Warcraft: Forever (client 1.60.1.69913, interface 16001)',
+    'Game: World of Warcraft: Forever (client 1.60.1.70532, interface 16001)',
     'Character: Testchar on Test Realm, level 23 Night Elf Hunter (Alliance), guild <Test Guild>',
     'Location: Duskwood - Darkshire',
     'Position: 45.2, 67.8 (map 1431)',
     'Money: 1g 23s 45c; XP: 1234/5000',
-    'Talents: Beast Mastery 10 / Marksmanship 5 / Survival 0',
     'Professions: Skinning 75/75, First Aid 40/75',
   ]);
+  // Talents: the client has no Classic talent tabs; #134 restores the line
+  // through C_ClassTalents and C_Traits (see the skipped test below).
   // The bridge answers the hello: the context is now known to be on its side.
   nextSlot(vm, '{ now = time(), cwd = "", replies = {} }');
   vm.run('STUB.now = STUB.now + 6; STUB.Tick()');
@@ -176,6 +177,16 @@ test('the game context describes the character and rides on the hello, then only
   const on = stripRecords(vm).filter(r => r.flags === 'h;c');
   assert.ok(on.some(r => r.ctx.includes('Character: Testchar')));
   assert.ok(vm.evaluate('RunbackDB.chats[2].history[#RunbackDB.chats[2].history].text').includes('Game context is ON'));
+});
+
+// The stub no longer fakes the Classic talent tabs, so the addon has no
+// Talents line on Forever. #134 reads the build through C_ClassTalents and
+// C_Traits and restores it; remove the skip there.
+test('the game context has a Talents line on Forever', { skip: '#134: talents move to C_ClassTalents and C_Traits' }, () => {
+  const vm = newVM();
+  login(vm);
+  vm.run('STUB.RunTimers()');
+  assert.match(stripRecords(vm)[0].ctx, /^Talents: /m);
 });
 
 test('a shift-clicked link lands in the focused input and is sent as its name plus tooltip', () => {
