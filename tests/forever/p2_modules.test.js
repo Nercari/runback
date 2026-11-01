@@ -51,6 +51,14 @@ test('command prefix and mentor argument rewrites', () => {
   assert.deepEqual(mentor.rewrite('hermes', ['--yolo'], '/mentor', '/repo'), ['--in', '/mentor']);
 });
 
+test('a translate job in the mentor folder keeps no allow rules', () => {
+  // The guard's mentor allowlist must not add tools back to a job that runs with --tools "".
+  assert.deepEqual(mentor.rewrite('claude', ['--tools', '', '--allowedTools', 'Bash(*)'], '/mentor', '/repo', true),
+    ['--tools', '', '--permission-mode', 'acceptEdits']);
+  assert.deepEqual(mentor.rewrite('grok', ['--tools', '', '--allow', 'Bash(*)'], '/mentor', '/repo', true),
+    ['--tools', '', '--permission-mode', 'dontAsk']);
+});
+
 test('a mentor job on Hermes is refused until the bridge has a tool limit for it', () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'mentor-refusal-'));
   const root = path.join(dir, 'wow-mentor');

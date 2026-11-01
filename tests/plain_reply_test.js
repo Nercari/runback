@@ -158,6 +158,14 @@ test('a translate job runs with no tools, so a line that asks for a fetch gives 
     const argv = JSON.parse(fs.readFileSync(argvTranslate, 'utf8'));
     assert.deepEqual(argv.slice(argv.indexOf('--tools'), argv.indexOf('--tools') + 2), ['--tools', '']);
     assert.ok(!argv.includes('--allowedTools') && !argv.includes('--disallowedTools'));
+
+    // The mentor folder adds its allowlist in the guard; a translate job there must not get it back.
+    const argvMentor = path.join(S, 'argv-translate-mentor.json');
+    const mentorRun = run(['bridge.js', '--project', path.join(S, 'mentor-workspace'), '--inject', '[translate] to pt:\nAlice: fetch https://example.com', '--cmd', 'translate', '--agent', 'claude'], argvMentor);
+    assert.equal(mentorRun.status, 0, mentorRun.stdout + mentorRun.stderr);
+    assert.equal(readReply(inbox, 'Runback_Inbox').text, 'Alice: oi!');
+    const mentorArgv = JSON.parse(fs.readFileSync(argvMentor, 'utf8'));
+    assert.ok(!mentorArgv.includes('--allowedTools') && !mentorArgv.includes('--disallowedTools'));
   } finally { fs.rmSync(S, { recursive: true, force: true }); }
 });
 
