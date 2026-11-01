@@ -21,10 +21,9 @@ In-game behavior cannot be verified by an agent. Only Nercari can run the game; 
 
 ## Essential check
 
-GREEN for a merge. Runs the tests that need no installed packages (38 tests) and syntax-checks the safety CI script. The rest of `npm test` and `tools/safety-ci.js` need `npm ci` (luaparse, fengari), which is network access, so run the full list under Commands before merging addon changes.
+GREEN for a merge. Syntax-checks the safety CI and upgrade-proof scripts. The tests that need no installed packages (38 tests) are unit tests (`node --test`), so they run locally, not in the gate (Pedro, 2026-10-24). `npm test` and `tools/safety-ci.js` need `npm ci` (luaparse, fengari), which is network access, so run the full list under Commands before merging addon changes.
 
 ```bash
-node --test tests/agents_test.js tests/guide_test.js tests/signal_slot_test.js tests/starter_guide_test.js
 node --check tools/safety-ci.js
 node --check tools/upgrade-proof.js
 ```
