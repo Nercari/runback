@@ -5,7 +5,7 @@ const os = require('os');
 const path = require('path');
 const { spawn } = require('child_process');
 
-function runAgentOnce({ agentId, cwd, prompt, timeoutMs }, deps) {
+function runAgentOnce({ agentId, cwd, prompt, timeoutMs, model }, deps) {
   const { A, P, cfg, killTree, augment, onSpawn } = deps;
   agentId = A.normalizeAgent(agentId);
   if (!agentId) return Promise.resolve({ status: 'error', text: 'Unknown agent.' });
@@ -19,6 +19,9 @@ function runAgentOnce({ agentId, cwd, prompt, timeoutMs }, deps) {
       : `${cwd} is outside the folders this bridge allows. Add it to allowedFolders in bridge/config.json on the PC, or use /runback cd for a folder inside one of them.` });
   }
   let acfg = A.agentConfig(cfg, agentId);
+  // A one-off note (the coach card, #140) can name its own model, the same cheap
+  // one a review uses; an agent's own choice still applies when this is empty.
+  if (model && model !== acfg.model) acfg = { ...acfg, model, effort: '' };
   if (!deps.mentorDir || !P.folderInside(cwd, deps.mentorDir)) {
     if (agent.readOnly === false) {
       return Promise.resolve({ status: 'error', text: `${agent.name} cannot be limited to read-only tools outside the mentor workspace. Use /runback agent to switch, or stay in the mentor workspace.` });

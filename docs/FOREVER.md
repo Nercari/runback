@@ -10,6 +10,8 @@ Bridge `ctx` exposes `cfg`, `log`, `HERE`, `REPO`, `state`, `saveState`, `atomic
 
 `06-review-wait.js` holds a review (`cmd=review`) while the newest combat log ends more than 3 seconds before `lastFight.end`: it sends one plain line to the window ("Waiting for the game to save the fight to the combat log..."), checks every 2 seconds, and lets the review start when the file catches up or after 2 minutes (then says it starts anyway). It only reads the log. Settings: `forever.combatLogDir`, `forever.reviewWait` (`docs/CONFIGURATION.md`).
 
+`07-coach-card.js` answers the addon's between-pull coach card (#140). After a fight's lockout ends, the addon sends a record with flag `k` (no chat, no reply text) carrying the fight times and the player's name. The module reads only that fight's window from the newest combat log, counts the checks in code (`tools/coach-card.js`: deaths, enemy casts, interrupts, hits taken, the longest gap between the player's own actions, and hits inside a 3-second burst), and picks one check worth a note. The agent's cheap model (`agents.<id>.coachModel`) writes the one sentence; every number in it is checked against the counts, and a sentence with any other number is replaced by the code sentence, so an invented number never reaches the player. The card is written as a `card` table in the slot files, never as a chat reply, and the addon shows it out of combat only. With no usable log, with the combat log off, or with nothing to say, no card is made and no error is raised. Read-only: the log is read, never changed, and nothing here runs during a fight.
+
 ```js
 module.exports = {
   init(ctx) { ctx.log('sample ready'); },

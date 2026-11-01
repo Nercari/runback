@@ -162,7 +162,8 @@ function sameFolder(a, b) {
 // text (an empty one clears the context the bridge keeps), "agent=codex" = run
 // this chat with that agent instead of the bridge's default (see agents.js),
 // "model=sonnet" = run it on that model (one of the agent's modelChoices),
-// "effort=high" = at that reasoning level (one the catalog lists for the model).
+// "effort=high" = at that reasoning level (one the catalog lists for the model),
+// "k" = ask for the between-pull coach card (no chat, no reply text; #140).
 // A model name as an agent CLI takes it ("opus", "gpt-5-codex",
 // "claude-sonnet-4-5[1m]", "openrouter/x-ai/grok-4"). It goes into argv, never a shell.
 // Permission rules never come from the game: an "allow=" token in older addon
@@ -172,12 +173,13 @@ function validModel(m) { return typeof m === 'string' && MODEL_TOKEN.test(m); }
 const EFFORT_TOKEN = /^[a-z]{1,16}$/;
 function validEffort(e) { return typeof e === 'string' && EFFORT_TOKEN.test(e); }
 function parseFlags(flags) {
-  const out = { newSession: false, hello: false, forget: false, stop: false, context: false, agent: '', model: '', effort: '', cmd: '' };
+  const out = { newSession: false, hello: false, forget: false, stop: false, context: false, card: false, agent: '', model: '', effort: '', cmd: '' };
   for (const tok of String(flags || '').split(';')) {
     if (tok === 'n') out.newSession = true;
     else if (tok === 'h') out.hello = true;
     else if (tok === 'd') out.forget = true;
     else if (tok === 's') out.stop = true;
+    else if (tok === 'k') out.card = true;
     else if (tok === 'c') out.context = true;
     else if (tok.startsWith('agent=')) out.agent = tok.slice(6).trim().toLowerCase();
     else if (tok.startsWith('model=')) { const m = tok.slice(6).trim(); if (validModel(m)) out.model = m; }
@@ -759,6 +761,7 @@ function luaTable(globalName, records, opts = {}) {
   lines.push('\t},');
   if (opts.map) lines.push(luaMap(opts.map));
   if (opts.guides) lines.push(luaGuides(opts.guides));
+  if (opts.card) lines.push(luaCard(opts.card));
   const restore = opts.restore;
   if (restore) {
     const chats = Array.isArray(restore.chats) ? restore.chats : [];
@@ -935,6 +938,14 @@ function luaGuides(store) {
   return lines.join('\n');
 }
 
+// The between-pull coach card (#140): one sentence, its reason and the counts
+// behind it, all short. The bridge owns it; the addon only shows it out of combat.
+function luaCard(card) {
+  if (!card || typeof card !== 'object' || typeof card.text !== 'string' || !card.text) return '';
+  return `\tcard = { key = ${luaStr(cleanText(card.key, 40))}, text = ${luaStr(cleanText(card.text, 200))}, ` +
+    `why = ${luaStr(cleanText(card.why, 200))}, counts = ${luaStr(cleanText(card.counts, 200))} },`;
+}
+
 // A valid, silent 10 ms WAV. An empty file "won't play"; this one will.
 const SILENT_WAV = (() => {
   const rate = 8000, samples = 80;
@@ -1002,4 +1013,5 @@ module.exports = {
   parseMapFile,
   luaMap,
   luaGuides,
+  luaCard,
 };
