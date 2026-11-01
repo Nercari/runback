@@ -196,18 +196,44 @@ test('OpenCode: run --format json, plan mode as the read-only floor, a variant i
   assert.ok(!A.AGENTS.opencode.takesImages, 'a look needs its image path confirmed first');
 });
 
+// An `opencode run --format json` stream, recorded on opencode v2.2.5 (2026-11-01, free model,
+// cost 0), with only the fields the parser reads: a shell, a write, a read, an edit, a grep,
+// one text part and the `stop` step. Paths are shortened to C:\work.
+const OPENCODE_STREAM = String.raw`
+{"type": "step_start", "sessionID": "ses_e66e1a4c7ffeQ4yweLJt8GwIn2", "part": {"messageID": "msg_1991e5b4b001vAcj9j0fg10MYY"}}
+{"type": "tool_use", "sessionID": "ses_e66e1a4c7ffeQ4yweLJt8GwIn2", "part": {"messageID": "msg_1991e5b4b001vAcj9j0fg10MYY", "tool": "shell", "state": {"input": {"command": "ls -la C:\\work 2>&1 | head -20"}}}}
+{"type": "step_finish", "sessionID": "ses_e66e1a4c7ffeQ4yweLJt8GwIn2", "part": {"messageID": "msg_1991e5b4b001vAcj9j0fg10MYY", "reason": "tool-calls"}}
+{"type": "step_start", "sessionID": "ses_e66e1a4c7ffeQ4yweLJt8GwIn2", "part": {"messageID": "msg_1991e5ff10011JfaXfR0vZyWSY"}}
+{"type": "tool_use", "sessionID": "ses_e66e1a4c7ffeQ4yweLJt8GwIn2", "part": {"messageID": "msg_1991e5ff10011JfaXfR0vZyWSY", "tool": "write", "state": {"input": {"path": "C:\\work\\w2.txt", "content": "alpha\n"}}}}
+{"type": "tool_use", "sessionID": "ses_e66e1a4c7ffeQ4yweLJt8GwIn2", "part": {"messageID": "msg_1991e5ff10011JfaXfR0vZyWSY", "tool": "read", "state": {"input": {"path": "C:\\work\\note.txt"}}}}
+{"type": "step_finish", "sessionID": "ses_e66e1a4c7ffeQ4yweLJt8GwIn2", "part": {"messageID": "msg_1991e5ff10011JfaXfR0vZyWSY", "reason": "tool-calls"}}
+{"type": "step_start", "sessionID": "ses_e66e1a4c7ffeQ4yweLJt8GwIn2", "part": {"messageID": "msg_1991e6865001jb6uq6hDCTX1MA"}}
+{"type": "tool_use", "sessionID": "ses_e66e1a4c7ffeQ4yweLJt8GwIn2", "part": {"messageID": "msg_1991e6865001jb6uq6hDCTX1MA", "tool": "edit", "state": {"input": {"path": "C:\\work\\w2.txt", "oldString": "alpha", "newString": "beta"}}}}
+{"type": "step_finish", "sessionID": "ses_e66e1a4c7ffeQ4yweLJt8GwIn2", "part": {"messageID": "msg_1991e6865001jb6uq6hDCTX1MA", "reason": "tool-calls"}}
+{"type": "step_start", "sessionID": "ses_e66e1a4c7ffeQ4yweLJt8GwIn2", "part": {"messageID": "msg_1991e6de00016TcAzSeKJsuClH"}}
+{"type": "tool_use", "sessionID": "ses_e66e1a4c7ffeQ4yweLJt8GwIn2", "part": {"messageID": "msg_1991e6de00016TcAzSeKJsuClH", "tool": "grep", "state": {"input": {"path": "C:\\work\\w2.txt", "pattern": "beta"}}}}
+{"type": "step_finish", "sessionID": "ses_e66e1a4c7ffeQ4yweLJt8GwIn2", "part": {"messageID": "msg_1991e6de00016TcAzSeKJsuClH", "reason": "tool-calls"}}
+{"type": "step_start", "sessionID": "ses_e66e1a4c7ffeQ4yweLJt8GwIn2", "part": {"messageID": "msg_1991e723d001YcKRXQa7fjiXYH"}}
+{"type": "tool_use", "sessionID": "ses_e66e1a4c7ffeQ4yweLJt8GwIn2", "part": {"messageID": "msg_1991e723d001YcKRXQa7fjiXYH", "tool": "shell", "state": {"input": {"command": "wc -c probe119/w2.txt", "workdir": "C:\\work"}}}}
+{"type": "step_finish", "sessionID": "ses_e66e1a4c7ffeQ4yweLJt8GwIn2", "part": {"messageID": "msg_1991e723d001YcKRXQa7fjiXYH", "reason": "tool-calls"}}
+{"type": "step_start", "sessionID": "ses_e66e1a4c7ffeQ4yweLJt8GwIn2", "part": {"messageID": "msg_1991e7674001z4D5PNuJzAWVvY"}}
+{"type": "text", "sessionID": "ses_e66e1a4c7ffeQ4yweLJt8GwIn2", "part": {"messageID": "msg_1991e7674001z4D5PNuJzAWVvY", "text": "5"}}
+{"type": "step_finish", "sessionID": "ses_e66e1a4c7ffeQ4yweLJt8GwIn2", "part": {"messageID": "msg_1991e7674001z4D5PNuJzAWVvY", "reason": "stop"}}
+`;
+// The same CLI's `error` event: it is printed and the command still exits 0.
+const OPENCODE_ERROR = '{"type":"error","sessionID":"ses_e66e41a6effeSvGkandKbOpai4","error":{"type":"provider.no-route","message":"Model unavailable: opencode/nope-nope"}}';
+
 test('OpenCode: the recorded stream gives plain progress, the session and the reply', () => {
-  const read = name => fs.readFileSync(path.join(__dirname, 'fixtures/agents', name), 'utf8').trim().split(/\r?\n/).map(JSON.parse);
+  const read = text => text.trim().split(/\r?\n/).map(JSON.parse);
   const p = A.opencodeParser();
-  const rows = read('opencode-tools.jsonl').map(ev => p.feed(ev));
+  const rows = read(OPENCODE_STREAM).map(ev => p.feed(ev));
   assert.equal(rows[0].session, 'ses_e66e1a4c7ffeQ4yweLJt8GwIn2');
   assert.deepEqual(rows.flatMap(r => r.progress),
     ['$ ls -la C:\\work 2>&1 | head -20', 'write w2.txt', 'read note.txt', 'edit w2.txt', 'grep beta', '$ wc -c probe119/w2.txt', '5']);
   const done = rows.find(r => r.done).done;
   assert.deepEqual(done, { text: '5', error: false });
   // An `error` event exits 0, so the event itself must end the run as an error.
-  const ep = A.opencodeParser();
-  const failed = ep.feed(read('opencode-error.jsonl')[0]);
+  const failed = A.opencodeParser().feed(JSON.parse(OPENCODE_ERROR));
   assert.equal(failed.done.error, true);
   assert.equal(failed.done.text, 'Model unavailable: opencode/nope-nope');
   assert.equal(failed.session, 'ses_e66e41a6effeSvGkandKbOpai4');

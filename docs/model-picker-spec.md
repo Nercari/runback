@@ -66,7 +66,7 @@ Labels: OBSERVED (read in the CLI's own source or run here), DOCUMENTED (officia
 
 Nercari asked (2026-10-11): "I also want to be able to use my OpenCode models and choose reasoning just like in their respective CLIs." The paid OpenCode Go plan was cancelled on 2026-10-04 (nercari-control CLAUDE.md), so only models his sign-in already gives him are in scope; nothing here buys a plan.
 
-Measured on Nercari's Linux PC, `opencode v2.2.5`, 2026-11-01 (help and list commands, plus one run per question on a free model, cost 0; the raw streams are `tests/fixtures/agents/opencode-*.jsonl`):
+Measured on Nercari's Linux PC, `opencode v2.2.5`, 2026-11-01 (help and list commands, plus one run per question on a free model, cost 0; the recorded stream and error event are in `tests/agents_test.js`):
 
 - Run: `opencode run [<message>…] --model <provider>/<model>[#<variant>] --format json [--session <id>] [--agent <name>] [--auto]`. With no message argument it reads the message on stdin (checked). `--format json` prints one JSON event per line: `step_start`, `tool_use` (`part.tool`, `part.state.input`), `text` (one whole text part), `step_finish` (`part.reason` `stop` or `tool-calls`) and `error`. All carry `sessionID`; `--session` continues that session (checked: the resumed run remembered the word from the first).
 - Models: `opencode models` lists `provider/model` ids, one per line, with no flags and no per-model detail; there is no `--verbose` in 2.2.5. The model's reasoning variants are not in that output, and `opencode run --help` offers no `--variant`; the variant is a `#name` suffix on the model id (`opencode/deepseek-v4.1-flash-free#high` ran, checked). So the bridge lists no OpenCode model or level by itself; both come from `agents.opencode.models` in `config.json`.
@@ -152,7 +152,7 @@ Each ticket: one PR into `forever`, `node tools/safety-ci.js` and `npm test` gre
 ### 64. OpenCode as an agent (this PR)
 
 - Needs: nothing.
-- Done: the flags and one JSON stream were recorded on Nercari's PC on `opencode v2.2.5` (2026-11-01, free model, cost 0), into `tests/fixtures/agents/opencode-*.jsonl`; `opencode` is in `bridge/agents.js` (detect, run, parse reply, progress, session and errors), so it shows in the AI menu like the others. No spend: a model that needs a paid plan shows the CLI's own error.
+- Done: the flags and one JSON stream were recorded on Nercari's PC on `opencode v2.2.5` (2026-11-01, free model, cost 0), into `tests/agents_test.js`; `opencode` is in `bridge/agents.js` (detect, run, parse reply, progress, session and errors), so it shows in the AI menu like the others. No spend: a model that needs a paid plan shows the CLI's own error.
 - Tests: the recorded stream parses in `tests/agents_test.js`, as does the `error` event; a missing CLI gives the install hint from `resolveCommand`.
 - Metric: OpenCode chats that return a reply in game, 0 → 1 (live check by Nercari).
 
