@@ -483,9 +483,16 @@ end
 -- bridge can tell it from a separator inside the text.
 local function RecordFor(id, rec)
 	local flags = Wire(rec.flags)
+	if rec.ctx ~= nil then
+		flags = flags == "" and "c" or (flags .. ";c")
+	end
+	-- The last reply slot this session loaded, so the bridge writes only the ones
+	-- after it (#144). Absent until one is loaded: an older bridge writes all.
+	if run.lastSlot then
+		flags = flags == "" and ("slot=" .. run.lastSlot) or (flags .. ";slot=" .. run.lastSlot)
+	end
 	local fields = { Wire(db.session), Wire(rec.chat), tostring(id), Wire(rec.cwd), flags, Wire(rec.name) }
 	if rec.ctx ~= nil then
-		fields[5] = flags == "" and "c" or (flags .. ";c")
 		table.insert(fields, Wire(rec.ctx))
 	end
 	table.insert(fields, Wire(rec.text))
@@ -950,6 +957,7 @@ local function TryLoadSlot(why)
 		return
 	end
 	run.polls = (run.polls or 0) + 1
+	run.lastSlot = tonumber(string.match(name, "(%d+)$"))
 	run.slotsUsed[why] = (run.slotsUsed[why] or 0) + 1
 	ScheduleNextPoll()
 	local data = Runback_SlotData

@@ -29,6 +29,21 @@ function comparableWindowsPath(p) {
   return normalized.length > 3 ? normalized.replace(/[\\/]$/, '') : normalized;
 }
 
+// The slot files one publish writes (#144). The game loads slots in ascending
+// order, so after the addon reports the last slot it loaded (l >= 1) only the
+// next `window` slots can be read; a report of 0 or none (an older addon, or one
+// that has not read a slot this session) writes every slot, as it always did.
+function slotTargets(lastSlot, slots, window) {
+  const max = Number(slots);
+  if (!Number.isInteger(max) || max < 1) return [];
+  const n = Number(lastSlot);
+  const size = Math.min(Math.max(Number(window) || 0, 1), max);
+  if (!Number.isInteger(n) || n < 1 || n > max) {
+    return Array.from({ length: max }, (_, i) => i + 1);
+  }
+  return Array.from({ length: size }, (_, i) => ((n + i) % max) + 1);
+}
+
 // Reply slot / signal file number for a message id (1-based, wraps at `slots`).
 function slotNumber(id, slots) {
   const n = Number(id);
@@ -168,12 +183,14 @@ function sameFolder(a, b) {
 // "claude-sonnet-4-5[1m]", "openrouter/x-ai/grok-4"). It goes into argv, never a shell.
 // Permission rules never come from the game: an "allow=" token in older addon
 // builds is ignored, and new rules are added only to config.json on the PC.
+// "slot=17" = the last reply-slot addon the game loaded this session (#144); an
+// addon without it gets every slot written.
 const MODEL_TOKEN = /^[A-Za-z0-9][A-Za-z0-9._:\/@\[\]-]{0,63}$/;
 function validModel(m) { return typeof m === 'string' && MODEL_TOKEN.test(m); }
 const EFFORT_TOKEN = /^[a-z]{1,16}$/;
 function validEffort(e) { return typeof e === 'string' && EFFORT_TOKEN.test(e); }
 function parseFlags(flags) {
-  const out = { newSession: false, hello: false, forget: false, stop: false, context: false, card: false, agent: '', model: '', effort: '', cmd: '' };
+  const out = { newSession: false, hello: false, forget: false, stop: false, context: false, card: false, agent: '', model: '', effort: '', cmd: '', slot: -1 };
   for (const tok of String(flags || '').split(';')) {
     if (tok === 'n') out.newSession = true;
     else if (tok === 'h') out.hello = true;
@@ -185,6 +202,7 @@ function parseFlags(flags) {
     else if (tok.startsWith('model=')) { const m = tok.slice(6).trim(); if (validModel(m)) out.model = m; }
     else if (tok.startsWith('effort=')) { const e = tok.slice(7).trim(); if (validEffort(e)) out.effort = e; }
     else if (tok.startsWith('cmd=')) { const cmd = tok.slice(4); if (/^[a-z0-9-]{1,24}$/.test(cmd)) out.cmd = cmd; }
+    else if (tok.startsWith('slot=')) { const v = tok.slice(5); if (/^\d{1,6}$/.test(v)) out.slot = Number(v); }
   }
   return out;
 }
@@ -969,6 +987,7 @@ module.exports = {
   fromHex,
   pad3,
   slotNumber,
+  slotTargets,
   chatKey,
   sessKey,
   alreadyHandled,

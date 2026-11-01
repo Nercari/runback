@@ -123,6 +123,12 @@ function siblingFolders() {
 }
 
 const SLOTS = cfg.slots || 200;
+// #144: one publish writes the inbox and only the slots the addon can still
+// read (it loads them in order and reports the last one on the strip), not all
+// 200. 16 was measured to cover a reply's polls; tools/upgrade-proof.js and
+// tests/forever/slot_window.test.js hold the evidence.
+const SLOT_WINDOW = Math.max(1, Math.min(cfg.slotWindow || 16, SLOTS));
+let addonSlot = 0; // last slot the addon reported loading; 0 = unknown, write all
 const MAX_PARALLEL = cfg.maxParallel || 3;
 const cap = Object.assign({ enabled: true, processName: 'WowB', cellPx: 4, cellsPerRow: 200, maxRows: 48, intervalMs: 250 }, cfg.capture || {});
 cfg.forever.clientDir = path.resolve(cfg.forever.clientDir || path.resolve(cfg.addonDir || '', '..', '..'));
@@ -396,11 +402,32 @@ function slotsInstalled() {
   return fs.existsSync(path.join(cfg.addonDir, 'Runback_S001', 'Inbox.lua'));
 }
 
-// The game will load *some* unused slot next, so every slot gets the full picture.
-// A missing addon folder (not installed yet, or the game folder moved) must not
-// take the bridge down: capture and agent runs keep working, and the game just
-// won't see replies until `node setup.js` has run and WoW was restarted.
+// The game will load *some* unused slot next, so the slots it can still reach
+// carry the full picture, and every slot when the bridge does not know which
+// one is next. A missing addon folder (not installed yet, or the game folder
+// moved) must not take the bridge down: capture and agent runs keep working,
+// and the game just won't see replies until `node setup.js` has run and WoW was
+// restarted.
 let warnedNoAddon = false;
+
+// The addon reports the last slot it loaded on the strip. A lower number than
+// before is a new slot pool (/reload, or a client restart the bridge did not
+// see), so every slot is written again before the next poll.
+function noteAddonSlot(n) {
+  if (!Number.isInteger(n) || n < 0) return;
+  const reset = n === 0 || (addonSlot > 0 && n < addonSlot);
+  addonSlot = reset ? 0 : n;
+  if (reset && n > 0) publishNow();
+}
+
+// Slot files are the largest thing a publish writes: write only the ones the
+// addon can still load (#144).
+function writeSlots(body) {
+  for (const i of P.slotTargets(addonSlot, SLOTS, SLOT_WINDOW)) {
+    try { atomicWrite(path.join(cfg.addonDir, 'Runback_S' + pad3(i), 'Inbox.lua'), body); } catch {}
+  }
+}
+
 function publishNow(urgent = true) {
   lastPublish = Date.now();
   const records = [...live.values()].slice(-30);
@@ -414,10 +441,7 @@ function publishNow(urgent = true) {
     return;
   }
   if (!slotsInstalled()) return;
-  const body = slotFile('Runback_SlotData', records, urgent);
-  for (let i = 1; i <= SLOTS; i++) {
-    try { atomicWrite(path.join(cfg.addonDir, 'Runback_S' + pad3(i), 'Inbox.lua'), body); } catch {}
-  }
+  writeSlots(slotFile('Runback_SlotData', records, urgent));
   // The restore bundle is large; it rides along once and is then dropped.
   // (The game keeps loading fresh slots until it has read one carrying it.)
   if (pendingRestore) { pendingRestore.published = (pendingRestore.published || 0) + 1; if (pendingRestore.published >= 3) pendingRestore = null; }
@@ -553,6 +577,7 @@ function runAgentOnce(options) {
 // ---------------------------------------------------------------------------
 
 function submit(job) {
+  if (job.slot >= 0) noteAddonSlot(job.slot);
   job.cwd = resolveCwd(job.cwd);
   if (job.agent) state.chatAgents[job.chat] = job.agent;
   job.agent = job.agent || state.chatAgents[job.chat] || DEFAULT_AGENT;
@@ -986,7 +1011,15 @@ function pollSavedVariables() {
   let st;
   try { st = fs.statSync(SAVED_VARS); } catch { return; }
   if (st.mtimeMs === lastMtime) return;
+  const reloaded = lastMtime !== 0;
   lastMtime = st.mtimeMs;
+  if (reloaded) {
+    // The game wrote SavedVariables: /reload frees every reply slot, so the next
+    // ones it loads are the first of the pool again (#144). Say everything again
+    // in full, in case a finished reply is waiting there.
+    addonSlot = 0;
+    publishNow();
+  }
   try { Forever.onSavedVariables(fs.readFileSync(SAVED_VARS, 'utf8')); } catch {}
   const job = readOutbox();
   if (job) submit(job);

@@ -16,7 +16,7 @@ test('luaStr escapes everything Lua 5.1 needs', () => {
 });
 
 test('parseFlags reads new-session, hello, forget, context and agent; permission rules from the game are ignored', () => {
-  const none = { newSession: false, hello: false, forget: false, stop: false, context: false, card: false, agent: '', model: '', effort: '', cmd: '' };
+  const none = { newSession: false, hello: false, forget: false, stop: false, context: false, card: false, agent: '', model: '', effort: '', cmd: '', slot: -1 };
   assert.deepEqual(P.parseFlags(''), none);
   assert.deepEqual(P.parseFlags('s'), { ...none, stop: true });
   assert.deepEqual(P.parseFlags('n'), { ...none, newSession: true });
@@ -41,11 +41,34 @@ test('parseFlags reads new-session, hello, forget, context and agent; permission
   }
 });
 
+test('parseFlags reads the last reply slot the addon loaded, and drops a bad one (#144)', () => {
+  assert.equal(P.parseFlags('slot=17').slot, 17);
+  assert.equal(P.parseFlags('h;c;slot=1').slot, 1);
+  assert.equal(P.parseFlags('slot=0').slot, 0);
+  assert.equal(P.parseFlags('').slot, -1, 'no token: an older addon');
+  for (const bad of ['slot=', 'slot=-1', 'slot=1.5', 'slot=abc', 'slot= 3', 'slot=0x10']) {
+    assert.equal(P.parseFlags(bad).slot, -1, bad);
+  }
+});
+
+test('slotTargets writes the window after the last slot loaded, or all of them (#144)', () => {
+  const all = Array.from({ length: 200 }, (_, i) => i + 1);
+  assert.deepEqual(P.slotTargets(0, 200, 16), all, 'nothing reported yet');
+  assert.deepEqual(P.slotTargets(-1, 200, 16), all);
+  assert.deepEqual(P.slotTargets(201, 200, 16), all, 'a number the pool cannot hold');
+  assert.deepEqual(P.slotTargets(1, 200, 16), [2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17]);
+  assert.deepEqual(P.slotTargets(200, 200, 16), [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16], 'wraps');
+  assert.deepEqual(P.slotTargets(195, 200, 16), [196, 197, 198, 199, 200, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11], 'wraps');
+  assert.equal(P.slotTargets(5, 200, 0).length, 1, 'a window of 0 still writes one');
+  assert.equal(P.slotTargets(5, 10, 16).length, 10, 'never more than the pool');
+  assert.deepEqual(P.slotTargets(5, 0, 16), []);
+});
+
 test('jobsFromStrip parses the current record format and keeps separators inside text', () => {
   const rec = ['sess', 'chat1', '12', 'realms', 'allow=WebSearch', 'My chat', 'hello\x1Fworld'].join('\x1F');
   const jobs = P.jobsFromStrip(12, rec);
   assert.equal(jobs.length, 1);
-  assert.deepEqual(jobs[0], { session: 'sess', chat: 'chat1', id: 12, cwd: 'realms', newSession: false, hello: false, forget: false, stop: false, context: false, card: false, agent: '', model: '', effort: '', cmd: '', name: 'My chat', text: 'hello\x1Fworld', via: 'pixel' });
+  assert.deepEqual(jobs[0], { session: 'sess', chat: 'chat1', id: 12, cwd: 'realms', newSession: false, hello: false, forget: false, stop: false, context: false, card: false, agent: '', model: '', effort: '', cmd: '', slot: -1, name: 'My chat', text: 'hello\x1Fworld', via: 'pixel' });
   // A chat that picked its own agent says so in the flags.
   const codex = P.jobsFromStrip(13, ['sess', 'chat1', '13', '', 'agent=codex', 'My chat', 'hi'].join('\x1F'))[0];
   assert.equal(codex.agent, 'codex');

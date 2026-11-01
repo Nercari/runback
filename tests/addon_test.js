@@ -74,9 +74,16 @@ function stripRecords(vm) {
   if (!frame) return [];
   return frame.text.split('\x1E').map(r => {
     const p = r.split('\x1F');
-    const withCtx = p[4].split(';').includes('c'); // a "c" flag means field 7 is the game context
-    const rec = { session: p[0], chat: p[1], id: Number(p[2]), cwd: p[3], flags: p[4], name: p[5], text: p.slice(withCtx ? 7 : 6).join('\x1F') };
+    const parts = p[4].split(';');
+    const withCtx = parts.includes('c'); // a "c" flag means field 7 is the game context
+    const slot = parts.find(t => t.startsWith('slot='));
+    const rec = {
+      session: p[0], chat: p[1], id: Number(p[2]), cwd: p[3], name: p[5],
+      flags: parts.filter(t => !t.startsWith('slot=')).join(';'), // #144 rides as its own token
+      text: p.slice(withCtx ? 7 : 6).join('\x1F'),
+    };
     if (withCtx) rec.ctx = p[6];
+    if (slot) rec.slot = Number(slot.slice(5));
     return rec;
   });
 }
@@ -430,6 +437,22 @@ test('a sent message is encoded on the strip with the chat folder, then a slot r
   vm.run('SlashCmdList.RUNBACK("cd")');
   assert.equal(vm.evaluate('RunbackDB.chats[1].cwd'), '');
   assert.ok(vm.evaluate('RunbackDB.chats[1].history[#RunbackDB.chats[1].history].text').includes('C:\\proj'));
+});
+
+test('the strip reports the last reply slot it loaded, so the bridge writes only the ones after it (#144)', () => {
+  const vm = newVM();
+  login(vm);
+  vm.run('STUB.RunTimers()'); // hello
+  assert.equal(decodeStrip(vm).text.includes('slot='), false, 'no slot token before a slot is loaded: every slot is written');
+  connect(vm); // the hello poll loads slot 1
+  vm.run('Runback.Send("count")');
+  const raw = () => decodeStrip(vm).text.split('\x1F');
+  assert.match(raw()[4], /(^|;)slot=1$/, 'the wire carries the token the bridge reads');
+  assert.equal(stripRecords(vm).find(r => r.text === 'count').slot, 1);
+  nextSlot(vm, '{ now = time(), cwd = "", replies = {} }');
+  vm.run('STUB.now = STUB.now + 6; STUB.Tick()'); // the next scheduled poll loads slot 2
+  vm.run('STUB.now = STUB.now + 1; STUB.Tick()'); // the strip is redrawn at the top of a tick
+  assert.equal(stripRecords(vm).find(r => r.text === 'count').slot, 2);
 });
 
 test('while the agent works: one timer (the status line) and an action count that matches the listed actions', () => {

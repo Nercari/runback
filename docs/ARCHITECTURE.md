@@ -17,8 +17,8 @@ Two processes that can't talk to each other directly, and how they do anyway.
    │                          │                    │   resumed; agents.js)       │
    │                          │                    │        │                    │
    │  LoadAddOn(Runback_S…)     │  files on disk     │        ▼                    │
-   │  ◀───────────────────────┼────────────────────┤  writes 200 slot Inbox.lua  │
-   │  PlaySoundFile(sig/…)    │                    │  flips signal/heartbeat wav │
+   │  ◀───────────────────────┼────────────────────┤  writes 16 slot Inbox.lua   │
+   │  PlaySoundFile(sig/…)    │                    │  (all 200 with no report)   │
    └──────────────────────────┘                    └─────────────────────────────┘
 ```
 
@@ -63,7 +63,7 @@ Exclusive fullscreen blocks GDI capture; borderless/windowed works. HDR was not 
 
 `install-slots.js` creates `Runback_S001` … `Runback_S200`, each a `## LoadOnDemand: 1` addon with a single `Inbox.lua`. `C_AddOns.LoadAddOn` reads that file from disk at load time; each slot can be loaded once per UI session, and `/reload` unloads them all.
 
-The bridge doesn't know which slot the game will load next, so every publish writes the same content to all 200 (atomic rename per file, ~1 MB total, cheap). The content is the latest status of every chat:
+The bridge doesn't know which slot the game will load next, but it knows which ones it can still load: the addon reports the last slot it loaded on the strip (`slot=NNN`), so every publish writes the same content to the 16 slots after that one, wrapping at 200. With no report (an addon before #144, or one that has not loaded a slot since login) it writes all 200, and a `/reload` (the game writing SavedVariables) writes all 200 again before the next poll, since the pool restarts at slot 1. The content is the latest status of every chat:
 
 ```lua
 Runback_SlotData = {
