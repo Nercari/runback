@@ -36,7 +36,7 @@ node setup.js --project "C:\path\to\the\project\you\want\to\work\on"
 
 This:
 
-- finds the WoW: Forever client (it looks under `Program Files (x86)\World of Warcraft\_classic_beta_` and a few other common places; pass `--wow "D:\Games\World of Warcraft\_classic_beta_"` if it can't find yours),
+- finds the WoW: Forever client (it looks for the `_forever_` folder first, then `_classic_beta_`, under `Program Files (x86)\World of Warcraft` and a few other common places; pass `--wow "D:\Games\World of Warcraft\_forever_"` if it can't find yours). A `config.json` that still names an older folder is repointed at the folder it finds, and the slot `.toc` files take the TOC number this checkout ships, so launch day needs no config edit,
 - copies the addon into `Interface\AddOns\Runback`,
 - writes `bridge\config.json` with your paths and the project folder,
 - reports which agent CLIs it found (Claude Code, Codex, Grok Build); one is enough, and you can add another later,

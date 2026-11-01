@@ -50,7 +50,7 @@ Then:
 2. If you used WoW AI before, `node setup.js` moves the old `WoWAI` folder out of `Interface\AddOns` into `Runback-backup-<date>` next to the game client, so the two addons do not run side by side.
 3. In this repo, start the bridge with `npm start`. On Windows, `bridge\start-window.cmd` opens its own window. Leave it running while you play. In game, `/runback` opens the window.
 4. On Linux, use the same steps. Once, while the colored strip is in the top-left of the game window, run `npm run probe`. It saves what the capture sees to `bridge/probe.png` and says whether it decoded the strip.
-5. `npm run doctor` any time. It only reads. It prints PASS or FAIL for Node.js 22.2 or newer, for a logged-in `claude`, `codex`, or `grok`, and for X11 (`DISPLAY` set). Windows passes the X11 check. A FAIL line includes a one-line fix, and the process exits with an error if any check fails.
+5. `npm run doctor` any time. It only reads. It prints PASS or FAIL for Node.js 22.2 or newer, for a logged-in `claude`, `codex`, or `grok`, for X11 (`DISPLAY` set), and for the client folder it found, named with the `## Interface` number from `Runback.toc`. Windows passes the X11 check. A FAIL line includes a one-line fix, and the process exits with an error if any check fails.
 
 Step-by-step with troubleshooting: [docs/INSTALL-WINDOWS.md](docs/INSTALL-WINDOWS.md) and [docs/INSTALL-LINUX.md](docs/INSTALL-LINUX.md).
 

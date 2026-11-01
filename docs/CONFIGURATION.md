@@ -8,7 +8,7 @@ The bridge reads `config.json` once at start. Restart it after editing, except f
 
 | Key | Default (from `config.example.json`) | Meaning |
 |---|---|---|
-| `addonDir` | `…\World of Warcraft\_classic_beta_\Interface\AddOns` | The game's AddOns folder. The bridge writes the slot addons, `Inbox.lua` and every signal file under it. `setup.js` fills this in from the client it finds. |
+| `addonDir` | `…\World of Warcraft\_classic_beta_\Interface\AddOns` | The game's AddOns folder. The bridge writes the slot addons, `Inbox.lua` and every signal file under it. `setup.js` fills this in from the client it finds, and repoints it at the `_forever_` folder when the client moves. |
 | `inboxFile` | `<addonDir>\Runback\Inbox.lua` | The file the game reads on `/reload` (fallback path). Normally derived from `addonDir`; only change it if you moved the addon. A value still naming the old `WoWClaude` addon is ignored in favour of the derived one. |
 | `savedVariablesFile` | `…\WTF\Account\<account>\SavedVariables\Runback.lua` | The addon's saved data. The bridge polls it for the reload-path outbox. `setup.js` picks the first account under `WTF\Account`; pass `--account <name>` to choose another. |
 | `defaultCwd` | empty | Folder for chats that have not chosen one with `/runback cd`, when the bridge is started from inside this repo (`npm start`). Empty means the mentor workspace. See [Which folder the agent works in](#which-folder-the-agent-works-in). |
@@ -78,7 +78,7 @@ These sizes are baked into the files `install-slots.js` creates, and the addon h
 | `actMax` | `60` | Heartbeat files per message (`act/NNN/01..60.wav`). One flips per agent action. |
 | `presenceMax` | `2000` | Presence files (`presence/0001..2000.wav`). One flips per `presenceIntervalMs`. |
 | `presenceIntervalMs` | `30000` | How often the bridge flips a presence file so the in-game light stays green. |
-| `tocInterface` | `"16001"` | `## Interface:` version written into every slot addon's `.toc`. Bump it when the client's TOC version changes. |
+| `tocInterface` | `"16001"` | `## Interface:` version written into every slot addon's `.toc`. `setup.js` copies the number from `config.example.json`, and `bridge/install-slots.js` rewrites the line in the 200 existing slot `.toc` files when the number changes. Both this file and `addon/Runback/Runback.toc` move together. |
 
 ## Command line
 

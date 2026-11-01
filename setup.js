@@ -35,25 +35,32 @@ function isClient(dir) {
   } catch { return false; }
 }
 
-function findClient() {
-  if (args.wow) {
-    if (isClient(args.wow)) return args.wow;
-    throw new Error(`--wow "${args.wow}" does not look like a WoW client folder (needs Interface\\ and a Wow*.exe)`);
-  }
-  const roots = process.platform === 'win32'
+// The launch client is the `_forever_` folder; `_classic_beta_` is what the
+// beta was called. Both stay here so an install from before launch keeps working.
+const FLAVORS = ['_forever_', '_classic_beta_', '_retail_', '_classic_era_', '_classic_'];
+
+function clientRoots() {
+  return process.platform === 'win32'
     ? [process.env['ProgramFiles(x86)'], process.env.ProgramFiles, 'D:\\', 'E:\\', 'D:\\Games', 'E:\\Games', 'C:\\Games']
       .filter(Boolean).map(r => path.join(r, 'World of Warcraft'))
     // Linux: the client lives inside a Wine prefix.
     : [process.env.WINEPREFIX, path.join(os.homedir(), '.wine'),
       path.join(os.homedir(), 'Games', 'battlenet')]
       .filter(Boolean).flatMap(p => ['Program Files (x86)', 'Program Files'].map(pf => path.join(p, 'drive_c', pf, 'World of Warcraft')));
+}
+
+function findClient(wow = args.wow, roots = clientRoots()) {
+  if (wow) {
+    if (isClient(wow)) return wow;
+    throw new Error(`--wow "${wow}" does not look like a WoW client folder (needs Interface\\ and a Wow*.exe)`);
+  }
   for (const root of roots) {
-    for (const flavor of ['_classic_beta_', '_forever_', '_retail_', '_classic_era_', '_classic_']) {
+    for (const flavor of FLAVORS) {
       const dir = path.join(root, flavor);
       if (isClient(dir)) return dir;
     }
   }
-  throw new Error('Could not find the WoW client. Pass --wow "C:\\path\\to\\World of Warcraft\\_classic_beta_"');
+  throw new Error('Could not find the WoW client. Pass --wow "C:\\path\\to\\World of Warcraft\\_forever_"');
 }
 
 function findAccount(client) {
@@ -175,11 +182,53 @@ function upgradeConfig(cfg, example) {
   return notes;
 }
 
+// A config.json from before a client rename, or from an older checkout, still
+// names the paths it was written with. Point it at the client folder setup found
+// and at the TOC number this checkout ships, so launch day needs no config edit.
+function repairClientPaths(cfg, client, account, example) {
+  const norm = p => String(p || '').replace(/\\/g, '/').replace(/\/+$/, '').toLowerCase();
+  const addonDir = path.join(client, 'Interface', 'AddOns');
+  // Keep the account the config already used: several accounts are common, and
+  // moving a player's saved variables to another one would lose the chats.
+  const found = /[\\/]WTF[\\/]Account[\\/]([^\\/]+)[\\/]SavedVariables[\\/]/i.exec(String(cfg.savedVariablesFile || ''));
+  const savedAccount = found ? found[1] : account;
+  const wants = {
+    addonDir,
+    inboxFile: path.join(addonDir, 'Runback', 'Inbox.lua'),
+    savedVariablesFile: path.join(client, 'WTF', 'Account', savedAccount, 'SavedVariables', 'Runback.lua'),
+  };
+  const notes = [];
+  for (const key of Object.keys(wants)) {
+    if (norm(cfg[key]) !== norm(wants[key])) {
+      cfg[key] = wants[key];
+      notes.push(key);
+    }
+  }
+  const toc = String((example && example.tocInterface) || cfg.tocInterface || '');
+  if (toc && String(cfg.tocInterface) !== toc) {
+    cfg.tocInterface = toc;
+    notes.push('tocInterface');
+  }
+  const exe = fs.readdirSync(client).find(f => /^Wow.*\.exe$/i.test(f));
+  if (exe) {
+    const name = exe.replace(/\.exe$/i, '');
+    cfg.capture = cfg.capture || {};
+    if (cfg.capture.processName !== name) {
+      cfg.capture.processName = name;
+      notes.push('capture.processName');
+    }
+  }
+  return notes;
+}
+
 function writeConfig(client, account) {
   const example = JSON.parse(fs.readFileSync(EXAMPLE, 'utf8'));
   if (fs.existsSync(CONFIG)) {
     const cfg = JSON.parse(fs.readFileSync(CONFIG, 'utf8'));
     const notes = upgradeConfig(cfg, example);
+    for (const note of repairClientPaths(cfg, client, account, example)) {
+      if (!notes.includes(note)) notes.push(note);
+    }
     if (notes.length) {
       fs.writeFileSync(CONFIG, JSON.stringify(cfg, null, 2) + '\n');
       console.log(`config   : ${CONFIG} updated (${notes.join(', ')}); everything else kept`);
@@ -242,4 +291,4 @@ Done. Next:
 
 if (require.main === module) main();
 
-module.exports = { migrateOldInstall, backupName, upgradeConfig };
+module.exports = { migrateOldInstall, backupName, upgradeConfig, findClient, clientRoots, repairClientPaths };
