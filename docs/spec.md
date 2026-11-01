@@ -18,7 +18,7 @@ Baseline (2026-10-03, `forever` at cbebd5a): `npm test` 187/187 pass, codec roun
 
 6. **Measured improvement.** Each improvement PR names one number (a test count, a gate passed, a failure fixed) before and after.
 
-## Backlog (numbered; next free: 92)
+## Backlog (numbered; next free: 94)
 
 1. **Live gates (WOW-02).** Nercari runs `probe/PROBE.md` on the installed Forever client; agents turn the results into the gate table and switch features to their fallback where a gate fails. Needs Nercari in game.
 
@@ -222,6 +222,8 @@ Items 85 to 91 are the Runback roadmap, requested by the Grok Director on nercar
 
 90. **Live-client checklist for Nercari.** One short list he runs after 86 and 89 land: upgrade on his PC with the shortcut; old chats and map marks still there; `/runback`, `/wowai` and `/rb` (or the one-line hint); the shortcut shows the Runback icon; pins readable with the safe palette and the toggle works. Results fill the Live column and close the "live check pending" notes on 85, 86 and 89.
 
-91. **Coaching phases (later).** The between-pull coaching that the README promises. Not specified yet: it starts after 88's mockups are approved, as new numbered items, each with one metric.
+92. **Reply readability, and the Jobs, Translate and Guide windows** (#142, done, PR pending; live look pending). The opaque fill from item 53 is now one helper (`RunbackForever.SolidFill`), used by the main window, the copy box, the AI jobs window and the translation popup. Jobs and Translate stay on the screen when dragged (clamped, draggable), and Esc closes all three windows (`UISpecialFrames`); Esc on the guide panel is saved like its close button. Metric: windows whose text can sit on the map, 2 → 0; windows that Esc does not close, 3 → 0.
+
+93. **Coaching phases (later).** The between-pull coaching that the README promises. Not specified yet: it starts after 88's mockups are approved, as new numbered items, each with one metric.
 
 Add new items at the end with the next number, one blank line between items (so parallel PRs append without touching each other's lines); mark done items `(done, PR #n)` instead of deleting them.

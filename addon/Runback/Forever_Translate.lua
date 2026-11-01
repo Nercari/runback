@@ -93,6 +93,11 @@ local function EnsureFrame()
 	f:SetFrameStrata("DIALOG")
 	f:SetMovable(true)
 	f:EnableMouse(true)
+	f:SetClampedToScreen(true) -- a drag can't lose it off screen
+	f:RegisterForDrag("LeftButton")
+	f:SetScript("OnDragStart", f.StartMoving)
+	f:SetScript("OnDragStop", f.StopMovingOrSizing)
+	tinsert(UISpecialFrames, "RunbackTranslateFrame") -- Esc closes it
 	if type(f.SetBackdrop) == "function" then
 		f:SetBackdrop({
 			bgFile = "Interface\\Tooltips\\UI-Tooltip-Background",
@@ -104,6 +109,7 @@ local function EnsureFrame()
 			f:SetBackdropColor(0.05, 0.05, 0.08, 0.95)
 		end
 	end
+	RunbackForever.SolidFill(f, 4)
 	local sc = CreateFrame("ScrollFrame", "RunbackTranslateScroll", f, "UIPanelScrollFrameTemplate")
 	sc:SetPoint("TOPLEFT", f, "TOPLEFT", 10, -10)
 	sc:SetPoint("BOTTOMRIGHT", f, "BOTTOMRIGHT", -30, 36)

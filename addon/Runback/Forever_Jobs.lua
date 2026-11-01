@@ -63,6 +63,11 @@ local function EnsureJobsFrame()
 	f:SetFrameStrata("DIALOG")
 	f:SetMovable(true)
 	f:EnableMouse(true)
+	f:SetClampedToScreen(true) -- a drag can't lose it off screen
+	f:RegisterForDrag("LeftButton")
+	f:SetScript("OnDragStart", f.StartMoving)
+	f:SetScript("OnDragStop", f.StopMovingOrSizing)
+	tinsert(UISpecialFrames, "RunbackJobsFrame") -- Esc closes it
 	if type(f.SetBackdrop) == "function" then
 		f:SetBackdrop({
 			bgFile = "Interface\\Tooltips\\UI-Tooltip-Background",
@@ -74,6 +79,7 @@ local function EnsureJobsFrame()
 			f:SetBackdropColor(0.05, 0.05, 0.07, 0.95)
 		end
 	end
+	RunbackForever.SolidFill(f, 4)
 	local title = f:CreateFontString(nil, "OVERLAY", "GameFontNormal")
 	title:SetPoint("TOPLEFT", f, "TOPLEFT", 12, -10)
 	title:SetText("AI jobs")

@@ -361,6 +361,7 @@ end
 -- Frame ----------------------------------------------------------------------
 
 local frame, rows, asks, header, picker
+local hiding -- set while Refresh hides the frame itself, not the player
 
 local function Build()
 	if frame then return frame end
@@ -420,6 +421,13 @@ local function Build()
 	local close = CreateFrame("Button", nil, f, "UIPanelCloseButton")
 	close:SetPoint("TOPRIGHT", f, "TOPRIGHT", -2, -2)
 	close:SetScript("OnClick", function() M.SetShown(false) end)
+	-- Esc closes it too; keep the saved "shown" flag in step so the next
+	-- Refresh does not open the panel again.
+	tinsert(UISpecialFrames, "RunbackGuideFrame")
+	f:SetScript("OnHide", function()
+		if not frame or hiding then return end -- Build's first Hide, or Refresh's own
+		if Panel().shown then M.SetShown(false) end
+	end)
 	local function Btn(text, width, x, fn)
 		local b = CreateFrame("Button", nil, f, "UIPanelButtonTemplate")
 		b:SetSize(width, 20)
@@ -463,7 +471,11 @@ function M.Refresh()
 	local p = Panel()
 	local want = p.shown and not Locked()
 	if not want then
-		if frame then frame:Hide() end
+		if frame then
+			hiding = true
+			frame:Hide()
+			hiding = false
+		end
 		return
 	end
 	Build()
