@@ -26,12 +26,17 @@ C_QuestLog = {
 }
 function GetFactionInfoByID(id) if REP[id] then return "Faction" .. id, "", REP[id] end end
 local SKILLS = function()
-  local list = { { "Professions", true, true } }
-  for name, rank in pairs(SKILL) do list[#list + 1] = { name, false, false, rank } end
+  local list = { { "Professions", true } }
+  for name, rank in pairs(SKILL) do list[#list + 1] = { name, false, rank } end
   return list
 end
-function GetNumSkillLines() return #SKILLS() end
-function GetSkillLineInfo(i) local s = SKILLS()[i]; return s[1], s[2], s[3], s[4] end`;
+C_SkillInfo = {
+  GetNumSkillLines = function() return #SKILLS() end,
+  GetSkillLineInfo = function(i)
+    local s = SKILLS()[i]
+    return { name = s[1], isHeader = s[2], rank = s[3], maxRank = 75, parentSkillLineID = 0 }
+  end,
+}`;
 
 const GUIDE = `{ id = "g", title = "G", steps = {
   { kind = "accept", text = "Take A.", questId = 101 },
@@ -136,10 +141,12 @@ test('level and faction filters: a Horde step and a level 30 step are skipped un
 
 test('missing or broken APIs fail open: every rule step shows, nothing throws', () => {
   for (const setup of [
-    'C_QuestLog = nil; IsQuestFlaggedCompleted = nil; GetFactionInfoByID = nil; GetNumSkillLines = nil; GetSkillLineInfo = nil',
+    'C_QuestLog = nil; IsQuestFlaggedCompleted = nil; GetFactionInfoByID = nil; C_SkillInfo = nil',
     `C_QuestLog = { IsQuestFlaggedCompleted = function() return "maybe" end }; GetFactionInfoByID = function() error("boom") end
-     GetNumSkillLines = function() return 0 end`,
-    'FLAGGED[101] = true; GetSkillLineInfo = function(i) if i == 1 then return "Professions", true, false end return "Skinning", false, false, 10 end; GetNumSkillLines = function() return 2 end; REP = {}',
+     C_SkillInfo = { GetNumSkillLines = function() return 0 end }`,
+    `FLAGGED[101] = true; REP = {}; C_SkillInfo = { GetNumSkillLines = function() return 2 end, GetSkillLineInfo = function(i)
+       if i == 1 then return { name = "Professions", isHeader = true, parentSkillLineID = 0 } end
+       return { name = "Skinning", isHeader = false, parentSkillLineID = 0 } end }`,
   ]) {
     const v = vm(`${setup}; RunbackGuideDB.panel.step.g = 3`);
     assert.equal(step(v), '3', setup);

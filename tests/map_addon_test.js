@@ -207,8 +207,8 @@ test('herb/ore nodes toggle and follow the gathering skill', () => {
   assert.equal(shownPins(vm).length, 4);
   vm.run('SlashCmdList.RUNBACKMAP("ore off"); SlashCmdList.RUNBACKMAP("herb off")');
   assert.equal(shownPins(vm).length, 0);
-  // The game context reads professions from the same API.
-  assert.match(vm.evaluate('Runback.GameContext()'), /Professions: Bergbau 50\/75(\n|$)/);
+  // The game context reads skills from the same API.
+  assert.match(vm.evaluate('Runback.GameContext()'), /Skills: Bergbau 50\/75(\n|$)/);
 });
 
 test('/runback map hide, show, nav and stop', () => {

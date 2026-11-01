@@ -9,7 +9,26 @@ function runAgentOnce({ agentId, cwd, prompt, timeoutMs }, deps) {
   const { A, P, cfg, killTree, augment, onSpawn } = deps;
   agentId = A.normalizeAgent(agentId);
   if (!agentId) return Promise.resolve({ status: 'error', text: 'Unknown agent.' });
-  const agent = A.AGENTS[agentId], acfg = A.agentConfig(cfg, agentId), cmd = A.resolveCommand(agentId, acfg);
+  const agent = A.AGENTS[agentId];
+  // One-off runs (council, journal) obey the same folder and permission rules as
+  // a chat: a module claims the job before runJob, so this is their only check.
+  const why = P.folderProblem(cwd, deps.allowedFolders || []);
+  if (why) {
+    return Promise.resolve({ status: 'error', text: why === 'broad'
+      ? `${cwd} is a broad folder, so an agent there could read unrelated files. Pick a narrower one with /runback cd.`
+      : `${cwd} is outside the folders this bridge allows. Add it to allowedFolders in bridge/config.json on the PC, or use /runback cd for a folder inside one of them.` });
+  }
+  // A mentor job on Hermes is refused: the guard has no tool limit for it there.
+  const refusal = require('./modules/05-mentor-guard').refusal(agentId, cwd, deps.mentorDir || (cfg.forever && cfg.forever.mentorDir));
+  if (refusal) return Promise.resolve({ status: 'error', text: refusal });
+  let acfg = A.agentConfig(cfg, agentId);
+  if (!deps.mentorDir || !P.folderInside(cwd, deps.mentorDir)) {
+    if (agent.readOnly === false) {
+      return Promise.resolve({ status: 'error', text: `${agent.name} cannot be limited to read-only tools outside the mentor workspace. Use /runback agent to switch, or stay in the mentor workspace.` });
+    }
+    acfg = A.readOnlyConfig(acfg);
+  }
+  const cmd = A.resolveCommand(agentId, acfg);
   if (!cmd.found) return Promise.resolve({ status: 'error', text: `${agent.name} is not installed: ${cmd.note}` });
   const system = P.systemPrompt('', ''), input = agent.input({ prompt: String(prompt || ''), system, systemShort: system, resume: '', cfg: acfg });
   // Grok reads its prompt from a file.

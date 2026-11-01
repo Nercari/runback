@@ -43,7 +43,7 @@ const TMP_DIR = path.join(HERE, 'tmp'); // prompt files for agents that read the
 const argv = process.argv.slice(2);
 if (argv.includes('--on')) { try { fs.unlinkSync(path.join(HERE, 'KILLED')); } catch {} }
 if (argv.includes('--help') || argv.includes('-h')) {
-  console.log('runback [--project <dir>] [--once] [--inject "text" [--agent <id>] [--model <name>] [--effort <level>]]\n\n' +
+  console.log('runback [--project <dir>] [--once] [--inject "text" [--cmd <name>] [--agent <id>] [--model <name>] [--effort <level>]]\n\n' +
     'Runs the Runback bridge. Chats without a folder of their own work in <dir>,\n' +
     'or in the folder you started it from, or in defaultCwd from bridge/config.json.\n' +
     `Agents: ${A.agentIds().join(', ')} (the default is "agent" in config.json; chats pick with /runback agent).`);
@@ -58,6 +58,8 @@ catch (e) {
 const once = argv.includes('--once');
 const injectIdx = argv.indexOf('--inject');
 const inject = injectIdx >= 0 ? argv[injectIdx + 1] : null;
+const cmdIdx = argv.indexOf('--cmd');
+const injectCmd = cmdIdx >= 0 ? argv[cmdIdx + 1] : '';
 const agentIdx = argv.indexOf('--agent');
 const injectAgent = agentIdx >= 0 ? argv[agentIdx + 1] : '';
 const modelIdx = argv.indexOf('--model');
@@ -98,10 +100,18 @@ if (DEFAULT_CWD_SOURCE === 'mentor workspace' && !fs.existsSync(DEFAULT_CWD)) {
   catch { fs.mkdirSync(DEFAULT_CWD, { recursive: true }); }
 }
 // Later runs: the coach's instructions follow the template (see syncPrompt).
-const MENTOR_PROMPT_UPDATED = require('./forever/modules/05-mentor-guard.js').syncPrompt(path.join(REPO, 'mentor'), cfg.forever.mentorDir);
-const BROAD_NOTE = dir => `${dir} is a broad folder, so the agent can read unrelated files there. Pick a narrower one with /runback cd.`;
+const MentorGuard = require('./forever/modules/05-mentor-guard.js');
+const MENTOR_PROMPT_UPDATED = MentorGuard.syncPrompt(path.join(REPO, 'mentor'), cfg.forever.mentorDir);
+const BROAD_NOTE = dir => `${dir} is a broad folder, so chats are refused there. Start the bridge in a narrower folder or set defaultCwd in bridge/config.json.`;
 
 const resolveCwd = raw => P.resolveCwd(raw, DEFAULT_CWD);
+// Folders a chat may run in: the default folder (chosen at the terminal) and
+// the player's allowedFolders list. Game text never adds to this.
+const ALLOWED_FOLDERS = [DEFAULT_CWD, ...(Array.isArray(cfg.allowedFolders) ? cfg.allowedFolders.map(f => resolveCwd(f)) : [])];
+const folderRefusal = (cwd, why) => why === 'broad'
+  ? `${cwd} is a broad folder, so an agent there could read unrelated files. Pick a narrower one with /runback cd.`
+  : `${cwd} is outside the folders this bridge allows. Folders: ${ALLOWED_FOLDERS.join(', ')}.\n` +
+    `Add it to allowedFolders in bridge/config.json on the PC (then restart the bridge), or use /runback cd for a folder inside one of them.`;
 const { sameFolder } = P;
 // Subfolders of the default folder, for the "folder not found" hint.
 function siblingFolders() {
@@ -518,26 +528,6 @@ function primer() {
   }
 }
 
-// Persist newly allowed rules for an agent so they stick across bridge restarts.
-// They go under agents.<id>.allowedTools; a config.json from before agents
-// existed keeps Claude's list at the top level, which moves down on first write.
-function allowRules(agentId, rules) {
-  const current = new Set(A.agentConfig(cfg, agentId).allowedTools || []);
-  const added = rules.filter(r => r && !current.has(r));
-  if (!added.length) return [];
-  const list = [...current, ...added];
-  cfg.agents = cfg.agents || {};
-  cfg.agents[agentId] = { ...(cfg.agents[agentId] || {}), allowedTools: list };
-  try {
-    const onDisk = JSON.parse(fs.readFileSync(CONFIG_FILE, 'utf8'));
-    onDisk.agents = onDisk.agents || {};
-    onDisk.agents[agentId] = { ...(onDisk.agents[agentId] || {}), allowedTools: list };
-    if (agentId === 'claude') delete onDisk.allowedTools;
-    atomicWrite(CONFIG_FILE, JSON.stringify(onDisk, null, 2) + '\n');
-  } catch (e) { log('could not save config.json:', e.message); }
-  return added;
-}
-
 // Run an agent without this bridge's chat/session/transcript bookkeeping.
 const onceChildren = new Set(); // agents started by runAgentOnce (council, journal)
 
@@ -554,7 +544,8 @@ function runAgentOnce(options) {
   Forever.onRun({ job: { chat: options.chat || 'council', cwd: options.cwd, text: options.prompt }, agentId: options.agentId,
     cwd: options.cwd, prompt: String(options.prompt || ''), promptBytes: Buffer.byteLength(String(options.prompt || '')) });
   const onSpawn = child => { onceChildren.add(child); child.on('close', () => onceChildren.delete(child)); };
-  return runAgent(options, { A, P, cfg, killTree, onSpawn, augment: (job, info) => Forever.augment(job, info) }).then(result => { result.elapsedMs = Date.now() - started; return result; });
+  return runAgent(options, { A, P, cfg, killTree, onSpawn, augment: (job, info) => Forever.augment(job, info),
+    allowedFolders: ALLOWED_FOLDERS, mentorDir: cfg.forever.mentorDir }).then(result => { result.elapsedMs = Date.now() - started; return result; });
 }
 
 // ---------------------------------------------------------------------------
@@ -595,6 +586,14 @@ function submit(job) {
     guideShareUntil = Date.now() + MAP_SHARE_MS;
     publishNow();
     log(`hello from session ${job.session}${pendingRestore ? ' (restore offered)' : ''}`);
+    return;
+  }
+  // No module may claim a job in a folder the PC did not allow: council, review
+  // and the rest start their own agents outside runJob.
+  const folderWhy = P.folderProblem(job.cwd, ALLOWED_FOLDERS);
+  if (folderWhy) {
+    log(`#${job.id}${job.session ? '@' + job.session : ''} refused folder (${folderWhy}): ${job.cwd}`);
+    finish(job, 'error', folderRefusal(job.cwd, folderWhy));
     return;
   }
   // A module owns this job until finish() marks it handled: the strip and the
@@ -673,6 +672,12 @@ function runJob(job) {
       `\nUse /runback cd <folder> to pick one, or /runback cd alone for the default.`);
     return;
   }
+  const folderWhy = P.folderProblem(cwd, ALLOWED_FOLDERS);
+  if (folderWhy) {
+    log(`${tag} refused folder (${folderWhy}): ${cwd}`);
+    finish(job, 'error', folderRefusal(cwd, folderWhy));
+    return;
+  }
   // Which agent: the chat's own (an "agent=" flag), else the bridge's default.
   const agentId = job.agent ? A.normalizeAgent(job.agent) : DEFAULT_AGENT;
   if (!agentId) {
@@ -683,6 +688,22 @@ function runJob(job) {
   }
   job.agent = agentId;
   const agent = A.AGENTS[agentId];
+  // Hermes can't run in the mentor folder: the guard has no tool limit for it
+  // (05-mentor-guard.js sets only --in), so game text could reach its tools.
+  const mentorRefusal = MentorGuard.refusal(agentId, cwd, cfg.forever.mentorDir);
+  if (mentorRefusal) {
+    log(`${tag} mentor job refused on ${agentId}`);
+    finish(job, 'error', mentorRefusal);
+    return;
+  }
+  // A translate job runs with every tool off (other players' text must never
+  // reach a tool), so an agent without that switch is refused.
+  const noTools = job.cmd === 'translate';
+  if (noTools && !agent.toolFree) {
+    log(`${tag} translate job refused on ${agentId}: no tool limit`);
+    finish(job, 'error', `${agent.name} cannot run the translator: it has no way to turn its tools off, and other players' text must never reach a tool. Switch this chat to ${A.toolFreeAgentNames()} with /runback agent.`);
+    return;
+  }
   let acfg = A.agentConfig(cfg, agentId);
   // The chat's model (a "model=" flag), if it is one this agent offers. A model
   // change keeps the session: the conversation carries on with the new model.
@@ -706,6 +727,18 @@ function runJob(job) {
       return;
     }
     acfg = { ...acfg, effort: job.effort };
+  }
+  // Outside the mentor workspace a chat reads files and nothing more: no command,
+  // edit or write tool. The mentor guard restores the coach's working set inside
+  // the workspace (forever/modules/05-mentor-guard.js). An agent with no way to
+  // limit its tools does not run there at all.
+  if (!P.folderInside(cwd, cfg.forever.mentorDir)) {
+    if (agent.readOnly === false) {
+      finish(job, 'error', `${agent.name} cannot be limited to read-only tools outside the mentor workspace. ` +
+        `Use /runback agent to switch, or stay in the mentor workspace.`);
+      return;
+    }
+    acfg = A.readOnlyConfig(acfg);
   }
   // A coach note (a fight review) runs on the agent's cheap model by default, so one
   // note per pull costs about nothing; agents.<id>.coachModel changes it. It outranks
@@ -737,10 +770,6 @@ function runJob(job) {
     log(`${tag} agent changed (${prevAgent} -> ${agentId}): new session`);
     delete state.sessions[skey]; delete state.sessions[key];
   }
-  if (Array.isArray(job.allow) && job.allow.length) {
-    const added = allowRules(agentId, job.allow);
-    log(`${tag} allowed for ${agentId}: ${job.allow.join(', ')}${added.length ? '' : ' (already allowed)'}`);
-  }
   maybeOfferRestore(job);
   noteMessage(job, 'user', job.text);
   const resume = state.sessions[skey] || state.sessions[key];
@@ -757,7 +786,7 @@ function runJob(job) {
   }
   let args = [...cmd.args, ...agent.args({
     cfg: acfg, resume, cwd, system, systemShort, promptFile, images: job.images,
-    prompt: job.text, timeoutMs: cfg.timeoutMs,
+    prompt: job.text, timeoutMs: cfg.timeoutMs, noTools,
   })];
   const env = agent.env({ ...process.env });
   // Where this run's tools append map commands (docs/MAP.md); any agent can use it.
@@ -812,7 +841,6 @@ function runJob(job) {
   };
   if (agent.stream === 'text') { pushProgress(`${agent.name} is working (no live progress)`, true); actionCount = 0; }
   if (input.note) notes.push(input.note);
-  if (P.isBroadFolder(cwd)) notes.push(BROAD_NOTE(cwd));
   // Long thinking stretches produce no tool events; keep the heartbeat alive anyway.
   const keepalive = setInterval(() => beat(job), 45000);
   // Checked often enough that the offer lands within seconds of the threshold.
@@ -939,7 +967,7 @@ function finish(job, status, text, session, denied, stall) {
     ({ text, summary } = P.splitSummary(text));
   }
   // A blocked run prints one short line in the game chat, whatever the agent wrote.
-  if (denied && denied.length) summary = 'Needs your OK to continue. Open the window and click Allow.';
+  if (denied && denied.length) summary = 'Needs your permission. Open the window and click How to allow.';
   noteMessage(job, status === 'done' ? 'assistant' : 'system', status === 'done' ? text : 'Bridge error: ' + text);
   publish(chatKey(job), { chat: job.chat, id: job.id, status, text, summary, followUps, cwd: job.cwd, session, denied, agent: job.agent || '', stall: stall || '' }, true);
   signal('sig', job.id, true);
@@ -1057,7 +1085,7 @@ Forever.init({ cfg, log, HERE, REPO, SAVED_VARS, state, saveState, atomicWrite, 
   } });
 process.on('exit', () => Forever.stop());
 if (inject !== null) {
-  submit({ id: state.lastId + 1, session: '', chat: '', text: inject, cwd: '', newSession: false, via: 'inject', agent: injectAgent || '', model: injectModel || '', effort: injectEffort || '' });
+  submit({ id: state.lastId + 1, session: '', chat: '', text: inject, cwd: '', newSession: false, via: 'inject', cmd: injectCmd || '', agent: injectAgent || '', model: injectModel || '', effort: injectEffort || '' });
 } else {
   pollSavedVariables();
   if (once) {

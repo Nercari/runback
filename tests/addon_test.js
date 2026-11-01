@@ -145,7 +145,7 @@ test('the game context describes the character and rides on the hello, then only
     'Position: 45.2, 67.8 (map 1431)',
     'Money: 1g 23s 45c; XP: 1234/5000',
     'Talents: Class 6 / Beast Mastery 2 / Legacy Beast Mastery 21 / Legacy Marksmanship 40 / Legacy Survival 0',
-    'Professions: Skinning 75/75, First Aid 40/75',
+    'Skills: Skinning 75/75, First Aid 40/75',
   ]);
   // The bridge answers the hello: the context is now known to be on its side.
   nextSlot(vm, '{ now = time(), cwd = "", replies = {} }');
@@ -176,6 +176,27 @@ test('the game context describes the character and rides on the hello, then only
   const on = stripRecords(vm).filter(r => r.flags === 'h;c');
   assert.ok(on.some(r => r.ctx.includes('Character: Testchar')));
   assert.ok(vm.evaluate('RunbackDB.chats[2].history[#RunbackDB.chats[2].history].text').includes('Game context is ON'));
+});
+
+// The stub client has one SkillLineAttributes table per line under C_SkillInfo
+// and no Classic skill globals: the context lists the profession lines.
+test('the game context lists skills through C_SkillInfo, without the bare skill globals', () => {
+  const vm = newVM();
+  login(vm);
+  vm.run('STUB.RunTimers()');
+  assert.match(stripRecords(vm)[0].ctx, /^Skills: Skinning 75\/75, First Aid 40\/75$/m);
+  assert.equal(vm.evaluate('type(GetNumSkillLines) .. type(GetSkillLineInfo)'), 'nilnil');
+});
+
+test('the addon reads skill lines only through C_SkillInfo', () => {
+  // The old code passed the globals as values, so the scan must match the name
+  // anywhere but after a dot; these two samples prove the pattern catches it.
+  const bare = /(?<![.\w])Get(NumSkillLines|SkillLineInfo)\b/;
+  assert.match('Try(GetNumSkillLines)', bare);
+  assert.match('Try(GetSkillLineInfo, i)', bare);
+  for (const file of ['Runback.lua', 'Forever_Guide.lua']) {
+    assert.doesNotMatch(fs.readFileSync(path.join(ADDON, file), 'utf8'), bare, `${file} names a bare skill global`);
+  }
 });
 
 // The stub no longer fakes the Classic talent tabs. The build is read through
@@ -435,7 +456,7 @@ test('while the agent works: one timer (the status line) and an action count tha
   assert.ok(!later.includes('no activity seen yet'), 'no "no activity seen yet" next to a listed action count');
 });
 
-test('a denied reply shows Allow, and Allow resends with the rules as flags', () => {
+test('a denied reply offers How to allow, and the click explains the PC step and sends nothing', () => {
   const vm = newVM();
   login(vm);
   connect(vm);
@@ -445,11 +466,14 @@ test('a denied reply shows Allow, and Allow resends with the rules as flags', ()
   nextSlot(vm, `{ now = time(), cwd = "", replies = { { chat = "${chatId}", id = ${id}, status = "done", text = "need permission", denied = { "WebSearch", "Bash(cargo:*)" } } } }`);
   vm.run('STUB.now = STUB.now + 6; STUB.Tick()');
   assert.equal(vm.evaluate('RunbackDB.chats[1].history[#RunbackDB.chats[1].history].denied[2]'), 'Bash(cargo:*)');
+  const before = vm.num('RunbackDB.lastSeq');
   vm.run(`Runback.Allow("${chatId}", { "WebSearch", "Bash(cargo:*)" })`);
-  const rec = stripRecords(vm).find(r => r.flags.includes('allow='));
-  assert.ok(rec, 'allow record on the strip');
-  assert.equal(rec.flags, 'allow=WebSearch,Bash(cargo:*)');
-  assert.equal(rec.id, id + 1);
+  // Decision 5 (issue 137): no permission rule leaves the game, and no message is sent.
+  assert.ok(stripRecords(vm).every(r => !r.flags.includes('allow=')), 'no allow record on the strip');
+  assert.equal(vm.num('RunbackDB.lastSeq'), before, 'nothing sent');
+  const last = vm.evaluate('RunbackDB.chats[1].history[#RunbackDB.chats[1].history].text');
+  assert.match(last, /bridge\/config\.json/);
+  assert.match(last, /agents\.<agent>\.allowedTools/);
 });
 
 test('the Allow button names tools plainly, connector tools included (backlog 81)', () => {
@@ -463,8 +487,8 @@ test('the Allow button names tools plainly, connector tools included (backlog 81
   nextSlot(vm, `{ now = time(), cwd = "", replies = { { chat = "${chatId}", id = ${id}, status = "done", text = "need permission", denied = ${denied} } } }`);
   vm.run('STUB.texts = {}; STUB.now = STUB.now + 6; STUB.Tick(); Runback.Render()');
   const texts = vm.evaluate('table.concat(STUB.texts, "|")').split('|');
-  assert.ok(texts.includes('Allow PowerShell, node, Google Drive (create file), playwright (browser click), Read & retry'),
-    texts.filter(t => t.startsWith('Allow')).join(' / ') || 'no Allow label');
+  assert.ok(texts.includes('How to allow: PowerShell, node, Google Drive (create file), playwright (browser click), Read'),
+    texts.filter(t => t.startsWith('How to allow')).join(' / ') || 'no allow label');
 });
 
 test('the window opens at the top centre on a fresh install and where it was left afterwards', () => {
