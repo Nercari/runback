@@ -15,6 +15,23 @@ end
 function RunbackForever.GetChats()
 	return (RunbackDB and RunbackDB.chats) or {}
 end
+-- The dialog and tooltip backdrop textures are see-through whatever their
+-- colour: one opaque fill, inside the art border, keeps text off the map.
+-- Made once per frame; a re-skin only moves it (UI API only, no hooks replaced).
+function RunbackForever.SolidFill(win, inset)
+	if type(win) ~= "table" then return end
+	inset = tonumber(inset) or 4
+	local fill = win.runbackSolidFill
+	if not fill then
+		fill = win:CreateTexture(nil, "BACKGROUND")
+		fill:SetColorTexture(0.03, 0.03, 0.05, 1)
+		win.runbackSolidFill = fill
+	end
+	fill:ClearAllPoints()
+	fill:SetPoint("TOPLEFT", win, "TOPLEFT", inset, -inset)
+	fill:SetPoint("BOTTOMRIGHT", win, "BOTTOMRIGHT", -inset, inset)
+	return fill
+end
 local frame = CreateFrame("Frame")
 local function WantsEvent(events, event)
 	if type(events) ~= "table" then return false end

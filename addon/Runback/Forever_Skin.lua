@@ -27,16 +27,7 @@ local function Dialog(frame)
 	frame:SetBackdropBorderColor(1, 1, 1, 1)
 	-- UI-DialogBox-Background is see-through: a solid dark fill, inside the 11px
 	-- border, keeps the map and grass from showing through the reply text.
-	-- Made once per frame; a re-skin only moves it (UI API only, no hooks replaced).
-	local fill = frame.runbackSolidFill
-	if not fill then
-		fill = frame:CreateTexture(nil, "BACKGROUND")
-		fill:SetColorTexture(0.03, 0.03, 0.05, 1)
-		frame.runbackSolidFill = fill
-	end
-	fill:ClearAllPoints()
-	fill:SetPoint("TOPLEFT", frame, "TOPLEFT", 11, -11)
-	fill:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", -11, 11)
+	RunbackForever.SolidFill(frame, 11)
 end
 
 local function Tooltip(frame)

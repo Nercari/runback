@@ -90,6 +90,21 @@ test('panel: hidden until asked, shows three steps, Next and Previous buttons mo
   assert.equal(v.get('RunbackGuideDB.panel.shown'), 'false');
 });
 
+test('Esc on the guide panel hides it and remembers the choice (launch 12)', () => {
+  const v = vm();
+  seed(v);
+  v.run('SlashCmdList.RUNBACK("guide show")');
+  assert.equal(shown(v), 'true');
+  const esc = '(function() for _, n in ipairs(UISpecialFrames) do if n == "RunbackGuideFrame" then return true end end return false end)()';
+  assert.equal(v.get(esc), 'true', 'the guide panel is on the Esc list');
+  // The client hides a UISpecialFrames frame directly, with no script of ours.
+  v.run('RunbackGuideFrame:Hide()');
+  assert.equal(shown(v), 'false');
+  assert.equal(v.get('RunbackGuideDB.panel.shown'), 'false', 'Esc counts as the player hiding it');
+  v.run('STUB.FireEvent("PLAYER_REGEN_ENABLED")');
+  assert.equal(shown(v), 'false', 'a later refresh does not open it again');
+});
+
 test('picker: the button cycles guides, pick takes a number, list prints them, each guide keeps its step', () => {
   const v = vm();
   seed(v);

@@ -244,6 +244,30 @@ test('job board status transition triggers done sound and speech notice once', (
   assert.equal(vm.num('#C_VoiceChat.spoken'), 1);
 });
 
+test('Jobs and Translate sit on an opaque panel, stay on screen when dragged, and close with Esc (launch 12)', () => {
+  const vm = newVM();
+  login(vm);
+  vm.run('SlashCmdList.RUNBACK("jobs")');
+  vm.run(`
+    for _, mod in ipairs(RunbackForever.modules) do
+      if mod.name == "translate" and mod.onReply then
+        mod.onReply({}, { id = 9, cmd = "translate", text = "Translated text." })
+      end
+    end`);
+  const esc = name => `(function() for _, n in ipairs(UISpecialFrames) do if n == "${name}" then return true end end return false end)()`;
+  for (const name of ['RunbackJobsFrame', 'RunbackTranslateFrame']) {
+    assert.equal(vm.evaluate(`${name}.runbackSolidFill ~= nil`), 'true', name + ' has a solid fill');
+    assert.equal(vm.evaluate(`${name}.runbackSolidFill.color[4]`), '1', name + ' fill is opaque');
+    assert.equal(vm.evaluate(`${name}.clamped`), 'true', name + ' is clamped to the screen');
+    assert.equal(vm.evaluate(`type(${name}.scripts.OnDragStart)`), 'function', name + ' can be dragged');
+    assert.equal(vm.evaluate(esc(name)), 'true', name + ' is on the Esc list');
+  }
+  // Esc hides them; the Jobs window has no saved state to fight it.
+  vm.run('RunbackJobsFrame:Hide(); RunbackTranslateFrame:Hide()');
+  assert.equal(vm.evaluate('RunbackJobsFrame.shown'), 'false');
+  assert.equal(vm.evaluate('RunbackTranslateFrame.shown'), 'false');
+});
+
 test('policy banner shows on [policy] reply and prints once', () => {
   const vm = newVM();
   login(vm);
