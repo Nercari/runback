@@ -144,7 +144,7 @@ test('the game context describes the character and rides on the hello, then only
     'Location: Duskwood - Darkshire',
     'Position: 45.2, 67.8 (map 1431)',
     'Money: 1g 23s 45c; XP: 1234/5000',
-    'Talents: Beast Mastery 8 / Marksmanship 2 / Legacy 24',
+    'Talents: Class 6 / Beast Mastery 2 / Legacy Beast Mastery 21 / Legacy Marksmanship 40 / Legacy Survival 0',
     'Professions: Skinning 75/75, First Aid 40/75',
   ]);
   // The bridge answers the hello: the context is now known to be on its side.
@@ -178,14 +178,14 @@ test('the game context describes the character and rides on the hello, then only
   assert.ok(vm.evaluate('RunbackDB.chats[2].history[#RunbackDB.chats[2].history].text').includes('Game context is ON'));
 });
 
-// The stub no longer fakes the Classic talent tabs; #134 reads the build through
-// C_ClassTalents and C_Traits instead.
+// The stub no longer fakes the Classic talent tabs. The build is read through
+// C_ClassTalents and C_Traits, group by group, plus the Legacy tree.
 test('the game context has a Talents line on Forever', () => {
   const vm = newVM();
   login(vm);
   vm.run('STUB.RunTimers()');
-  assert.match(stripRecords(vm)[0].ctx, /^Talents: Beast Mastery 8 \/ Marksmanship 2 \/ Legacy 24$/m,
-    'the config trees with their ranks spent, and the Legacy node outside them');
+  assert.match(stripRecords(vm)[0].ctx, /^Talents: Class 6 \/ Beast Mastery 2 \/ Legacy Beast Mastery 21 \/ Legacy Marksmanship 40 \/ Legacy Survival 0$/m,
+    'the active config groups with their points, then the Legacy tree groups');
 });
 
 test('with no talent config the Talents line is left out and nothing raises', () => {
@@ -208,7 +208,7 @@ test('the Talents read runs outside combat only', () => {
   assert.ok(!vm.evaluate('Runback.GameContext()').includes('Talents:'), 'no Talents line in combat');
   assert.equal(vm.num('STUB.traitReads'), 0, 'and no traits call at all');
   vm.run('STUB.combat = false');
-  assert.ok(vm.evaluate('Runback.GameContext()').includes('Talents: Beast Mastery 8'), 'back after combat');
+  assert.ok(vm.evaluate('Runback.GameContext()').includes('Talents: Class 6'), 'back after combat');
 });
 
 test('a shift-clicked link lands in the focused input and is sent as its name plus tooltip', () => {
@@ -1379,7 +1379,7 @@ test('the stub has no Classic talent or skill globals', () => {
 test('the stub has the Forever talent and skill namespaces', () => {
   const vm = newVM();
   assert.equal(vm.evaluate('type(C_ClassTalents) .. "/" .. type(C_ClassTalents.GetActiveConfigID)'), 'table/function');
-  assert.equal(vm.evaluate('type(C_Traits) .. "/" .. type(C_Traits.GetNodeInfo)'), 'table/function');
+  assert.equal(vm.evaluate('type(C_Traits) .. "/" .. type(C_Traits.GetGroupCurrencyInfo)'), 'table/function');
   assert.equal(vm.evaluate('C_SkillInfo.GetNumSkillLines()'), '8');
   assert.equal(vm.evaluate('C_SkillInfo.GetSkillLineInfo(4).name .. " " .. C_SkillInfo.GetSkillLineInfo(4).rank'), 'Skinning 75');
 });

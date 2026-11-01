@@ -280,39 +280,57 @@ C_SkillInfo = {
 	GetSkillLineInfo = function(i) return SKILLS[i] end,
 }
 -- Forever reads talents through these; the Classic talent tabs are gone in
--- build 70532. #134 fills the config and Legacy rows.
-local TRAIT_TREES = { [11] = "Beast Mastery", [12] = "Marksmanship" }
-local TRAIT_TREE_IDS = { 11, 12 }
-local LEGACY_NODE = 900
--- Shapes follow the retail C_Traits API; the in-game read is still to be checked.
-local TRAIT_NODES = {
-	{ id = 101, tree = 11, name = "Improved Aspect of the Hawk", ranksPurchased = 5, maxRanks = 5 },
-	{ id = 102, tree = 11, name = "Thick Hide", ranksPurchased = 3, maxRanks = 3 },
-	{ id = 103, tree = 12, name = "Lethal Shots", ranksPurchased = 2, maxRanks = 2 },
-	{ id = LEGACY_NODE, tree = 0, name = "Legacy", ranksPurchased = 24, maxRanks = 51 },
+-- build 70532. Shapes and names are from the client's own generated API docs at
+-- 1.60.1 (70532), `Blizzard_APIDocumentationGenerated/SharedTraitsDocumentation.lua`;
+-- only the fields the addon reads are here.
+local TRAIT_CONFIGS = {
+	[1] = { ID = 1, type = 1, name = "Leveling", treeIDs = { 11 }, usesSharedActionBars = false },
+	[2] = { ID = 2, type = 0, name = "Legacy", treeIDs = { 12 }, usesSharedActionBars = false },
 }
-Constants = { LegacyConsts = { LEGACY_TREE_ADVENTURE_TALENTED_NODE_ID = LEGACY_NODE } }
+-- The talents frame draws one header per group, with the first currency's
+-- `spent` as its point count.
+local TRAIT_GROUPS = {
+	[11] = {
+		{ groupID = 21, treeID = 11, displayName = "Class", spent = 6 },
+		{ groupID = 22, treeID = 11, displayName = "Beast Mastery", spent = 2 },
+	},
+	[12] = {
+		{ groupID = 23, treeID = 12, displayName = "Beast Mastery", spent = 21 },
+		{ groupID = 24, treeID = 12, displayName = "Marksmanship", spent = 40 },
+		{ groupID = 25, treeID = 12, displayName = "Survival", spent = 0 },
+	},
+}
+Constants = { LegacyConsts = { LEGACY_TREE_ADVENTURE_ID = 12, LEGACY_TREE_ADVENTURE_TALENTED_NODE_ID = 900 } }
 C_ClassTalents = {
 	GetActiveConfigID = function() STUB.traitReads = STUB.traitReads + 1; return STUB.configID end,
 }
 C_Traits = {
-	GetConfigInfo = function(configID)
-		if type(configID) ~= "number" or configID ~= STUB.configID then return nil end
-		return { ID = configID, name = "Leveling", treeIDs = TRAIT_TREE_IDS }
-	end,
-	GetTreeInfo = function(configID, treeID) return { treeID = treeID, name = TRAIT_TREES[treeID] } end,
-	GetTreeNodes = function(treeID)
-		local out = {}
-		for _, node in ipairs(TRAIT_NODES) do if node.tree == treeID then out[#out + 1] = node.id end end
-		return out
-	end,
-	GetNodeInfo = function(configID, nodeID)
-		STUB.traitReads = STUB.traitReads + 1
-		for _, node in ipairs(TRAIT_NODES) do
-			if node.id == nodeID then return { ID = node.id, name = node.name, ranksPurchased = node.ranksPurchased, maxRanks = node.maxRanks } end
+	GetConfigInfo = function(configID) return TRAIT_CONFIGS[configID] end,
+	GetConfigIDByTreeID = function(treeID)
+		for configID, config in pairs(TRAIT_CONFIGS) do
+			for _, id in ipairs(config.treeIDs) do if id == treeID then return configID end end
 		end
 	end,
-	GetDefinitionInfo = function(definitionID) end,
+	GetGroupDisplayInfoByTreeID = function(treeID)
+		local out = {}
+		for _, group in ipairs(TRAIT_GROUPS[treeID] or {}) do
+			out[#out + 1] = { groupID = group.groupID, treeID = treeID, skillLineID = 0, orderIndex = #out + 1, displayName = group.displayName, icon = 0 }
+		end
+		return out
+	end,
+	GetGroupCurrencyInfo = function(configID, groupIDs)
+		local spent = {}
+		for _, groups in pairs(TRAIT_GROUPS) do
+			for _, group in ipairs(groups) do spent[group.groupID] = group.spent end
+		end
+		local out = {}
+		for _, groupID in ipairs(groupIDs) do
+			if spent[groupID] then
+				out[#out + 1] = { traitNodeGroupID = groupID, currencyInfos = { { traitCurrencyID = 1, quantity = 0, maxQuantity = 0, spent = spent[groupID] } } }
+			end
+		end
+		return out
+	end,
 }
 ITEM_QUALITY2_DESC = "Uncommon"
 C_Item = {

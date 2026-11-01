@@ -1190,35 +1190,53 @@ function Runback.SkillLines()
 end
 
 -- The talent build, through the Forever namespaces: the Classic talent tabs are
--- gone in build 70532. C_ClassTalents names the active config, C_Traits lists its
--- trees and nodes, and the Legacy tree is one node outside the config. Read-only,
--- and it runs outside combat only.
-local function TalentLine()
-	if type(InCombatLockdown) == "function" and InCombatLockdown() then return nil end
-	local configID = Try(C_ClassTalents and C_ClassTalents.GetActiveConfigID)
-	if type(configID) ~= "number" then return nil end
-	local config = Try(C_Traits and C_Traits.GetConfigInfo, configID)
-	local treeIDs = type(config) == "table" and config.treeIDs
-	if type(treeIDs) ~= "table" then return nil end
-	local parts = {}
-	for _, treeID in ipairs(treeIDs) do
-		local tree = Try(C_Traits.GetTreeInfo, configID, treeID)
-		local nodes = Try(C_Traits.GetTreeNodes, treeID)
-		if type(nodes) == "table" then
-			local points = 0
-			for _, nodeID in ipairs(nodes) do
-				local node = Try(C_Traits.GetNodeInfo, configID, nodeID)
-				local ranks = type(node) == "table" and tonumber(node.ranksPurchased)
-				if ranks then points = points + ranks end
+-- gone in build 70532. The active config names its trees, and the talents frame
+-- shows each tree's points per group (class and spec, and the Legacy tab), where
+-- the group's first currency is the amount spent. Read-only, and it runs outside
+-- combat only.
+local function GroupPoints(parts, configID, treeID, prefix)
+	local groups = Try(C_Traits.GetGroupDisplayInfoByTreeID, treeID)
+	if type(groups) ~= "table" or #groups == 0 then return end
+	local ids = {}
+	for _, group in ipairs(groups) do
+		if type(group.groupID) == "number" then ids[#ids + 1] = group.groupID end
+	end
+	local spent = {}
+	local infos = Try(C_Traits.GetGroupCurrencyInfo, configID, ids)
+	if type(infos) == "table" then
+		for _, info in ipairs(infos) do
+			local currency = type(info.currencyInfos) == "table" and info.currencyInfos[1]
+			if type(info.traitNodeGroupID) == "number" and type(currency) == "table" then
+				spent[info.traitNodeGroupID] = tonumber(currency.spent)
 			end
-			local name = type(tree) == "table" and type(tree.name) == "string" and tree.name or ("Tree " .. tostring(treeID))
-			parts[#parts + 1] = name .. " " .. points
 		end
 	end
-	local legacy = Constants and Constants.LegacyConsts and Constants.LegacyConsts.LEGACY_TREE_ADVENTURE_TALENTED_NODE_ID
-	local legacyNode = type(legacy) == "number" and Try(C_Traits.GetNodeInfo, configID, legacy)
-	local legacyRanks = type(legacyNode) == "table" and tonumber(legacyNode.ranksPurchased)
-	if legacyRanks then parts[#parts + 1] = "Legacy " .. legacyRanks end
+	for _, group in ipairs(groups) do
+		if type(group.displayName) == "string" then
+			parts[#parts + 1] = prefix .. group.displayName .. " " .. (spent[group.groupID] or 0)
+		end
+	end
+end
+
+local function TalentLine()
+	if type(InCombatLockdown) == "function" and InCombatLockdown() then return nil end
+	if type(C_ClassTalents) ~= "table" or type(C_Traits) ~= "table" then return nil end
+	local configID = Try(C_ClassTalents.GetActiveConfigID)
+	if type(configID) ~= "number" then return nil end
+	local config = Try(C_Traits.GetConfigInfo, configID)
+	local treeIDs = type(config) == "table" and config.treeIDs
+	if type(treeIDs) ~= "table" then return nil end
+	local parts, seen = {}, {}
+	for _, treeID in ipairs(treeIDs) do
+		seen[treeID] = true
+		GroupPoints(parts, configID, treeID, "")
+	end
+	-- The Legacy tab is its own trait tree with its own config.
+	local legacyTree = Constants and Constants.LegacyConsts and Constants.LegacyConsts.LEGACY_TREE_ADVENTURE_ID
+	if type(legacyTree) == "number" and not seen[legacyTree] then
+		local legacyConfig = Try(C_Traits.GetConfigIDByTreeID, legacyTree)
+		if type(legacyConfig) == "number" then GroupPoints(parts, legacyConfig, legacyTree, "Legacy ") end
+	end
 	if #parts == 0 then return nil end
 	return table.concat(parts, " / ")
 end
