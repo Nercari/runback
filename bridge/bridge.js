@@ -105,6 +105,10 @@ const resolveCwd = raw => P.resolveCwd(raw, DEFAULT_CWD);
 // Folders a chat may run in: the default folder (chosen at the terminal) and
 // the player's allowedFolders list. Game text never adds to this.
 const ALLOWED_FOLDERS = [DEFAULT_CWD, ...(Array.isArray(cfg.allowedFolders) ? cfg.allowedFolders.map(f => resolveCwd(f)) : [])];
+const folderRefusal = (cwd, why) => why === 'broad'
+  ? `${cwd} is a broad folder, so an agent there could read unrelated files. Pick a narrower one with /runback cd.`
+  : `${cwd} is outside the folders this bridge allows. Folders: ${ALLOWED_FOLDERS.join(', ')}.\n` +
+    `Add it to allowedFolders in bridge/config.json on the PC (then restart the bridge), or use /runback cd for a folder inside one of them.`;
 const { sameFolder } = P;
 // Subfolders of the default folder, for the "folder not found" hint.
 function siblingFolders() {
@@ -537,7 +541,8 @@ function runAgentOnce(options) {
   Forever.onRun({ job: { chat: options.chat || 'council', cwd: options.cwd, text: options.prompt }, agentId: options.agentId,
     cwd: options.cwd, prompt: String(options.prompt || ''), promptBytes: Buffer.byteLength(String(options.prompt || '')) });
   const onSpawn = child => { onceChildren.add(child); child.on('close', () => onceChildren.delete(child)); };
-  return runAgent(options, { A, P, cfg, killTree, onSpawn, augment: (job, info) => Forever.augment(job, info) }).then(result => { result.elapsedMs = Date.now() - started; return result; });
+  return runAgent(options, { A, P, cfg, killTree, onSpawn, augment: (job, info) => Forever.augment(job, info),
+    allowedFolders: ALLOWED_FOLDERS, mentorDir: cfg.forever.mentorDir }).then(result => { result.elapsedMs = Date.now() - started; return result; });
 }
 
 // ---------------------------------------------------------------------------
@@ -578,6 +583,14 @@ function submit(job) {
     guideShareUntil = Date.now() + MAP_SHARE_MS;
     publishNow();
     log(`hello from session ${job.session}${pendingRestore ? ' (restore offered)' : ''}`);
+    return;
+  }
+  // No module may claim a job in a folder the PC did not allow: council, review
+  // and the rest start their own agents outside runJob.
+  const folderWhy = P.folderProblem(job.cwd, ALLOWED_FOLDERS);
+  if (folderWhy) {
+    log(`#${job.id}${job.session ? '@' + job.session : ''} refused folder (${folderWhy}): ${job.cwd}`);
+    finish(job, 'error', folderRefusal(job.cwd, folderWhy));
     return;
   }
   // A module owns this job until finish() marks it handled: the strip and the
@@ -659,10 +672,7 @@ function runJob(job) {
   const folderWhy = P.folderProblem(cwd, ALLOWED_FOLDERS);
   if (folderWhy) {
     log(`${tag} refused folder (${folderWhy}): ${cwd}`);
-    finish(job, 'error', folderWhy === 'broad'
-      ? `${cwd} is a broad folder, so an agent there could read unrelated files. Pick a narrower one with /runback cd.`
-      : `${cwd} is outside the folders this bridge allows. Folders: ${ALLOWED_FOLDERS.join(', ')}.\n` +
-        `Add it to allowedFolders in bridge/config.json on the PC (then restart the bridge), or use /runback cd for a folder inside one of them.`);
+    finish(job, 'error', folderRefusal(cwd, folderWhy));
     return;
   }
   // Which agent: the chat's own (an "agent=" flag), else the bridge's default.

@@ -51,7 +51,7 @@ The agent's tools also depend on the folder:
 | Folder | `permissionMode` and tools |
 |---|---|
 | The mentor workspace (`forever.mentorDir`) | The coach's working set: `acceptEdits`, with `Read`, `Grep`, `Glob`, `Edit`, `Write`, web search and its own `tools/` scripts (see [AGENTS.md](AGENTS.md)). |
-| Any other allowed folder | Read-only: `permissionMode` `default` and `Read`, `Grep`, `Glob`, `WebSearch`, `WebFetch`. No command, edit or write tool, whatever `allowedTools` says. Hermes has no tool-limit flag in the bridge yet, so it is refused there. |
+| Any other allowed folder | Read-only: `permissionMode` `default` and `Read`, `Grep`, `Glob`, `WebSearch`, `WebFetch`. No command, edit or write tool, whatever `allowedTools` says. `WebFetch` is network egress, so it can send a page URL out. Hermes has no tool-limit flag in the bridge yet, so it is refused there. |
 
 ## Runs
 

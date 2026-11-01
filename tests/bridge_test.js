@@ -574,16 +574,17 @@ function sandbox({ allowed = [], defaultCwd } = {}) {
   const argv = () => fs.existsSync(env.FAKE_ARGV) ? JSON.parse(fs.readFileSync(env.FAKE_ARGV, 'utf8')) : null;
   const config = () => fs.readFileSync(path.join(repo, 'bridge', 'config.json'), 'utf8');
   // The reload path: the addon's SavedVariables outbox, with an old allow= rule.
-  const outbox = (id, cwd, allow) => {
+  const outbox = (id, cwd, allow, cmd) => {
     const hex = s => Buffer.from(s, 'utf8').toString('hex');
     fs.writeFileSync(cfg.savedVariablesFile, 'RunbackDB = {\n["outbox"] = {\n' +
       `["id"] = ${id},\n["text"] = "${hex('hello')}",\n["cwd"] = "${hex(cwd)}",\n` +
-      (allow ? `["allow"] = "${hex(allow)}",\n` : '') + '},\n}\n');
+      (allow ? `["allow"] = "${hex(allow)}",\n` : '') +
+      (cmd ? `["cmd"] = "${cmd}",\n` : '') + '},\n}\n');
   };
   // The bridge stays up while the reload poll picks the outbox up (an async
   // module owns the job briefly, so --once would exit too early).
-  const runLive = (id, cwd, marker, allow) => {
-    outbox(id, cwd, allow);
+  const runLive = (id, cwd, marker, allow, cmd) => {
+    outbox(id, cwd, allow, cmd);
     return new Promise((resolve, reject) => {
       const child = spawn(process.execPath, ['bridge.js'], { cwd: path.join(repo, 'bridge'), env, stdio: 'ignore' });
       const started = Date.now();
@@ -646,6 +647,14 @@ test('a folder outside allowedFolders is refused, and added only by config.json'
     fs.writeFileSync(path.join(s.repo, 'bridge', 'config.json'), JSON.stringify(cfg, null, 2));
     await s.runLive(1, path.join(s.S, 'outside'), MARK);
     assert.ok(s.argv(), 'the agent ran inside an allowed folder');
+  } finally { fs.rmSync(s.S, { recursive: true, force: true }); }
+});
+
+test('a module job (council) cannot claim a refused folder', async () => {
+  const s = sandbox();
+  try {
+    await s.runLive(1, path.join(s.S, 'outside'), 'outside the folders this bridge allows', '', 'council');
+    assert.equal(s.argv(), null, 'council never started an agent in a refused folder');
   } finally { fs.rmSync(s.S, { recursive: true, force: true }); }
 });
 
