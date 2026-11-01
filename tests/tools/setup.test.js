@@ -162,6 +162,43 @@ test('setup finds a temp game folder named _forever_', (t) => {
   assert.equal(findClient('', [betaRoot]), beta);
 });
 
+test('a Forever folder on another drive beats retail in the first root', (t) => {
+  const retailRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'runback-client-'));
+  t.after(() => fs.rmSync(retailRoot, { recursive: true, force: true }));
+  const gamesRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'runback-client-'));
+  t.after(() => fs.rmSync(gamesRoot, { recursive: true, force: true }));
+  flavor(retailRoot, '_retail_');
+  const forever = flavor(gamesRoot, '_forever_');
+  assert.equal(findClient('', [retailRoot, gamesRoot]), forever);
+});
+
+test('a working Forever config is not repointed at a retail install', (t) => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'runback-client-'));
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  const retail = flavor(root, '_retail_');
+  const forever = path.join('F:', 'WoW', '_forever_');
+  const cfg = {
+    addonDir: path.join(forever, 'Interface', 'AddOns'),
+    inboxFile: path.join(forever, 'Interface', 'AddOns', 'Runback', 'Inbox.lua'),
+    savedVariablesFile: path.join(forever, 'WTF', 'Account', 'Alpha', 'SavedVariables', 'Runback.lua'),
+    tocInterface: '17000',
+    capture: { processName: 'WowB' },
+  };
+  assert.deepEqual(repairClientPaths(cfg, retail, 'Alpha', { tocInterface: '17000' }), []);
+  assert.equal(cfg.addonDir, path.join(forever, 'Interface', 'AddOns'));
+  assert.equal(cfg.tocInterface, '17000');
+  assert.equal(cfg.capture.processName, 'WowB');
+});
+
+test('the Interface number only goes up, so a newer config value is kept', (t) => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'runback-client-'));
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  const client = flavor(root, '_forever_');
+  const cfg = { tocInterface: '17000' };
+  assert.deepEqual(repairClientPaths(cfg, client, 'Alpha', { tocInterface: '16001' }), ['addonDir', 'inboxFile', 'savedVariablesFile', 'capture.processName']);
+  assert.equal(cfg.tocInterface, '17000');
+});
+
 test('an existing config follows the folder setup found, with no edit', (t) => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'runback-client-'));
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));

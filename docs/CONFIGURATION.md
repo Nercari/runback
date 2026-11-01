@@ -78,7 +78,7 @@ These sizes are baked into the files `install-slots.js` creates, and the addon h
 | `actMax` | `60` | Heartbeat files per message (`act/NNN/01..60.wav`). One flips per agent action. |
 | `presenceMax` | `2000` | Presence files (`presence/0001..2000.wav`). One flips per `presenceIntervalMs`. |
 | `presenceIntervalMs` | `30000` | How often the bridge flips a presence file so the in-game light stays green. |
-| `tocInterface` | `"16001"` | `## Interface:` version written into every slot addon's `.toc`. `setup.js` copies the number from `config.example.json`, and `bridge/install-slots.js` rewrites the line in the 200 existing slot `.toc` files when the number changes. Both this file and `addon/Runback/Runback.toc` move together. |
+| `tocInterface` | `"16001"` | `## Interface:` version written into every slot addon's `.toc`. `setup.js` raises it to the number in `config.example.json` (it never lowers it), and `bridge/install-slots.js` rewrites the line in the 200 existing slot `.toc` files when the number changes. Both this file and `addon/Runback/Runback.toc` move together. |
 
 ## Command line
 
