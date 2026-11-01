@@ -362,7 +362,7 @@ function slotFile(globalName, records, urgent = true) {
   const map = Date.now() < mapShareUntil && (urgent || mapLuaSize() <= MAP_PROGRESS_MAX) ? state.map : null;
   const guides = Date.now() < guideShareUntil && (urgent || guideLuaSize() <= MAP_PROGRESS_MAX) ? state.guides : null;
   const { agents, models, efforts, defaults } = pools();
-  return P.luaTable(globalName, records, { cwd: DEFAULT_CWD, restore: pendingRestore, agent: DEFAULT_AGENT, agents, models, efforts, defaults, map, guides });
+  return P.luaTable(globalName, records, { cwd: DEFAULT_CWD, restore: pendingRestore, agent: DEFAULT_AGENT, agents, models, efforts, defaults, map, guides, card: state.forever.card });
 }
 
 // What the in-game picker offers: the agents installed on this PC (all of them
@@ -970,7 +970,9 @@ function finish(job, status, text, session, denied, stall) {
   if (denied && denied.length) summary = 'Needs your permission. Open the window and click How to allow.';
   noteMessage(job, status === 'done' ? 'assistant' : 'system', status === 'done' ? text : 'Bridge error: ' + text);
   publish(chatKey(job), { chat: job.chat, id: job.id, status, text, summary, followUps, cwd: job.cwd, session, denied, agent: job.agent || '', stall: stall || '' }, true);
-  signal('sig', job.id, true);
+  // A module may finish a job the addon must not read a slot for (a card with
+  // nothing to say): no sig flip, so no reply slot is spent.
+  if (!job.noSignal) signal('sig', job.id, true);
   log(`#${job.id}${job.session ? '@' + job.session : ''} ${status} (${text.length} chars${summary ? ', summary ' + summary.length : ', no summary'})`);
   drainQueue();
   if (exitWhenIdle && running.size === 0) process.exit(status === 'done' ? 0 : 1);

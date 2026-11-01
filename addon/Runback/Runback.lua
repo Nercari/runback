@@ -39,6 +39,9 @@ local SLOT_PREFIX = "Runback_S"
 local ACT_MAX = 60 -- heartbeat files per message (act/NNN/01..60.wav)
 local PRESENCE_MAX = 2000 -- presence/0001..2000.wav, one flipped by the bridge every 30 s
 local STRIP_TRIES = 3 -- re-show an unacknowledged message this many times before falling back
+-- The between-pull coach card (#140): with the sound channel off the bridge cannot
+-- say the card is ready, so read one slot once, this many seconds after the request.
+local CARD_POLL, CARD_LIFE = 12, 45
 local CELL, CELLS_PER_ROW, MAX_ROWS = 4, 200, 48
 local STRIP_SECONDS = 40 -- max per message; it leaves the strip as soon as the bridge acknowledges
 -- Seconds after a send at which a slot is read. With the sound channel the
@@ -966,6 +969,7 @@ local function TryLoadSlot(why)
 	if type(data) == "table" and data.restore then ImportRestore(data.restore) end
 	if type(data) == "table" and data.map and RunbackMap then RunbackMap.Sync(data.map) end
 	if type(data) == "table" and data.guides and RunbackGuide then RunbackGuide.Sync(data.guides) end
+	if type(data) == "table" and data.card and RunbackCard and RunbackCard.Sync(data.card) then run.cardAt = nil end
 	if why == "signal" and not matched then
 		run.signalUnreliable = true
 	end
@@ -1012,7 +1016,19 @@ local function Tick()
 		run.restoring = nil
 		Runback.Render()
 	end
+	-- The coach card with the sound channel off: one read, once. With the channel
+	-- on, the bridge's sig flip below says when the card is written.
+	if run.cardAt and now >= run.cardAt then
+		run.cardAt = nil
+		TryLoadSlot("card")
+	end
 	for id, rec in pairs(run.outbound) do
+		-- The coach card is written: the bridge flips sig only when it made one, so
+		-- a fight with nothing to say costs no reply slot.
+		if rec.card and not rec.cardRead and CheckSignal("sig", id) then
+			rec.cardRead = true
+			TryLoadSlot("card")
+		end
 		if not rec.acked and CheckSignal("ack", id) then
 			NoteAcked(rec)
 			changed = true
@@ -1020,7 +1036,8 @@ local function Tick()
 		end
 		-- A hello only needs the bridge to have been seen; it never escalates.
 		-- A forget is the same, but the bridge must have been seen a moment after
-		-- the record went up, so it had a chance to read it.
+		-- the record went up, so it had a chance to read it. A card request waits
+		-- for its own answer (the sig or the ack): the card may take a few seconds.
 		if (rec.hello or rec.forget) and not rec.acked and run.bridgeSeen and run.bridgeSeen >= rec.sentAt + (rec.forget and 2 or 0) then
 			NoteAcked(rec)
 			changed = true
@@ -1030,6 +1047,11 @@ local function Tick()
 			run.outbound[id] = nil
 			changed = true
 		elseif (rec.hello or rec.stop) and now - rec.sentAt >= 20 then
+			run.outbound[id] = nil
+			changed = true
+		elseif rec.card and now - rec.sentAt >= CARD_LIFE then
+			-- The note can take the model's 20 s, so a card request waits longer
+			-- than a hello, and never nags or reloads.
 			run.outbound[id] = nil
 			changed = true
 		elseif now - rec.sentAt >= STRIP_SECONDS then
@@ -1087,6 +1109,7 @@ local function ProcessInbox()
 	if inbox.restore then ImportRestore(inbox.restore) end
 	if inbox.map and RunbackMap then RunbackMap.Sync(inbox.map) end
 	if inbox.guides and RunbackGuide then RunbackGuide.Sync(inbox.guides) end
+	if inbox.card and RunbackCard and RunbackCard.Sync(inbox.card) then run.cardAt = nil end
 end
 
 Finish = function(chat, role, text, denied, agent, summary, followUps, stall)
@@ -1648,6 +1671,26 @@ function Runback.SayHello()
 	end
 	RefreshStrip()
 	Runback.Render()
+end
+
+-- The between-pull coach card (#140): a record with no text and no chat, just the
+-- fight context, so the bridge can count the checks in the combat log and write the
+-- card. The answer comes back in the slot files (Forever_Card.lua), never in the
+-- chat. Only out of combat, only with the log on, and never more than once a fight.
+function Runback.RequestCard(ctx)
+	if db.settings.mode ~= "pixel" or type(ctx) ~= "string" or ctx == "" then return false end
+	if not Runback.IsConnected() then return false end
+	local now = GetTime()
+	db.lastSeq = db.lastSeq + 1
+	local c = ActiveChat()
+	-- temporaryContext: the fight lines are not the context later messages carry.
+	run.outbound[db.lastSeq] = { chat = c and c.id or "", cwd = c and c.cwd or "", flags = "k", name = "",
+		text = "", ctx = ctx, sentAt = now, card = true, temporaryContext = true }
+	-- The sound channel carries "the card is ready" with no slot spent; without it,
+	-- read one slot once.
+	if run.signalUnreliable or not (signalAvailable and db.settings.signal) then run.cardAt = now + CARD_POLL end
+	RefreshStrip()
+	return true
 end
 
 -- Put the active chat's pending message back on the strip.

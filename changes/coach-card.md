@@ -1,0 +1,3 @@
+### Added
+
+- **A between-pull coach card with numbers counted from the log (launch 10, #140).** After a fight, one short card ("One change: ..." and "Why: ...") appears once the fight's lockout is over: the bridge counts the checks in the game's combat log file and the coach model writes the one sentence, with every number in it checked against those counts. The card stays out of the chat and clear of the quest tracker, and is held while you are in a fight. **Got it**, **Why?** and **Not useful** add to a local count that `/ai card` prints. `/ai card off` turns the card off; it also stays off while the combat log is off, and with no usable log no card shows. The in-game check is still pending: the first card needs a real Forever log.

@@ -12,6 +12,7 @@ Runback is a fork of [chelinho139/wow-ai](https://github.com/chelinho139/wow-ai)
 - Live progress while the agent works, and replies echoed into the game chat.
 - Optional game context: character, level, zone, talents, professions and quest log. You can shift-click items, spells and quests into a message.
 - Quick prompts: `/ai review`, `death`, `build`, `gear`, `quest`, `level`, `drill`, `practice`, `recap`, `bags`, `look`.
+- A between-pull coach card after each fight: one sentence and its reason, with the numbers counted from the combat log by the bridge, shown out of combat only. `/ai card` prints its button counts; `/ai card off` turns it off.
 - Map layers drawn by the agent: numbered routes, quest stops and a navigator arrow.
 - Herb and ore spawns you can show on the world map (`/runback map herb`, `/runback map ore`), filtered by your gathering skill. This needs the optional `WoWAI_Nodes` data addon.
 - Runs on Windows, and on Linux with the game under Wine (X11).
