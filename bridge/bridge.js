@@ -721,6 +721,16 @@ function runJob(job) {
     }
     acfg = A.readOnlyConfig(acfg);
   }
+  // A coach note (a fight review) runs on the agent's cheap model by default, so one
+  // note per pull costs about nothing; agents.<id>.coachModel changes it. It outranks
+  // the chat's pick, since a review is not the chat's own turn, and its level goes
+  // with the model: the cheap model's own default applies. A chat that is not a
+  // coach note keeps its model, and an agent with no cheap model keeps its own.
+  const coach = job.cmd === 'review' ? A.coachModel(acfg, agentId) : '';
+  if (coach && coach !== acfg.model) {
+    acfg = { ...acfg, model: coach, effort: '' };
+    log(`${tag} coach note on ${agentId} model ${coach}`);
+  }
   const cmd = A.resolveCommand(agentId, acfg);
   if (!cmd.found) {
     log(`${tag} ${agentId} not found: ${cmd.note}`);

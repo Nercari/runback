@@ -2,14 +2,14 @@
 
 Merge evidence for runback. This file lists the commands only; it never holds their results. Results go in the PR body, because a results section in this file is the same few lines every PR appends, and parallel PRs then conflict on it.
 
-Run these from the repo root. CI runs the first three on Windows and Linux.
+Run these from the repo root. CI runs all four on Windows and Linux.
 
 ## Commands
 
 - `npm ci`
 - `node tools/safety-ci.js` (Blizzard-policy and safety checks; must exit 0)
 - `npm test` (must end with `# fail 0` and `CODEC ROUND-TRIP PASS`)
-- `node tools/upgrade-proof.js` when a PR touches `setup.js`, the addon folder name or saved data (must end with `UPGRADE PROOF PASS`; installs into temporary folders only)
+- `node tools/upgrade-proof.js` (must end with `UPGRADE PROOF PASS`; installs into temporary folders only)
 
 ## Proof in the PR body
 

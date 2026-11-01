@@ -42,6 +42,12 @@ const CATALOG = {
   hermes: [],
 };
 
+// The cheap model a coach note (a fight review) runs on by default, one per pull,
+// so its cost rounds to nothing. Only Claude's docs name one (haiku, the small fast
+// model); the other lists here name no cheaper model the bridge can rely on, so
+// those agents keep their normal model. agents.<id>.coachModel changes it.
+const CHEAP = { claude: 'haiku' };
+
 function validEffort(e) { return typeof e === 'string' && EFFORT_TOKEN.test(e); }
 
 // A config.json models item: a plain string (no levels) or { id, efforts, defaultEffort }.
@@ -69,8 +75,21 @@ function entries(acfg, id) {
   return out;
 }
 
+// The model a coach note runs on, or '' for the agent's normal one: agents.<id>.coachModel
+// when this agent offers it, else the built-in cheap model when its list offers that.
+// A player whose list names no cheap model gets the normal model, never an error.
+function coachModel(acfg, id) {
+  const list = entries(acfg, id);
+  const own = acfg && typeof acfg.coachModel === 'string' ? acfg.coachModel : '';
+  if (own && list.some(e => e.id === own)) return own;
+  const cheap = CHEAP[id] || '';
+  return cheap && list.some(e => e.id === cheap) ? cheap : '';
+}
+
 module.exports = {
   CATALOG,
+  CHEAP,
   entries,
+  coachModel,
   validEffort,
 };

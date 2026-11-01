@@ -36,6 +36,7 @@
     "claude": {
       "path": "",
       "model": "",
+      "coachModel": "",
       "models": ["opus", "sonnet", "haiku"],
       "permissionMode": "acceptEdits",
       "allowedTools": [
@@ -57,6 +58,7 @@
     "codex": {
       "path": "",
       "model": "",
+      "coachModel": "",
       "models": [],
       "permissionMode": "acceptEdits",
       "networkAccess": false,
@@ -65,6 +67,7 @@
     "agy": {
       "path": "",
       "model": "",
+      "coachModel": "",
       "models": [],
       "permissionMode": "acceptEdits",
       "extraArgs": []
@@ -72,6 +75,7 @@
     "hermes": {
       "path": "",
       "model": "",
+      "coachModel": "",
       "models": [],
       "permissionMode": "acceptEdits",
       "extraArgs": []
@@ -79,6 +83,7 @@
     "grok": {
       "path": "",
       "model": "",
+      "coachModel": "",
       "models": [],
       "permissionMode": "acceptEdits",
       "allowedTools": [

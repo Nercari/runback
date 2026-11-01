@@ -214,7 +214,8 @@ ChatFrameUtil = { InsertLink = function(text) return false end }
 function ChatEdit_InsertLink(text) return ChatFrameUtil.InsertLink(text) end
 
 -- The character, for the game context (Runback.GameContext).
-function GetBuildInfo() return "1.60.1", "69913", "Sep 1 2026", 16001 end
+-- Forever at build 1.60.1 (70532), as the client dump of branch `forever` reports.
+function GetBuildInfo() return "1.60.1", "70532", "Sep 1 2026", 16001 end
 function UnitName(unit) if unit == "player" then return "Testchar" end end
 function GetRealmName() return "Test Realm" end
 function UnitLevel(unit) return STUB.level end
@@ -232,23 +233,63 @@ C_Map = {
 }
 function UnitXP(unit) return 1234 end
 function UnitXPMax(unit) return 5000 end
-function GetNumTalentTabs() return 3 end
-function GetTalentTabInfo(i)
-	local tabs = { { "Beast Mastery", 10 }, { "Marksmanship", 5 }, { "Survival", 0 } }
-	return tabs[i][1], "Interface\\Icons\\x", tabs[i][2]
+
+-- Forever marks some live values secret: they pass around, but any call that
+-- looks inside them raises. STUB.health lets a test hand UnitHealth one; #133
+-- reads a pull start through it.
+local SecretMT = {}
+local function NoSecret(op)
+	error("attempt to " .. op .. " a secret value", 3)
 end
+SecretMT.__add = function() NoSecret("perform arithmetic on") end
+SecretMT.__sub = SecretMT.__add
+SecretMT.__mul = SecretMT.__add
+SecretMT.__div = SecretMT.__add
+SecretMT.__mod = SecretMT.__add
+SecretMT.__pow = SecretMT.__add
+SecretMT.__unm = function() NoSecret("perform arithmetic on") end
+SecretMT.__lt = function() NoSecret("compare") end
+SecretMT.__le = SecretMT.__lt
+SecretMT.__concat = function() NoSecret("concatenate") end
+SecretMT.__tostring = function() NoSecret("tostring") end
+SecretMT.__secret = true
+function STUB.Secret() return setmetatable({}, SecretMT) end
+function issecretvalue(value)
+	local mt = type(value) == "table" and getmetatable(value)
+	return not not (mt and mt.__secret)
+end
+function UnitHealth(unit) return STUB.health end
+function UnitHealthMax(unit) return STUB.healthMax end
+
 TRADE_SKILLS, SECONDARY_SKILLS = "Professions", "Secondary Skills"
+-- Forever has one SkillLineAttributes table per line under C_SkillInfo; the bare
+-- GetNumSkillLines and GetSkillLineInfo globals are gone in build 70532.
 local SKILLS = {
-	{ "Class Skills", true }, { "Bows", false, 46, 115 },
-	{ "Professions", true }, { "Skinning", false, 75, 75 },
-	{ "Secondary Skills", true }, { "First Aid", false, 40, 75 },
-	{ "Weapon Skills", true }, { "Swords", false, 10, 115 },
+	{ name = "Class Skills", isHeader = true, parentSkillLineID = 0 },
+	{ name = "Bows", isHeader = false, rank = 46, maxRank = 115, skillID = 45, parentSkillLineID = 0 },
+	{ name = "Professions", isHeader = true, parentSkillLineID = 0 },
+	{ name = "Skinning", isHeader = false, rank = 75, maxRank = 75, skillID = 393, parentSkillLineID = 0 },
+	{ name = "Secondary Skills", isHeader = true, parentSkillLineID = 0 },
+	{ name = "First Aid", isHeader = false, rank = 40, maxRank = 75, skillID = 129, parentSkillLineID = 0 },
+	{ name = "Weapon Skills", isHeader = true, parentSkillLineID = 0 },
+	{ name = "Swords", isHeader = false, rank = 10, maxRank = 115, skillID = 43, parentSkillLineID = 0 },
 }
-function GetNumSkillLines() return #SKILLS end
-function GetSkillLineInfo(i)
-	local s = SKILLS[i]
-	return s[1], s[2] or nil, false, s[3], 0, 0, s[4]
-end
+C_SkillInfo = {
+	GetNumSkillLines = function() return #SKILLS end,
+	GetSkillLineInfo = function(i) return SKILLS[i] end,
+}
+-- Forever reads talents through these; the Classic talent tabs are gone in
+-- build 70532. #134 fills the config and Legacy rows.
+C_ClassTalents = {
+	GetActiveConfigID = function() end,
+}
+C_Traits = {
+	GetConfigInfo = function(configID) end,
+	GetTreeInfo = function(configID, treeID) end,
+	GetTreeNodes = function(treeID) return {} end,
+	GetNodeInfo = function(configID, nodeID) end,
+	GetDefinitionInfo = function(definitionID) end,
+}
 ITEM_QUALITY2_DESC = "Uncommon"
 C_Item = {
 	GetItemInfo = function(link)

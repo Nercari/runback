@@ -687,6 +687,7 @@ module.exports = {
   readOnlyConfig,
   modelChoices,
   modelLevels,
+  coachModel: M.coachModel,
   modelEntries: M.entries,
   effortProblem,
   grokRules,
