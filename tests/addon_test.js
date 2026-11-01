@@ -1339,3 +1339,37 @@ test('a bridge reply carries its follow-up questions into the history: strings o
   deliver('');
   assert.equal(vm.evaluate('RunbackDB.chats[1].history[#RunbackDB.chats[1].history].followUps'), null, 'no tag, none stored');
 });
+
+// The stub client itself: it stands in for the Forever client at build 70532,
+// not for the Classic client (the moonshot audit of #132).
+test('the stub reports the Forever client build', () => {
+  const vm = newVM();
+  assert.equal(vm.evaluate('select(1, GetBuildInfo()) .. "/" .. select(2, GetBuildInfo()) .. "/" .. select(4, GetBuildInfo())'), '1.60.1/70532/16001');
+});
+
+test('the stub has no Classic talent or skill globals', () => {
+  const vm = newVM();
+  for (const name of ['GetNumTalentTabs', 'GetTalentTabInfo', 'GetNumSkillLines', 'GetSkillLineInfo']) {
+    assert.equal(vm.evaluate(`type(${name})`), 'nil', `${name} is gone in build 70532`);
+  }
+});
+
+test('the stub has the Forever talent and skill namespaces', () => {
+  const vm = newVM();
+  assert.equal(vm.evaluate('type(C_ClassTalents) .. "/" .. type(C_ClassTalents.GetActiveConfigID)'), 'table/function');
+  assert.equal(vm.evaluate('type(C_Traits) .. "/" .. type(C_Traits.GetNodeInfo)'), 'table/function');
+  assert.equal(vm.evaluate('C_SkillInfo.GetNumSkillLines()'), '8');
+  assert.equal(vm.evaluate('C_SkillInfo.GetSkillLineInfo(4).name .. " " .. C_SkillInfo.GetSkillLineInfo(4).rank'), 'Skinning 75');
+});
+
+test('UnitHealth returns a plain number or a secret-like value', () => {
+  const vm = newVM();
+  assert.equal(vm.evaluate('UnitHealth("player")'), null, 'no health until a test sets one');
+  vm.run('STUB.health = 1000; STUB.healthMax = 1000');
+  assert.equal(vm.evaluate('UnitHealth("player")'), '1000');
+  vm.run('STUB.health = STUB.Secret()');
+  assert.equal(vm.evaluate('issecretvalue(UnitHealth("player"))'), 'true');
+  assert.equal(vm.evaluate('pcall(function() return UnitHealth("player") * 100 end)'), 'false', 'arithmetic on a secret raises');
+  assert.equal(vm.evaluate('pcall(function() return tostring(UnitHealth("player")) end)'), 'false');
+  assert.equal(vm.evaluate('issecretvalue(999)'), 'false');
+});
