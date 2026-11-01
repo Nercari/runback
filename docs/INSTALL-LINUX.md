@@ -66,16 +66,14 @@ npm run doctor                                    # PASS x11, no Wayland line
 
 Then install Wine and the game and run `node setup.js --wow <client folder>` as above, start the bridge with `npm start`, and run the capture check below.
 
-To undo it, drop the extra theme file, then log out to Hyprland:
+To undo it, drop the extra theme file, then get out of openbox (right-click the desktop, *Exit*, or `loginctl terminate-user "$USER"`) and log in to Hyprland again:
 
 ```bash
 sudo rm /etc/sddm.conf.d/zz-runback-theme.conf
 sudo rm /usr/share/xsessions/runback-x11.desktop /usr/local/bin/runback-x11-session
 ```
 
-The next login is the Omarchy theme and Hyprland as before; `/usr/share/wayland-sessions` and the other `/etc/sddm.conf.d` files were never touched. If the greeter ever fails to draw, press `Ctrl+Alt+F2`, log in, run those two `rm` lines, and `sudo systemctl restart sddm`.
-
-The next login is Hyprland as before; `/usr/share/wayland-sessions` was never touched.
+The next login is the Omarchy theme and Hyprland as before: both session directories (`/usr/local/share/wayland-sessions` and `/usr/share/wayland-sessions`) and the other `/etc/sddm.conf.d` files were never touched, so only the empty `/usr/share/xsessions`, the three packages and the game remain installed. If the greeter ever fails to draw, press `Ctrl+Alt+F2`, log in, run those two `rm` lines, and `sudo systemctl restart sddm`.
 
 ## Check the capture (do this once)
 
