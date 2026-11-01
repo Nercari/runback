@@ -392,8 +392,8 @@ def grab(w):
 
 
 def run():
-    # The session type rides on every probe line so the pasted proof shows which
-    # session produced the strip instead of relying on a second command.
+    # A probe failure still has to show which session it ran in, so the pasted
+    # proof does not rely on a second command.
     session = os.environ.get("XDG_SESSION_TYPE", "")
     if args.probe:
         w = find_window()
@@ -405,7 +405,7 @@ def run():
             time.sleep(0.5)
         g = grab(w)
         if not g or isinstance(g, dict):
-            emit(g or {"error": "capture failed", "session": session})
+            emit(g if isinstance(g, dict) else {"error": "capture failed", "session": session})
             sys.exit(1)
         px, width, height = g
         write_png(args.probe, px, width, height)

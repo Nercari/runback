@@ -21,9 +21,11 @@ Without `--wow`, `setup.js` looks in `$WINEPREFIX`, `~/.wine` and `~/Games/battl
 
 ## No X11 session yet
 
-A PC that runs Hyprland has Wayland only, and the XWayland it provides is not enough: the bridge must read another window's pixels. Add one X11 session next to Hyprland for the capture test. Nothing below changes Hyprland or the default login, so a logout rolls it back.
+A PC that runs Hyprland has Wayland only, and the XWayland it provides is not enough: the bridge must read another window's pixels. Add one X11 session next to Hyprland for the capture test. Hyprland's own session file is not changed, so the rollback is a logout.
 
-On Arch with SDDM as the login manager (Omarchy), as root:
+The Omarchy SDDM theme draws no session picker: it signs you into the `uwsm` session (`/usr/share/sddm/themes/omarchy/Main.qml`, `sessionIndex`). So the test switches SDDM to its own `elarun` theme, which has the picker, for one session.
+
+On Arch with SDDM (Omarchy), as root:
 
 ```bash
 sudo pacman -S --needed openbox xterm xorg-xinit
@@ -45,18 +47,30 @@ Exec=/usr/local/bin/runback-x11-session
 Type=Application
 DesktopNames=openbox
 EOF
+
+sudo cp /etc/sddm.conf.d/10-theme.conf /etc/sddm.conf.d/10-theme.conf.runback-backup
+sudo sed -i 's/^Current=.*/Current=elarun/' /etc/sddm.conf.d/10-theme.conf
 ```
 
-Log out. Autologin signs you straight in on boot, so the logout is what shows the login screen; pick *Runback X11 (openbox)* there. In that session, in the terminal it opens:
+Log out, not reboot: `[Autologin]` in `/etc/sddm.conf.d/autologin.conf` skips the screen on boot. The login screen then lists the sessions; pick *Runback X11 (openbox)*. In the terminal it opens:
 
 ```bash
-echo $XDG_SESSION_TYPE      # must print x11
-npm run doctor              # PASS x11, and nothing about a Wayland session
+echo $XDG_SESSION_TYPE                            # must print x11
+loginctl show-session "$XDG_SESSION_ID" -p Type    # must say Type=x11
+cd ~/runback                                      # the clone from above
+npm run doctor                                    # PASS x11, no Wayland line
 ```
 
 Then install Wine and the game and run `node setup.js --wow <client folder>` as above, start the bridge with `npm start`, and run the capture check below.
 
-To undo it: log out, pick Hyprland again, then `sudo rm /usr/share/xsessions/runback-x11.desktop /usr/local/bin/runback-x11-session`. The session files in `/usr/share/wayland-sessions` are untouched.
+To undo it, restore the theme first and then log out to Hyprland:
+
+```bash
+sudo mv /etc/sddm.conf.d/10-theme.conf.runback-backup /etc/sddm.conf.d/10-theme.conf
+sudo rm /usr/share/xsessions/runback-x11.desktop /usr/local/bin/runback-x11-session
+```
+
+The next login is Hyprland as before; `/usr/share/wayland-sessions` was never touched.
 
 ## Check the capture (do this once)
 
