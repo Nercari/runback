@@ -676,6 +676,7 @@ module.exports = {
   agentConfig,
   modelChoices,
   modelLevels,
+  coachModel: M.coachModel,
   modelEntries: M.entries,
   effortProblem,
   grokRules,

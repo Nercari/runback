@@ -32,12 +32,21 @@ Keys under `agents.claude`, `agents.codex`, `agents.grok`, `agents.agy` and `age
 | `allowedTools` | git, npm, npx, node, python, pip, pytest, ls, dir, WebSearch, WebFetch | Rules in Claude Code's syntax: `Bash(git:*)` allows any command starting with `git`, `WebSearch` a tool. Passed to Claude as `--allowedTools`, translated to Grok's `--allow` globs, ignored by Codex. The **Allow & retry** button in game appends rules here permanently. |
 | `deniedTools` | `[]` | Rules the agent may never use, same syntax. Claude: `--disallowedTools`; Grok: `--deny`, which wins over everything, `bypassPermissions` included; ignored by Codex. |
 | `model` | `""` | Passed to the CLI (`--model` / `-m`) when non-empty. Empty uses the CLI's default. |
+| `coachModel` | `""` | The model a coach note (a fight review, `/ai review`) runs on, whatever model the chat picked. Empty uses the agent's cheap model: `haiku` for Claude, which is the only agent whose list names one. Give a model this agent offers to change it; one it does not offer is ignored, so the cheap model still applies. An agent with no cheap model, or a `models` list that leaves it out, runs reviews on its normal model, with no error. |
 | `models` | Built in (`bridge/models.js`): Claude `fable, opus, sonnet, haiku`; Codex its eight listed models (`gpt-6-astra` … `gpt-5.5`); Grok `grok-build`; agy and Hermes none | The models the in-game **AI** picker offers for this agent, as the CLI names them (`"gpt-5-codex"`, `"openrouter/x-ai/grok-4"`). Setting it replaces the built-in list. An item is a name, or `{ "id": "gpt-6-sol", "efforts": ["low", "high"], "defaultEffort": "low" }` to record the reasoning levels the CLI accepts for it (levels are lowercase letters, up to 16). A chat that picks one runs with it instead of `model`; a model not on this list is refused. Names are letters, digits and `. _ : / @ [ ] -`, up to 64 characters. |
 | `path` | `""` | Full path to the executable. Empty means: look in the installer's folder, then (for Codex) `CODEX_BIN`, then `PATH`, then npm's launcher. A `.js` path is run with the bridge's Node. |
 | `extraArgs` | `[]` | More command-line arguments, added verbatim (before Codex's `resume` subcommand). |
 | `networkAccess` (codex only) | `false` | `true` lets commands inside Codex's `workspace-write` sandbox reach the network (`-c sandbox_workspace_write.network_access=true`). |
 
 A `config.json` from before agents existed kept Claude's settings at the top level (`claudePath`, `model`, `permissionMode`, `allowedTools`). The bridge still reads them, under anything in `agents.claude`; `setup.js` moves them down.
+
+### The model a coach note runs on
+
+One coach note per pull has to cost about nothing, so a fight review runs on the agent's cheap model by default: `haiku` for Claude, set in `bridge/models.js` (the only agent whose model list names a small, fast one). Codex, Grok, agy and Hermes keep their normal model, and so does every chat.
+
+- Change it per agent: `"coachModel": "sonnet"` under `agents.claude`. Give a model that agent offers.
+- Turn the cheap default off: give `coachModel` the model you want reviews on, or remove `haiku` from `models` and reviews keep the agent's normal model.
+- The chat's own model pick does not apply to a review, and the review takes the coach model's own reasoning level.
 
 ## Runs
 
