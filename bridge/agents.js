@@ -472,6 +472,7 @@ const AGENTS = {
   hermes: {
     name: 'Hermes', command: 'hermes',
     install: 'Install Hermes Agent and run `hermes setup` once.',
+    readOnly: false, // no tool-limit flag yet, so the bridge refuses it outside the mentor workspace (#138)
     takesEffort: true, // chat --reasoning, confirmed on Nercari's PC 2026-10-09
     takesImages: true, // chat --image <image>
     windowsPaths: () => [], posixPaths: () => [],
@@ -499,6 +500,14 @@ const AGENTS = {
 const DEFAULT_AGENT = 'claude';
 
 function agentIds() { return Object.keys(AGENTS); }
+
+// Outside the mentor workspace a chat reads only: no command, edit or write
+// tool. The mentor guard gives the coach its working set inside the workspace
+// (forever/modules/05-mentor-guard.js); this is the floor everywhere else.
+const READ_ONLY_TOOLS = ['Read', 'Grep', 'Glob', 'WebSearch', 'WebFetch'];
+function readOnlyConfig(acfg) {
+  return { ...acfg, permissionMode: 'default', allowedTools: READ_ONLY_TOOLS.slice() };
+}
 
 // The agent id a config value or strip flag names, or null when it is unknown.
 function normalizeAgent(id) {
@@ -674,6 +683,8 @@ module.exports = {
   imageAgentNames,
   lookFor,
   agentConfig,
+  READ_ONLY_TOOLS,
+  readOnlyConfig,
   modelChoices,
   modelLevels,
   modelEntries: M.entries,

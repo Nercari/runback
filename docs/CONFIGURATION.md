@@ -2,7 +2,7 @@
 
 Everything the bridge reads: `bridge/config.json`, command-line flags, environment variables, and the files it writes next to itself. `node setup.js` writes a working `config.json` from `bridge/config.example.json` (and brings an older one up to date); this page explains each key so you can tune it by hand.
 
-The bridge reads `config.json` once at start. Restart it after editing, except for an agent's `allowedTools`, which the **Allow & retry** button updates live.
+The bridge reads `config.json` once at start. Restart it after editing, including `allowedTools`: the game never changes permissions.
 
 ## Paths
 
@@ -12,6 +12,7 @@ The bridge reads `config.json` once at start. Restart it after editing, except f
 | `inboxFile` | `<addonDir>\Runback\Inbox.lua` | The file the game reads on `/reload` (fallback path). Normally derived from `addonDir`; only change it if you moved the addon. A value still naming the old `WoWClaude` addon is ignored in favour of the derived one. |
 | `savedVariablesFile` | `…\WTF\Account\<account>\SavedVariables\Runback.lua` | The addon's saved data. The bridge polls it for the reload-path outbox. `setup.js` picks the first account under `WTF\Account`; pass `--account <name>` to choose another. |
 | `defaultCwd` | empty | Folder for chats that have not chosen one with `/runback cd`, when the bridge is started from inside this repo (`npm start`). Empty means the mentor workspace. See [Which folder the agent works in](#which-folder-the-agent-works-in). |
+| `allowedFolders` | `[]` | More folders a chat may work in, one path per entry (`~` is your home folder). The default folder is always allowed. A chat in any other folder is refused; the in-game **How to allow** button does not add one. |
 
 ## Extensions
 
@@ -29,7 +30,7 @@ Keys under `agents.claude`, `agents.codex`, `agents.grok`, `agents.agy` and `age
 | Key | Default | Meaning |
 |---|---|---|
 | `permissionMode` | `"acceptEdits"` | `acceptEdits` auto-approves file edits inside the working folder; `bypassPermissions` approves everything; `default` approves nothing beyond what `allowedTools` names. Claude gets it as `--permission-mode`; for Codex it picks the sandbox (`read-only` / `workspace-write` / none); for Grok it becomes `--permission-mode dontAsk` plus allow rules, or `--always-approve` (headless Grok runs ordinary commands on its own and blocks dangerous ones unless a rule allows them; see [AGENTS.md](AGENTS.md)). |
-| `allowedTools` | git, npm, npx, node, python, pip, pytest, ls, dir, WebSearch, WebFetch | Rules in Claude Code's syntax: `Bash(git:*)` allows any command starting with `git`, `WebSearch` a tool. Passed to Claude as `--allowedTools`, translated to Grok's `--allow` globs, ignored by Codex. The **Allow & retry** button in game appends rules here permanently. |
+| `allowedTools` | git, npm, npx, node, python, pip, pytest, ls, dir, WebSearch, WebFetch | Rules in Claude Code's syntax: `Bash(git:*)` allows any command starting with `git`, `WebSearch` a tool. Passed to Claude as `--allowedTools`, translated to Grok's `--allow` globs, ignored by Codex. Only this file gives a rule: the game cannot add one (see [Permissions](#permissions)). Outside the mentor workspace the bridge replaces this list with read-only tools. |
 | `deniedTools` | `[]` | Rules the agent may never use, same syntax. Claude: `--disallowedTools`; Grok: `--deny`, which wins over everything, `bypassPermissions` included; ignored by Codex. |
 | `model` | `""` | Passed to the CLI (`--model` / `-m`) when non-empty. Empty uses the CLI's default. |
 | `models` | Built in (`bridge/models.js`): Claude `fable, opus, sonnet, haiku`; Codex its eight listed models (`gpt-6-astra` … `gpt-5.5`); Grok `grok-build`; agy and Hermes none | The models the in-game **AI** picker offers for this agent, as the CLI names them (`"gpt-5-codex"`, `"openrouter/x-ai/grok-4"`). Setting it replaces the built-in list. An item is a name, or `{ "id": "gpt-6-sol", "efforts": ["low", "high"], "defaultEffort": "low" }` to record the reasoning levels the CLI accepts for it (levels are lowercase letters, up to 16). A chat that picks one runs with it instead of `model`; a model not on this list is refused. Names are letters, digits and `. _ : / @ [ ] -`, up to 64 characters. |
@@ -38,6 +39,19 @@ Keys under `agents.claude`, `agents.codex`, `agents.grok`, `agents.agy` and `age
 | `networkAccess` (codex only) | `false` | `true` lets commands inside Codex's `workspace-write` sandbox reach the network (`-c sandbox_workspace_write.network_access=true`). |
 
 A `config.json` from before agents existed kept Claude's settings at the top level (`claudePath`, `model`, `permissionMode`, `allowedTools`). The bridge still reads them, under anything in `agents.claude`; `setup.js` moves them down.
+
+## Permissions
+
+The game never changes what an agent may do. An `allow=` field on a strip or reload record is ignored, so an old addon cannot widen `config.json`. To add a rule, edit `agents.<id>.allowedTools` in `bridge/config.json` on the PC and restart the bridge.
+
+A reply that was refused a tool offers **How to allow**. The button only explains that PC step; it sends no rule and writes no file.
+
+The agent's tools also depend on the folder:
+
+| Folder | `permissionMode` and tools |
+|---|---|
+| The mentor workspace (`forever.mentorDir`) | The coach's working set: `acceptEdits`, with `Read`, `Grep`, `Glob`, `Edit`, `Write`, web search and its own `tools/` scripts (see [AGENTS.md](AGENTS.md)). |
+| Any other allowed folder | Read-only: `permissionMode` `default` and `Read`, `Grep`, `Glob`, `WebSearch`, `WebFetch`. No command, edit or write tool, whatever `allowedTools` says. Hermes has no tool-limit flag in the bridge yet, so it is refused there. |
 
 ## Runs
 
@@ -115,7 +129,9 @@ Each chat can pick its own folder with `/runback cd` or **Folder...** in the men
 4. `defaultCwd` in `config.json`, unless it is a broad folder
 5. The mentor workspace (`forever.mentorDir`, by default `wow-mentor` next to this repo), created from the `mentor/` template on first use. Its `AGENTS.md` is refreshed from the template at each bridge start (the replaced copy is kept as `AGENTS.md.bak`); put your own notes in `LOCAL.md`, which is never overwritten
 
-A broad folder is a drive root, your home folder or anything above it, or its Documents, Desktop or Downloads (also inside OneDrive): an agent working there reads unrelated files. Naming one on purpose (`--project`, `WOW_AI_PROJECT`, `/runback cd`) still works, and every reply in it carries a one-line warning.
+A broad folder is a drive root, your home folder or anything above it, or its Documents, Desktop or Downloads (also inside OneDrive): an agent working there reads unrelated files. The bridge refuses a chat there, even when the folder was named on purpose; start the bridge in a narrower folder or set `defaultCwd`.
+
+A chat may work in the default folder and its subfolders, or in a folder listed in `allowedFolders`. Any other folder from the game is refused, and the reply says which folders are allowed. Only `config.json` adds one.
 
 A relative `/runback cd` path is resolved against that default. `~` expands to your home folder. The agents keep sessions per folder, so a chat that changes folder starts a fresh session there; the same happens when a chat changes agent.
 

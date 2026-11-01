@@ -1736,14 +1736,14 @@ function Runback.BoxCommand(text)
 	end
 end
 
--- The Allow button: grant the rules a reply asked for, then tell the agent to carry on.
+-- The Allow button: explain the PC step. Permissions never change from the game
+-- (decision 5, issue 137); the bridge ignores any allow rule a game record carries.
 function Runback.Allow(chatId, rules)
 	local c = FindChat(chatId)
-	if not c or c.pendingId or not rules or #rules == 0 then return end
+	if not c or not rules or #rules == 0 then return end
 	if db.activeChat ~= c.id then Runback.SwitchChat(c.id) end
-	for _, m in ipairs(c.history) do m.denied = nil end
-	AddHistory(c, "system", "Allowed: " .. table.concat(rules, ", "))
-	Runback.Send("Those actions are allowed now. Continue from where you left off.", rules)
+	AddHistory(c, "system", "Permissions are set on the PC, not in the game. Add these rules to agents.<agent>.allowedTools in bridge/config.json, then restart the bridge: " .. table.concat(rules, ", "))
+	Runback.Render()
 end
 
 ---------------------------------------------------------------------------
@@ -2369,7 +2369,7 @@ function Runback.Render()
 			if denied then
 				local names = {}
 				for _, rule in ipairs(denied) do table.insert(names, AllowName(rule)) end
-				local label = "Allow " .. table.concat(names, ", ") .. " & retry"
+				local label = "How to allow" .. ": " .. table.concat(names, ", ")
 				b.allow:SetText(label)
 				b.allow:SetWidth(math.min(width - 24, math.max(160, b.allow:GetFontString():GetStringWidth() + 30)))
 				b.allow.chatId = c.id

@@ -13,17 +13,19 @@ test('luaStr escapes everything Lua 5.1 needs', () => {
   assert.equal(P.luaStr(42), '"42"');
 });
 
-test('parseFlags reads new-session, hello, forget, context, agent and allow lists', () => {
-  const none = { newSession: false, hello: false, forget: false, stop: false, context: false, allow: [], agent: '', model: '', effort: '', cmd: '' };
+test('parseFlags reads new-session, hello, forget, context and agent; permission rules from the game are ignored', () => {
+  const none = { newSession: false, hello: false, forget: false, stop: false, context: false, agent: '', model: '', effort: '', cmd: '' };
   assert.deepEqual(P.parseFlags(''), none);
   assert.deepEqual(P.parseFlags('s'), { ...none, stop: true });
   assert.deepEqual(P.parseFlags('n'), { ...none, newSession: true });
   assert.deepEqual(P.parseFlags('h'), { ...none, hello: true });
   assert.deepEqual(P.parseFlags('d'), { ...none, forget: true });
   assert.deepEqual(P.parseFlags('h;c'), { ...none, hello: true, context: true });
-  assert.deepEqual(P.parseFlags('n;allow=WebSearch, Bash(git:*),'), { ...none, newSession: true, allow: ['WebSearch', 'Bash(git:*)'] });
+  // Decision 5 (issue 137): an old addon's allow= token changes nothing.
+  assert.deepEqual(P.parseFlags('n;allow=WebSearch, Bash(git:*),'), { ...none, newSession: true });
+  assert.deepEqual(P.parseFlags('allow=Bash(*)'), none);
   assert.deepEqual(P.parseFlags('agent=Codex'), { ...none, agent: 'codex' });
-  assert.deepEqual(P.parseFlags('n;agent=grok;allow=WebSearch'), { ...none, newSession: true, agent: 'grok', allow: ['WebSearch'] });
+  assert.deepEqual(P.parseFlags('n;agent=grok;allow=WebSearch'), { ...none, newSession: true, agent: 'grok' });
   // A model keeps its case; anything that could be read as a CLI flag or shell text is dropped.
   assert.deepEqual(P.parseFlags('agent=claude;model=claude-sonnet-4-5[1m]'), { ...none, agent: 'claude', model: 'claude-sonnet-4-5[1m]' });
   assert.equal(P.parseFlags('agent=hermes;model=openrouter/x-ai/grok-4').model, 'openrouter/x-ai/grok-4');
@@ -41,7 +43,7 @@ test('jobsFromStrip parses the current record format and keeps separators inside
   const rec = ['sess', 'chat1', '12', 'realms', 'allow=WebSearch', 'My chat', 'hello\x1Fworld'].join('\x1F');
   const jobs = P.jobsFromStrip(12, rec);
   assert.equal(jobs.length, 1);
-  assert.deepEqual(jobs[0], { session: 'sess', chat: 'chat1', id: 12, cwd: 'realms', newSession: false, hello: false, forget: false, stop: false, context: false, allow: ['WebSearch'], agent: '', model: '', effort: '', cmd: '', name: 'My chat', text: 'hello\x1Fworld', via: 'pixel' });
+  assert.deepEqual(jobs[0], { session: 'sess', chat: 'chat1', id: 12, cwd: 'realms', newSession: false, hello: false, forget: false, stop: false, context: false, agent: '', model: '', effort: '', cmd: '', name: 'My chat', text: 'hello\x1Fworld', via: 'pixel' });
   // A chat that picked its own agent says so in the flags.
   const codex = P.jobsFromStrip(13, ['sess', 'chat1', '13', '', 'agent=codex', 'My chat', 'hi'].join('\x1F'))[0];
   assert.equal(codex.agent, 'codex');
@@ -150,8 +152,9 @@ test('parseOutbox decodes the SavedVariables fallback', () => {
   const hex = s => Buffer.from(s, 'utf8').toString('hex');
   const src = `RunbackDB = {\n["outbox"] = {\n["id"] = 7,\n["session"] = "abc123",\n["chat"] = "c1",\n["text"] = "${hex('héllo')}",\n["cwd"] = "${hex('realms')}",\n["newSession"] = true,\n},\n["settings"] = {},\n}`;
   assert.deepEqual(P.parseOutbox(src), { id: 7, session: 'abc123', chat: 'c1', text: 'héllo', cwd: 'realms', newSession: true, via: 'reload' });
+  // A reload outbox from an old addon may carry allow rules; the bridge drops them.
   const withAllow = src.replace('["newSession"]', `["allow"] = "${hex('WebSearch\x1fBash(git:*)')}",\n["newSession"]`);
-  assert.deepEqual(P.parseOutbox(withAllow).allow, ['WebSearch', 'Bash(git:*)']);
+  assert.equal(P.parseOutbox(withAllow).allow, undefined);
   const withCtx = src.replace('["newSession"]', `["ctx"] = "${hex('Character: Testchar')}",\n["newSession"]`);
   assert.equal(P.parseOutbox(withCtx).ctx, 'Character: Testchar');
   const withAgent = src.replace('["newSession"]', '["agent"] = "codex",\n["newSession"]');
@@ -260,6 +263,22 @@ test('isBroadFolder: drive root, home and above, Documents/Desktop/Downloads; a 
   for (const d of [path.join(home, 'Documents', 'wow-mentor'), path.join(home, 'code'), path.join(os.tmpdir(), 'elsewhere', 'Documents')]) {
     assert.equal(P.isBroadFolder(d, home), false, d);
   }
+});
+
+test('folderProblem: a broad folder and any folder outside the allowed roots are refused', () => {
+  const home = path.join(os.tmpdir(), 'runback-home', 'nercari');
+  const mentor = path.join(home, 'Documents', 'wow-mentor');
+  const project = path.join(home, 'code', 'realms');
+  const roots = [mentor, project];
+  assert.equal(P.folderProblem(path.join(mentor, 'reviews'), roots, home), '');
+  assert.equal(P.folderProblem(project, roots, home), '');
+  assert.equal(P.folderProblem(path.join(home, 'code', 'other'), roots, home), 'outside');
+  assert.equal(P.folderProblem(path.join(mentor, '..', 'realms'), roots, home), 'outside');
+  // A folder named on purpose is still refused when it is broad.
+  assert.equal(P.folderProblem(home, roots, home), 'broad');
+  assert.equal(P.folderProblem(path.join(home, 'Documents'), roots, home), 'broad');
+  // No roots means no folder is allowed, not every folder.
+  assert.equal(P.folderProblem(project, [], home), 'outside');
 });
 
 test('pickDefaultCwd: explicit wins, broad start and config folders fall back to the mentor workspace', () => {
