@@ -38,6 +38,9 @@ const CATALOG = {
   grok: [entry('grok-build', [], '')],
   // agy puts the level in the model id, and the real ids are not confirmed yet (backlog 41, 46).
   agy: [],
+  // OpenCode lists its models as `provider/model` (opencode models, 2.2.5) and keeps
+  // each model's reasoning variants off that list, so both come from config.json.
+  opencode: [],
   // Hermes uses whatever the player configured: list it in agents.hermes.models.
   hermes: [],
 };

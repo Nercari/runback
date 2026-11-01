@@ -81,6 +81,14 @@
       "permissionMode": "acceptEdits",
       "extraArgs": []
     },
+    "opencode": {
+      "path": "",
+      "model": "",
+      "coachModel": "",
+      "models": [],
+      "permissionMode": "acceptEdits",
+      "extraArgs": []
+    },
     "grok": {
       "path": "",
       "model": "",

@@ -1,6 +1,6 @@
 # Agents
 
-The bridge can drive three coding agents: Claude Code, OpenAI Codex and xAI's Grok Build. This page is the reference for each: what to install, how the bridge starts it, what its permission settings mean, and what it cannot do. The code is `bridge/agents.js`, one entry per agent; `bridge.js` only knows the interface (build the arguments, hand over the prompt, read the stream).
+The bridge can drive six coding agents: Claude Code, OpenAI Codex, xAI's Grok Build, Google Antigravity CLI, Hermes Agent and OpenCode. This page is the reference for each: what to install, how the bridge starts it, what its permission settings mean, and what it cannot do. The code is `bridge/agents.js`, one entry per agent; `bridge.js` only knows the interface (build the arguments, hand over the prompt, read the stream).
 
 ## Choosing one
 
@@ -25,12 +25,12 @@ Every agent's block in `config.json` has the same keys, and the bridge maps them
 |---|---|
 | `permissionMode` | `acceptEdits` (default): edits inside the project are fine, commands need a rule. `default`: nothing is pre-approved beyond reading. `bypassPermissions`: everything is allowed. |
 | `allowedTools` | Rules in Claude Code's syntax: `WebSearch` allows a tool, `Bash(git:*)` any command starting with `git`, `Bash(npm test)` that exact command. Only this list grants a rule; the game never adds one. Ignored by Codex. Outside the mentor workspace the bridge uses its read-only list instead. |
-| `deniedTools` | Rules the agent may never use, same syntax. Claude gets them as `--disallowedTools`, Grok as `--deny` (which wins over everything, `bypassPermissions` included). Ignored by Codex. |
+| `deniedTools` | Rules the agent may never use, same syntax. Claude gets them as `--disallowedTools`, Grok as `--deny` (which wins over everything, `bypassPermissions` included). Ignored by Codex and OpenCode. |
 | `model` | Passed through to the CLI when non-empty. |
 | `path` | The executable, when the bridge can't find it on its own. A `.js` path is run with the bridge's own Node; a Windows `.cmd` npm shim is unwrapped. |
 | `extraArgs` | Anything else to put on the command line, verbatim. |
 
-A translate job (`cmd=translate`) carries other players' chat, so it runs with every tool off: Claude and Grok get `--tools ""`, with no allow or deny rules. An agent that has no switch to turn its tools off is refused with one plain line, because that text must never reach a tool. A translate chat cannot run on Codex, Antigravity or Hermes.
+A translate job (`cmd=translate`) carries other players' chat, so it runs with every tool off: Claude and Grok get `--tools ""`, with no allow or deny rules. An agent that has no switch to turn its tools off is refused with one plain line, because that text must never reach a tool. A translate chat cannot run on Codex, Antigravity, Hermes or OpenCode.
 
 Hermes can read and write like the other agents, but the bridge has no tool limit for it in the mentor folder, so a mentor job on Hermes is refused with one plain line until it has one.
 
@@ -78,6 +78,16 @@ Codex also checks `CODEX_BIN` before searching `PATH`, so a newer launcher can o
 - **Command line:** `hermes chat --query-file - -Q --in <folder> --source tool [--resume <id>] [-m <model>] [--image <path>]`; the prompt is sent on stdin. Hermes writes plain reply text to stdout and `session_id: <id>` to stderr.
 - **Permissions:** `acceptEdits` is the default. `bypassPermissions` falls back to default; the bridge never passes `--yolo` and appends a note to the reply. The bridge has no tool limit for Hermes, so a mentor job on it is refused until there is one.
 - **Images and context:** the first image is passed with `--image`; additional paths are included in the prompt. The system prompt (with the marked game-context block) goes at the top of the prompt.
+
+## OpenCode
+
+- **Install:** [opencode.ai](https://opencode.ai) (`curl -fsSL https://opencode.ai/install | bash`, `npm install -g opencode-ai`, or its Windows package), then run `opencode auth login` once. The bridge looks in `~/.opencode/bin`, then on the `PATH`.
+- **Command line:** `opencode run --format json [--agent plan] [--auto] [--model <provider>/<model>[#<variant>]] [--session <id>]`, prompt on stdin (with the game context and primer above it, in the same marked block). Measured on OpenCode 2.2.5 (2026-11-01): `run` takes the message as an argument, and reads stdin as the message when no argument is given.
+- **Permissions:** OpenCode keeps its permissions in its own config, so `allowedTools` and `deniedTools` are ignored, like Codex. `permissionMode` `default` runs `--agent plan`, OpenCode's own read-only agent (no edit, no command), which is the floor the bridge asks for outside the mentor workspace. `bypassPermissions` adds `--auto` (auto-approve what is not explicitly denied), and a mentor chat never keeps it: the mentor guard strips `--auto` like the other bypass flags.
+- **Session:** the `sessionID` on every event; `--session <id>` continues it.
+- **Progress:** one line per `tool_use` event (`shell`, `read`, `write`, `edit`, `grep`, `glob`, `task` become `$ cmd`, `read file`, …) and each text part as a snippet.
+- **Reply and errors:** the text parts of the last message are the reply; `step_finish` ends the run (`reason` `stop`, or another reason, which is reported as stopped early). An OpenCode `error` event exits the CLI with code 0, so the event itself is what the bridge reports as the failure.
+- **Images:** `--file` attaches a file, but nothing here has shown an image reaching the model yet, so an OpenCode look says to pick another agent (`takesImages`).
 
 ## Known limits
 

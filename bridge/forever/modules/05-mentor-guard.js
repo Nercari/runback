@@ -15,7 +15,7 @@ function setOption(args, names, values) {
   args.push(...values);
 }
 // Flags that lift the sandbox or approvals; a mentor chat never keeps them.
-const BYPASS = /^(--dangerously-skip-permissions|--dangerously-bypass-approvals-and-sandbox|--always-approve|--full-auto|-y|--yolo)(=.*)?$/;
+const BYPASS = /^(--dangerously-skip-permissions|--dangerously-bypass-approvals-and-sandbox|--always-approve|--full-auto|--auto|-y|--yolo)(=.*)?$/;
 // noTools: a translate job already runs with --tools "", so the mentor allowlist
 // must not add rules back (other players' text must never reach a tool).
 function rewrite(agent, args, cwd, repo, noTools) {

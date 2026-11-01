@@ -22,19 +22,19 @@ The bridge reads `config.json` once at start. Restart it after editing, includin
 
 | Key | Default | Meaning |
 |---|---|---|
-| `agent` | `"claude"` | The agent for chats that have not picked one with `/runback agent`. One of `claude`, `codex`, `grok`, `agy`, `hermes`; the bridge refuses to start on anything else. |
+| `agent` | `"claude"` | The agent for chats that have not picked one with `/runback agent`. One of `claude`, `codex`, `grok`, `agy`, `hermes`, `opencode`; the bridge refuses to start on anything else. |
 | `agents.<id>` | one block per agent | That agent's settings, below. A missing block means the defaults. |
 
-Keys under `agents.claude`, `agents.codex`, `agents.grok`, `agents.agy` and `agents.hermes` (what each one means per agent is spelled out in [AGENTS.md](AGENTS.md)):
+Keys under `agents.claude`, `agents.codex`, `agents.grok`, `agents.agy`, `agents.hermes` and `agents.opencode` (what each one means per agent is spelled out in [AGENTS.md](AGENTS.md)):
 
 | Key | Default | Meaning |
 |---|---|---|
-| `permissionMode` | `"acceptEdits"` | `acceptEdits` auto-approves file edits inside the working folder; `bypassPermissions` approves everything; `default` approves nothing beyond what `allowedTools` names. Claude gets it as `--permission-mode`; for Codex it picks the sandbox (`read-only` / `workspace-write` / none); for Grok it becomes `--permission-mode dontAsk` plus allow rules, or `--always-approve` (headless Grok runs ordinary commands on its own and blocks dangerous ones unless a rule allows them; see [AGENTS.md](AGENTS.md)). |
+| `permissionMode` | `"acceptEdits"` | `acceptEdits` auto-approves file edits inside the working folder; `bypassPermissions` approves everything; `default` approves nothing beyond what `allowedTools` names. Claude gets it as `--permission-mode`; for Codex it picks the sandbox (`read-only` / `workspace-write` / none); for Grok it becomes `--permission-mode dontAsk` plus allow rules, or `--always-approve`; for OpenCode `default` runs its read-only `plan` agent and `bypassPermissions` adds `--auto` (headless Grok runs ordinary commands on its own and blocks dangerous ones unless a rule allows them; see [AGENTS.md](AGENTS.md)). |
 | `allowedTools` | git, npm, npx, node, python, pip, pytest, ls, dir, WebSearch, WebFetch | Rules in Claude Code's syntax: `Bash(git:*)` allows any command starting with `git`, `WebSearch` a tool. Passed to Claude as `--allowedTools`, translated to Grok's `--allow` globs, ignored by Codex. Only this file gives a rule: the game cannot add one (see [Permissions](#permissions)). Outside the mentor workspace the bridge replaces this list with read-only tools. |
 | `deniedTools` | `[]` | Rules the agent may never use, same syntax. Claude: `--disallowedTools`; Grok: `--deny`, which wins over everything, `bypassPermissions` included; ignored by Codex. |
 | `model` | `""` | Passed to the CLI (`--model` / `-m`) when non-empty. Empty uses the CLI's default. |
 | `coachModel` | `""` | The model a coach note (a fight review, `/ai review`, and the between-pull card) runs on, whatever model the chat picked. Empty uses the agent's cheap model: `haiku` for Claude, which is the only agent whose list names one. Give a model this agent offers to change it; one it does not offer is ignored, so the cheap model still applies. An agent with no cheap model, or a `models` list that leaves it out, runs reviews on its normal model, with no error. |
-| `models` | Built in (`bridge/models.js`): Claude `fable, opus, sonnet, haiku`; Codex its eight listed models (`gpt-6-astra` … `gpt-5.5`); Grok `grok-build`; agy and Hermes none | The models the in-game **AI** picker offers for this agent, as the CLI names them (`"gpt-5-codex"`, `"openrouter/x-ai/grok-4"`). Setting it replaces the built-in list. An item is a name, or `{ "id": "gpt-6-sol", "efforts": ["low", "high"], "defaultEffort": "low" }` to record the reasoning levels the CLI accepts for it (levels are lowercase letters, up to 16). A chat that picks one runs with it instead of `model`; a model not on this list is refused. Names are letters, digits and `. _ : / @ [ ] -`, up to 64 characters. |
+| `models` | Built in (`bridge/models.js`): Claude `fable, opus, sonnet, haiku`; Codex its eight listed models (`gpt-6-astra` … `gpt-5.5`); Grok `grok-build`; agy, Hermes and OpenCode none | The models the in-game **AI** picker offers for this agent, as the CLI names them (`"gpt-5-codex"`, `"openrouter/x-ai/grok-4"`). Setting it replaces the built-in list. An item is a name, or `{ "id": "gpt-6-sol", "efforts": ["low", "high"], "defaultEffort": "low" }` to record the reasoning levels the CLI accepts for it (levels are lowercase letters, up to 16). A chat that picks one runs with it instead of `model`; a model not on this list is refused. Names are letters, digits and `. _ : / @ [ ] -`, up to 64 characters. |
 | `path` | `""` | Full path to the executable. Empty means: look in the installer's folder, then (for Codex) `CODEX_BIN`, then `PATH`, then npm's launcher. A `.js` path is run with the bridge's Node. |
 | `extraArgs` | `[]` | More command-line arguments, added verbatim (before Codex's `resume` subcommand). |
 | `networkAccess` (codex only) | `false` | `true` lets commands inside Codex's `workspace-write` sandbox reach the network (`-c sandbox_workspace_write.network_access=true`). |
@@ -43,7 +43,7 @@ A `config.json` from before agents existed kept Claude's settings at the top lev
 
 ### The model a coach note runs on
 
-One coach note per pull has to cost about nothing, so a fight review and the between-pull coach card run on the agent's cheap model by default: `haiku` for Claude, set in `bridge/models.js` (the only agent whose model list names a small, fast one). Codex, Grok, agy and Hermes keep their normal model, and so does every chat.
+One coach note per pull has to cost about nothing, so a fight review and the between-pull coach card run on the agent's cheap model by default: `haiku` for Claude, set in `bridge/models.js` (the only agent whose model list names a small, fast one). Codex, Grok, agy, Hermes and OpenCode keep their normal model, and so does every chat.
 
 - Change it per agent: `"coachModel": "sonnet"` under `agents.claude`. Give a model that agent offers.
 - Turn the cheap default off: give `coachModel` the model you want reviews on, or remove `haiku` from `models` and reviews keep the agent's normal model.
@@ -60,7 +60,7 @@ The agent's tools also depend on the folder:
 | Folder | `permissionMode` and tools |
 |---|---|
 | The mentor workspace (`forever.mentorDir`) | The coach's working set: `acceptEdits`, with `Read`, `Grep`, `Glob`, `Edit`, `Write`, web search and its own `tools/` scripts (see [AGENTS.md](AGENTS.md)). |
-| Any other allowed folder | Read-only: `permissionMode` `default` and `Read`, `Grep`, `Glob`, `WebSearch`, `WebFetch`. No command, edit or write tool, whatever `allowedTools` says. `WebFetch` is network egress, so it can send a page URL out. Hermes has no tool-limit flag in the bridge yet, so it is refused there. |
+| Any other allowed folder | Read-only: `permissionMode` `default` and `Read`, `Grep`, `Glob`, `WebSearch`, `WebFetch`. No command, edit or write tool, whatever `allowedTools` says. `WebFetch` is network egress, so it can send a page URL out. OpenCode runs its own read-only `plan` agent there; Hermes has no tool-limit flag in the bridge yet, so it is refused there. |
 
 ## Runs
 

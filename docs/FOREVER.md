@@ -59,9 +59,9 @@ Enter as is to ask "What's on my screen?" about your newest screenshot (take
 one with Print Screen first). `/ai look` typed alone does the same, and so do a
 lone "look" ("look!", "look at this", "look at my screen") or `/look [question]`
 typed in the window box; a longer line that starts with "look" stays a message.
-Claude, Codex, Grok and Hermes can see screenshots; Antigravity cannot, so in
-an Antigravity chat look says to pick one of those with the AI button, and
-Antigravity's prompt does not offer look (the `takesImages` flag in
+Claude, Codex, Grok and Hermes can see screenshots; Antigravity and OpenCode
+cannot yet, so in one of those chats look says to pick another with the AI
+button, and that agent's prompt does not offer look (the `takesImages` flag in
 `bridge/agents.js`).
 Up/Down recall recent messages in the input; Tab and
 Shift+Tab switch chats.

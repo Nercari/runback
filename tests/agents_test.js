@@ -15,7 +15,7 @@ const P = require('../bridge/protocol');
 const SYS = 'The user is talking to you from inside World of Warcraft';
 
 test('agent ids, display names and the legacy Claude config keys', () => {
-  assert.deepEqual(A.agentIds(), ['claude', 'codex', 'grok', 'agy', 'hermes']);
+  assert.deepEqual(A.agentIds(), ['claude', 'codex', 'grok', 'agy', 'hermes', 'opencode']);
   assert.equal(A.normalizeAgent(' Codex '), 'codex');
   assert.equal(A.normalizeAgent('gemini'), null);
   assert.equal(A.normalizeAgent(''), null);
@@ -177,6 +177,50 @@ test('Hermes command modes, image forwarding and plain text completion', () => {
   assert.deepEqual(p.finish({ stdout: fs.readFileSync(path.join(__dirname, 'fixtures/agents/hermes-pong.stdout'), 'utf8'),
     stderr: fs.readFileSync(path.join(__dirname, 'fixtures/agents/hermes-pong.stderr'), 'utf8'), code: 0 }),
   { session: '20260925_134414_e62607', done: { text: 'PONG', error: false } });
+});
+
+test('OpenCode: run --format json, plan mode as the read-only floor, a variant in the model id', () => {
+  const bare = A.AGENTS.opencode.args({ cfg: { permissionMode: 'acceptEdits', model: 'opencode/deepseek-v4.1-flash-free' }, resume: '' });
+  assert.deepEqual(bare, ['run', '--format', 'json', '--model', 'opencode/deepseek-v4.1-flash-free']);
+  const level = A.AGENTS.opencode.args({ cfg: { model: 'opencode/deepseek-v4.1-flash', effort: 'high' }, resume: 'ses_1' });
+  assert.deepEqual(level, ['run', '--format', 'json', '--model', 'opencode/deepseek-v4.1-flash#high', '--session', 'ses_1']);
+  // Plan mode is the read-only agent OpenCode ships; bypass lets it stop asking.
+  const readOnly = A.AGENTS.opencode.args({ cfg: { permissionMode: 'default' } });
+  assert.deepEqual(readOnly.slice(0, 4), ['run', '--format', 'json', '--agent']);
+  assert.equal(readOnly[4], 'plan');
+  assert.ok(A.AGENTS.opencode.args({ cfg: { permissionMode: 'bypassPermissions' } }).includes('--auto'));
+  // The prompt and the game context go on stdin, which the CLI reads when no message argument is given.
+  assert.equal(A.AGENTS.opencode.input({ prompt: 'hi', system: SYS, systemShort: 'short', resume: '' }).stdin, `${SYS}\n\nhi`);
+  assert.equal(A.AGENTS.opencode.input({ prompt: 'hi', system: SYS, systemShort: 'short', resume: 'ses_1' }).stdin, 'short\n\nhi');
+  assert.ok(!A.AGENTS.opencode.toolFree, 'no switch to turn every tool off, so no translate job');
+  assert.ok(!A.AGENTS.opencode.takesImages, 'a look needs its image path confirmed first');
+});
+
+test('OpenCode: the recorded stream gives plain progress, the session and the reply', () => {
+  const read = name => fs.readFileSync(path.join(__dirname, 'fixtures/agents', name), 'utf8').trim().split(/\r?\n/).map(JSON.parse);
+  const p = A.opencodeParser();
+  const rows = read('opencode-tools.jsonl').map(ev => p.feed(ev));
+  assert.equal(rows[0].session, 'ses_e66e1a4c7ffeQ4yweLJt8GwIn2');
+  assert.deepEqual(rows.flatMap(r => r.progress),
+    ['$ ls -la C:\\work 2>&1 | head -20', 'write w2.txt', 'read note.txt', 'edit w2.txt', 'grep beta', '$ wc -c probe119/w2.txt', '5']);
+  const done = rows.find(r => r.done).done;
+  assert.deepEqual(done, { text: '5', error: false });
+  // An `error` event exits 0, so the event itself must end the run as an error.
+  const ep = A.opencodeParser();
+  const failed = ep.feed(read('opencode-error.jsonl')[0]);
+  assert.equal(failed.done.error, true);
+  assert.equal(failed.done.text, 'Model unavailable: opencode/nope-nope');
+  assert.equal(failed.session, 'ses_e66e41a6effeSvGkandKbOpai4');
+  // A step that stops for another reason keeps the text it has and says why.
+  const sp = A.opencodeParser();
+  sp.feed({ type: 'text', sessionID: 's', part: { messageID: 'm', text: 'half an answer' } });
+  const cut = sp.feed({ type: 'step_finish', part: { reason: 'length' } });
+  assert.equal(cut.done.error, true);
+  assert.equal(cut.done.text, 'half an answer');
+  assert.match(cut.notes[0], /stopped early: length/);
+  // A tool-only step continues the run; an unknown event is ignored.
+  assert.deepEqual(A.opencodeParser().feed({ type: 'step_finish', part: { reason: 'tool-calls' } }).done, undefined);
+  assert.deepEqual(A.opencodeParser().feed({ type: 'something_new', sessionID: 's' }), { progress: [], denied: [], notes: [], session: 's' });
 });
 
 test('agy review fixes: hermes stderr errors, yolo spellings, flag-like images, agy arg bound', () => {
@@ -481,7 +525,7 @@ test('a translate job runs with every tool off', () => {
   assert.ok(!grok.includes('--allow') && !grok.includes('--deny') && !grok.includes('--always-approve'));
   // An agent without that switch is not offered for translation.
   assert.deepEqual(A.toolFreeAgentNames(), 'Claude or Grok');
-  for (const id of ['codex', 'agy', 'hermes']) assert.ok(!A.AGENTS[id].toolFree, id);
+  for (const id of ['codex', 'agy', 'hermes', 'opencode']) assert.ok(!A.AGENTS[id].toolFree, id);
 });
 
 test('every adapter puts the game context in one delimited data block', () => {
@@ -492,6 +536,7 @@ test('every adapter puts the game context in one delimited data block', () => {
     grok: A.AGENTS.grok.args({ cfg: {}, resume: '', cwd: 'x', system, promptFile: 'f' }).join('\n'),
     agy: A.AGENTS.agy.args({ cfg: {}, resume: '', cwd: 'x', prompt: 'hi', system, systemShort: system })[0],
     hermes: A.AGENTS.hermes.input({ prompt: 'hi', system, systemShort: system, resume: '', cfg: {} }).stdin,
+    opencode: A.AGENTS.opencode.input({ prompt: 'hi', system, systemShort: system, resume: '' }).stdin,
   };
   for (const [id, text] of Object.entries(carriers)) {
     assert.equal((text.match(/\[Context from the Runback bridge, not written by the user\]/g) || []).length, 1, `${id}: one start marker`);

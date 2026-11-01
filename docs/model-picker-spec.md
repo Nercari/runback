@@ -64,12 +64,15 @@ Labels: OBSERVED (read in the CLI's own source or run here), DOCUMENTED (officia
 
 ### OpenCode (`opencode`, added 2026-10-11)
 
-Nercari asked (2026-10-11): "I also want to be able to use my OpenCode models and choose reasoning just like in their respective CLIs." OpenCode is not a bridge agent yet. His PC has OpenCode 1.19 updating to 2.0 (recording B, 4:20 to 5:35), signed in on a free plan; `opencode auth login opencode` failed there with "fetch() URL is invalid". The paid OpenCode Go plan was cancelled on 2026-10-04 (nercari-control CLAUDE.md), so only models his sign-in already gives him are in scope; nothing here buys a plan.
+Nercari asked (2026-10-11): "I also want to be able to use my OpenCode models and choose reasoning just like in their respective CLIs." The paid OpenCode Go plan was cancelled on 2026-10-04 (nercari-control CLAUDE.md), so only models his sign-in already gives him are in scope; nothing here buys a plan.
 
-- Run: `opencode run "<prompt>" --model <provider>/<model> --format json` for one non-interactive reply (UNVERIFIED for 2.0: confirm the flags and the JSON event shape on Nercari's PC).
-- Models: `opencode models [provider] --verbose` lists the models his providers give him, with per-model details (UNVERIFIED: confirm the output and whether it shows reasoning variants).
-- Reasoning: OpenCode calls effort levels "variants" per model (the TUI cycles them; recording B shows "OpenCode · high"). A per-run `--variant <name>` is UNVERIFIED; confirm it, and the variant names per model, before the bridge passes it.
-- Bridge flag: `--model` always; `--variant` only after it is confirmed. Never write OpenCode's own config.
+Measured on Nercari's Linux PC, `opencode v2.2.5`, 2026-11-01 (help and list commands, plus one run per question on a free model, cost 0; the raw streams are `tests/fixtures/agents/opencode-*.jsonl`):
+
+- Run: `opencode run [<message>…] --model <provider>/<model>[#<variant>] --format json [--session <id>] [--agent <name>] [--auto]`. With no message argument it reads the message on stdin (checked). `--format json` prints one JSON event per line: `step_start`, `tool_use` (`part.tool`, `part.state.input`), `text` (one whole text part), `step_finish` (`part.reason` `stop` or `tool-calls`) and `error`. All carry `sessionID`; `--session` continues that session (checked: the resumed run remembered the word from the first).
+- Models: `opencode models` lists `provider/model` ids, one per line, with no flags and no per-model detail; there is no `--verbose` in 2.2.5. The model's reasoning variants are not in that output, and `opencode run --help` offers no `--variant`; the variant is a `#name` suffix on the model id (`opencode/deepseek-v4.1-flash-free#high` ran, checked). So the bridge lists no OpenCode model or level by itself; both come from `agents.opencode.models` in `config.json`.
+- Errors: an `error` event (`{"type":"error","error":{"message":"Model unavailable: …"}}`) is printed and the CLI still exits 0, so the bridge reads the event, not the exit code.
+- Permissions: `--agent plan` is OpenCode's own read-only agent (measured: it refused to create a file); `--auto` auto-approves what is not explicitly denied. Its allow and deny lists live in OpenCode's own config, so the bridge passes neither.
+- Bridge flags: `--model`, `#variant` with a level, `--session`, `--agent plan`, `--auto`. Never write OpenCode's own config.
 
 ## Confirmed on Nercari's PC (ticket 41, 2026-10-09)
 
@@ -146,19 +149,19 @@ Each ticket: one PR into `forever`, `node tools/safety-ci.js` and `npm test` gre
 - Tests: parsing recorded samples from ticket 41; a broken or missing file falls back to the catalog.
 - Metric: catalog entries that differ from the CLI's own list, measured in `shadow`.
 
-### 64. OpenCode as an agent
+### 64. OpenCode as an agent (this PR)
 
 - Needs: nothing.
-- Do: first, through Remote Control on Nercari's PC, record `opencode --version`, `opencode run --help`, `opencode models --verbose` and one `opencode run ... --format json` stream into `tests/fixtures/`; then add `opencode` to `bridge/agents.js` (detect, run, parse the JSON stream into reply, actions and errors), so it shows in the AI menu like the others. No spend: a model that needs a paid plan shows the CLI's own error.
-- Tests: the recorded stream parses in `tests/agents_test.js`; missing CLI gives the install hint.
+- Done: the flags and one JSON stream were recorded on Nercari's PC on `opencode v2.2.5` (2026-11-01, free model, cost 0), into `tests/fixtures/agents/opencode-*.jsonl`; `opencode` is in `bridge/agents.js` (detect, run, parse reply, progress, session and errors), so it shows in the AI menu like the others. No spend: a model that needs a paid plan shows the CLI's own error.
+- Tests: the recorded stream parses in `tests/agents_test.js`, as does the `error` event; a missing CLI gives the install hint from `resolveCommand`.
 - Metric: OpenCode chats that return a reply in game, 0 → 1 (live check by Nercari).
 
 ### 65. OpenCode models and reasoning in the picker
 
 - Needs: 64, 42, 44 and 45.
-- Do: OpenCode's models come from `opencode models --verbose` (read at most once an hour, catalog fallback, same switch as ticket 46); each model's reasoning variants become the effort row; the choice is passed as `--variant` once ticket 64 has confirmed the flag.
-- Tests: recorded `opencode models` sample parses; an unknown variant is refused with the model's valid list.
-- Metric: OpenCode models and variants in the picker that `opencode` also offers, 0 → all.
+- State: the flags are confirmed, but `opencode models` (2.2.5) prints one `provider/model` id per line and names no reasoning variants, so there is nothing to read per model yet. Models and levels come from `agents.opencode.models` in `config.json`; a chosen level goes into the model id as `#level`.
+- Do next: an `opencode models` reader (same off → shadow → on switch as ticket 46) for the model list; the variants still need a source the CLI does not print.
+- Metric: OpenCode models and variants in the picker that `opencode` also offers, 0 → all. Today: 0 of them are automatic; every one is listed by hand.
 
 ## Not in scope
 
