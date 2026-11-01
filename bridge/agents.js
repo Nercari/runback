@@ -342,12 +342,10 @@ function hermesParser() {
 
 // The "system prompt" is the game context and the addon primer. Claude and Grok
 // take it as a real system prompt; Codex has no such flag, so it rides at the
-// top of the prompt, marked as context, in full for a new session and as the
-// short context-only version on a resumed one (the primer is already in the
-// thread).
-function contextBlock(text) {
-  return `[Context from the Runback bridge, not written by the user]\n${text}\n[End of context]\n\n`;
-}
+// top of the prompt, in full for a new session and as the short context-only
+// version on a resumed one (the primer is already in the thread). The game
+// context is already inside one delimited block (protocol.contextBlock), so the
+// prompt-delivery agents add no second wrapper.
 
 const AGENTS = {
   claude: {
@@ -356,14 +354,19 @@ const AGENTS = {
     install: 'https://claude.com/claude-code, then run `claude` once and log in',
     takesEffort: true, // --effort, confirmed on Nercari's PC 2026-10-09 (docs/model-picker-spec.md)
     takesImages: true, // a screenshot path it reads with its Read tool
+    toolFree: true, // --tools "" runs the job with every tool off
     windowsPaths: () => [path.join(os.homedir(), '.local', 'bin', 'claude.exe')],
     posixPaths: () => [path.join(os.homedir(), '.local', 'bin', 'claude')],
-    args({ cfg, resume, system }) {
+    args({ cfg, resume, system, noTools }) {
       const a = ['-p', '--output-format', 'stream-json', '--verbose', '--permission-mode', cfg.permissionMode || 'acceptEdits'];
-      const rules = Array.isArray(cfg.allowedTools) ? cfg.allowedTools.filter(isRule) : [];
-      if (rules.length) a.push('--allowedTools', ...rules);
-      const denied = Array.isArray(cfg.deniedTools) ? cfg.deniedTools.filter(isRule) : [];
-      if (denied.length) a.push('--disallowedTools', ...denied);
+      if (noTools) {
+        a.push('--tools', ''); // a translate job: other players' text must never reach a tool
+      } else {
+        const rules = Array.isArray(cfg.allowedTools) ? cfg.allowedTools.filter(isRule) : [];
+        if (rules.length) a.push('--allowedTools', ...rules);
+        const denied = Array.isArray(cfg.deniedTools) ? cfg.deniedTools.filter(isRule) : [];
+        if (denied.length) a.push('--disallowedTools', ...denied);
+      }
       if (cfg.model) a.push('--model', cfg.model);
       if (cfg.effort) a.push('--effort', cfg.effort);
       if (resume) a.push('--resume', resume);
@@ -403,7 +406,7 @@ const AGENTS = {
     input: ({ prompt, system, systemShort, resume, images }) => {
       const ctx = resume ? systemShort : system;
       const attached = images && images.length ? `\n\nAttached screenshots: ${images.join(', ')} — read them with your Read tool.` : '';
-      return { stdin: (ctx ? contextBlock(ctx) : '') + prompt + attached };
+      return { stdin: (ctx ? ctx + '\n\n' : '') + prompt + attached };
     },
     env: (env) => env,
     parser: codexParser,
@@ -418,22 +421,28 @@ const AGENTS = {
     posixPaths: () => [path.join(process.env.GROK_HOME || path.join(os.homedir(), '.grok'), 'bin', 'grok')],
     npmPackage: '@xai-official/grok',
     takesImages: true, // a screenshot path it reads with its Read tool
-    args({ cfg, resume, cwd, system, promptFile }) {
+    toolFree: true, // --tools "" runs the job with every tool off
+    args({ cfg, resume, cwd, system, promptFile, noTools }) {
       const a = ['--no-auto-update', '--output-format', 'streaming-json', '--cwd', cwd, '--prompt-file', promptFile];
-      const mode = cfg.permissionMode || 'acceptEdits';
-      if (mode === 'bypassPermissions') {
+      if (noTools) {
+        // A translate job: other players' text must never reach a tool.
+        a.push('--permission-mode', 'dontAsk', '--tools', '');
+      } else if ((cfg.permissionMode || 'acceptEdits') === 'bypassPermissions') {
         a.push('--always-approve');
       } else {
         // Headless Grok can't ask, so anything not on the allowlist is denied.
         a.push('--permission-mode', 'dontAsk');
+        const mode = cfg.permissionMode || 'acceptEdits';
         const rules = mode === 'acceptEdits' ? ['Edit', 'Read', 'Grep'] : [];
         for (const r of (Array.isArray(cfg.allowedTools) ? cfg.allowedTools : [])) rules.push(...grokRules(r));
         for (const r of new Set(rules)) a.push('--allow', r);
       }
       // Deny rules win over everything, always-approve included.
-      const denied = [];
-      for (const r of (Array.isArray(cfg.deniedTools) ? cfg.deniedTools : [])) denied.push(...grokRules(r));
-      for (const r of new Set(denied)) a.push('--deny', r);
+      if (!noTools) {
+        const denied = [];
+        for (const r of (Array.isArray(cfg.deniedTools) ? cfg.deniedTools : [])) denied.push(...grokRules(r));
+        for (const r of new Set(denied)) a.push('--deny', r);
+      }
       if (cfg.model) a.push('-m', cfg.model);
       if (resume) a.push('-r', resume);
       if (system) a.push('--append-system-prompt', system);
@@ -454,7 +463,7 @@ const AGENTS = {
     args({ cfg, resume, cwd, prompt, system, systemShort, timeoutMs }) {
       const text = String(prompt || '');
       const note = '\n[User prompt truncated to fit the agy command line.]';
-      const context = contextBlock(resume ? systemShort || '' : system || '').slice(0, 12000);
+      const context = (resume ? systemShort || '' : system || '').slice(0, 12000);
       const available = Math.max(0, 24000 - context.length - note.length);
       const bounded = text.length > available ? text.slice(0, available) + note : text;
       const a = [`-p=${context}${bounded}`, '--output-format', 'stream-json', '--add-dir', cwd,
@@ -487,7 +496,7 @@ const AGENTS = {
     },
     input: ({ prompt, system, systemShort, resume, images, cfg }) => {
       const ctx = resume ? systemShort : system;
-      let text = (ctx ? contextBlock(ctx) : '') + prompt;
+      let text = (ctx ? ctx + '\n\n' : '') + prompt;
       if (images && images.length > 1) text += `\n\nAdditional attached screenshot paths: ${images.slice(1).join(', ')}`;
       const note = cfg && cfg.permissionMode === 'bypassPermissions' ? 'hermes never runs with --yolo from the bridge' : '';
       return { stdin: text, note };
@@ -517,6 +526,12 @@ function imageAgentNames() {
 function lookFor(id) {
   const a = AGENTS[normalizeAgent(id)];
   return { seesImages: !a || !!a.takesImages, imageAgents: imageAgentNames() };
+}
+
+// The agents that can run a job with every tool off: a translate job needs one,
+// because other players' text must never reach a tool.
+function toolFreeAgentNames() {
+  return Object.values(AGENTS).filter(a => a.toolFree).map(a => a.name).join(' or ');
 }
 
 function displayName(id) {
@@ -680,7 +695,7 @@ module.exports = {
   effortProblem,
   grokRules,
   snippet,
-  contextBlock,
+  toolFreeAgentNames,
   claudeParser,
   codexParser,
   grokParser,

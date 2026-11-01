@@ -69,9 +69,18 @@ function syncPrompt(templateDir, workspace) {
     return true;
   } catch { return false; }
 }
+// Hermes has no tool limit the bridge can set in the mentor folder, so a mentor
+// job on it is refused until it has one: other players' chat and game text would
+// reach its tools. Returns the line to show the player, or ''.
+function refusal(agentId, cwd, mentorDir) {
+  if (agentId !== 'hermes' || !mentorDir) return '';
+  if (!inside(String(cwd || ''), mentorDir)) return '';
+  return 'Hermes has no tool limit in the mentor folder, so Runback will not run a mentor job on it: other players\' chat and game text could reach its tools. Pick Claude, Codex, Grok or Antigravity with /runback agent, or move this chat to another folder.';
+}
 module.exports = {
   inside,
   rewrite,
+  refusal,
   syncPrompt,
   augment(job, info, ctx) {
     const root = ctx.cfg.forever && ctx.cfg.forever.mentorDir || path.join(ctx.REPO, '..', 'wow-mentor');

@@ -9,6 +9,9 @@ function runAgentOnce({ agentId, cwd, prompt, timeoutMs }, deps) {
   const { A, P, cfg, killTree, augment, onSpawn } = deps;
   agentId = A.normalizeAgent(agentId);
   if (!agentId) return Promise.resolve({ status: 'error', text: 'Unknown agent.' });
+  // One-off runs go through the same mentor refusal as a chat (Hermes has no tool limit there).
+  const refusal = require('./modules/05-mentor-guard').refusal(agentId, cwd, cfg.forever && cfg.forever.mentorDir);
+  if (refusal) return Promise.resolve({ status: 'error', text: refusal });
   const agent = A.AGENTS[agentId], acfg = A.agentConfig(cfg, agentId), cmd = A.resolveCommand(agentId, acfg);
   if (!cmd.found) return Promise.resolve({ status: 'error', text: `${agent.name} is not installed: ${cmd.note}` });
   const system = P.systemPrompt('', ''), input = agent.input({ prompt: String(prompt || ''), system, systemShort: system, resume: '', cfg: acfg });

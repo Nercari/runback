@@ -38,7 +38,7 @@ Checked and compliant:
 - Auction house: the addon sends no search queries of its own. When the player clicks **Scan for AI**, it reads the results the player's own search already shows (`C_AuctionHouse.GetBrowseResults`, at most 500 items) and saves them; nothing runs on a timer or on its own. It never bids, buys or posts. Whether the Forever client has `GetBrowseResults` is unverified in game; without it the button only prints a short message.
 - Key bindings: the addon never binds keys on its own. `/runback bind <key>` binds one key to the addon's own button when the player types it, out of combat.
 - Keypress reload: the hidden key catcher lets every key through to the game and only reloads the UI; it never acts in the world.
-- Translation reads chat only on channels the player turns on (none by default) and pre-fills the reply box; the player presses Enter to send.
+- Translation reads chat only on channels the player turns on (none by default) and pre-fills the reply box; the player presses Enter to send. A translate turn runs with every tool off (Claude and Grok get `--tools ""`), and an agent with no tool-off switch is refused, so other players' text never reaches a tool (2026-11-01, `mentor/AGENTS.md` rule 14).
 - Screenshots: only the game's own `Screenshot()` behind a button the player clicks.
 - Look from the box (backlog 84): a lone "look" or `/look` in the window box runs the same `/ai look` the player can type, which only reads the newest screenshot the player took with Print Screen. The addon never calls `Screenshot()` on this path.
 - Reply slots (backlog 78): fewer `C_AddOns.LoadAddOn` calls on the addon's own slot addons and a grey status light while idle. No gameplay, targeting, input or protected API is touched.

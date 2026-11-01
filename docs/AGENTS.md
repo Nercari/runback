@@ -30,6 +30,10 @@ Every agent's block in `config.json` has the same keys, and the bridge maps them
 | `path` | The executable, when the bridge can't find it on its own. A `.js` path is run with the bridge's own Node; a Windows `.cmd` npm shim is unwrapped. |
 | `extraArgs` | Anything else to put on the command line, verbatim. |
 
+A translate job (`cmd=translate`) carries other players' chat, so it runs with every tool off: Claude and Grok get `--tools ""`, with no allow or deny rules. An agent that has no switch to turn its tools off is refused with one plain line, because that text must never reach a tool. A translate chat cannot run on Codex, Antigravity or Hermes.
+
+Hermes can read and write like the other agents, but the bridge has no tool limit for it in the mentor folder, so a mentor job on Hermes is refused with one plain line until it has one.
+
 How each one finds its executable on Windows: a configured `path`; else the installer's folder (`%UserProfile%\.local\bin\claude.exe`, `%UserProfile%\.grok\bin\grok.exe`); else `<name>.exe` on the `PATH`; else npm's `<name>.cmd` launcher, which the bridge unwraps (Node can't spawn `.cmd` files, and going through `cmd.exe` would mangle a system prompt) into the script it runs or the native binary next to it.
 
 Codex also checks `CODEX_BIN` before searching `PATH`, so a newer launcher can override an older `codex.exe` earlier on `PATH`.
@@ -41,7 +45,7 @@ Codex also checks `CODEX_BIN` before searching `PATH`, so a newer launcher can o
 - **Permissions:** `permissionMode` and `allowedTools` are Claude's own concepts, passed as they are. Denied tools come back in the result as `permission_denials`; the bridge turns them into rules (`Bash(cargo:*)`, `WebSearch`) for the **Allow & retry** button.
 - **Session:** the `session_id` on the stream; `--resume` on later runs. Claude keeps sessions per folder.
 - **Progress:** one line per `tool_use` block (`edit player.gd`, `$ npm test`, `search: …`) and each text block as a snippet.
-- **Context:** the game context and primer go in as a system prompt, on every run.
+- **Context:** the game context and primer go in as a system prompt, on every run. The game context is inside one block marked `[Context from the Runback bridge, not written by the user]` … `[End of context]`, so Claude reads it as data.
 
 ## Codex
 
@@ -50,7 +54,7 @@ Codex also checks `CODEX_BIN` before searching `PATH`, so a newer launcher can o
 - **Permissions:** Codex has no per-tool allowlist; in `exec` mode it never asks and relies on its sandbox. So `permissionMode` picks the sandbox: `default` → `read-only`, `acceptEdits` → `workspace-write` (it may write the chat's folder and temp; the network is off for commands unless `networkAccess: true`), `bypassPermissions` → no sandbox at all. `allowedTools` and `deniedTools` are ignored. Measured on codex 0.156: a command the sandbox blocks produces no event at all in the `--json` stream; the model gets the failure and says so in its own words ("`touch x` failed: operation not permitted"). Should a `command_execution` with status `declined` ever appear, the bridge names it at the end of the reply. There is no **Allow** button because there is no rule to add: raise `permissionMode` instead.
 - **Session:** the `thread_id` of the `thread.started` event; later runs use `codex exec … resume <thread_id> -`.
 - **Progress:** `command_execution` → `$ command` (the shell wrapper Codex adds, `/bin/zsh -lc '…'`, is stripped), `file_change` → `edit a.js, b.js` (or `write`/`delete`), `web_search`, `mcp_tool_call` → `tool: server.name`, reasoning summaries as `~ …`, and each `agent_message` as a snippet. The reply is the last `agent_message` of the turn (what `codex exec -o` would write).
-- **Context:** Codex has no system-prompt flag, so the game context and primer ride at the top of the prompt in a block marked as context from the bridge. A new session gets the full block; a resumed one only the short context lines (the primer is already in the thread). Codex also reads `AGENTS.md` in the chat's folder on its own.
+- **Context:** Codex has no system-prompt flag, so the system prompt (game context inside its marked data block, plus the primer) rides at the top of the prompt. A new session gets the full text; a resumed one only the short version (the primer and context are already in the thread). Codex also reads `AGENTS.md` in the chat's folder on its own.
 
 ## Grok Build
 
@@ -59,21 +63,21 @@ Codex also checks `CODEX_BIN` before searching `PATH`, so a newer launcher can o
 - **Permissions:** `acceptEdits` → `--permission-mode dontAsk` plus `--allow Edit`, `--allow Read`, `--allow Grep` and your `allowedTools`; `default` → `dontAsk` plus your `allowedTools` only; `bypassPermissions` → `--always-approve`; `deniedTools` → `--deny` rules in every mode. Rules are translated from Claude's syntax to Grok's globs: `Bash(git:*)` becomes `Bash(git *)` and `Bash(git)`; `WebSearch`, `WebFetch`, `Read`, `Edit`, `Grep`, `Bash` pass through (Grok accepts the same tool names). What Grok Build 1.0.41 actually does headless, measured rather than read off the docs: `dontAsk` and `default` both behave like its auto mode. Ordinary actions run without any rule (listing, reading, editing, `touch`, a file write); dangerous ones are blocked by its classifier (`rm` of a project file: "Auto mode blocked this action"), an allow rule naming the command lets them through, and a deny rule always blocks. So `allowedTools` only matters for the dangerous commands, and `deniedTools` is the way to keep Grok off something. A refused call comes back as a `tool_call_update` with status `failed` and a content line "Tool `run_terminal_command` was not executed: …"; the bridge turns it into a rule for the **Allow & retry** button (`Bash(rm:*)` for a blocked `rm victim.txt`) and quotes the reason in the reply. A command that merely failed (non-zero exit) is not mistaken for one.
 - **Session:** the `sessionId` in the `end` event; later runs pass `-r <id>`. Grok stores sessions under `%UserProfile%\.grok\sessions`.
 - **Progress:** `tool_call` events by their `toolName` (`run_terminal_command` → `$ npm test`, `read_file` → `read main.rs`, `write`/`search_replace` → `edit b.lua`, `grep`, `list_dir` → `ls src`, `web_search`, `web_fetch`, `spawn_subagent` → `agent: …`; anything else by its ACP `kind`, then its name), `thought` chunks as one `~ …` line, and each stretch of `text` before a tool call as a snippet. The reply is the text streamed after the last tool call (or the last text there was, when the turn ends on a tool call). A `stopReason` other than `end_turn` is noted in the reply.
-- **Context:** the game context and primer go in with `--append-system-prompt` (Grok accepts Claude Code's flag names), on every run. Grok also reads `AGENTS.md`, `CLAUDE.md` and `.grok/rules/` in the chat's folder on its own.
+- **Context:** the game context and primer go in with `--append-system-prompt` (Grok accepts Claude Code's flag names), on every run; the game context is inside the same marked data block as Claude's. Grok also reads `AGENTS.md`, `CLAUDE.md` and `.grok/rules/` in the chat's folder on its own.
 
 ## Google Antigravity CLI
 
 - **Install:** Install Google Antigravity CLI (agy) and run `agy` once to log in. On Windows the bridge checks `%LOCALAPPDATA%\agy\bin\agy.exe`.
 - **Command line:** `agy -p=<prompt> --output-format stream-json --add-dir <folder> --print-timeout <seconds>s [--conversation <id>] [--model <m>] ...`. The prompt must be attached to `-p=`. The bridge sets both the process cwd and `--add-dir` to the chat folder.
 - **Permissions:** `acceptEdits` uses `--mode accept-edits --disable-slash-commands`; `default` uses `--mode plan`; `bypassPermissions` uses `--dangerously-skip-permissions --disable-slash-commands`.
-- **Session and progress:** the `conversation_id` from `init` is resumed with `--conversation`. Active tool steps become progress lines, and `result` supplies the final reply. The context block goes at the top of the prompt. When needed, the user prompt is truncated to keep context under the Windows command-line limit.
+- **Session and progress:** the `conversation_id` from `init` is resumed with `--conversation`. Active tool steps become progress lines, and `result` supplies the final reply. The system prompt (with the marked game-context block) goes at the top of the prompt. When needed, the user prompt is truncated to keep context under the Windows command-line limit.
 
 ## Hermes Agent
 
 - **Install:** Install Hermes Agent and run `hermes setup` once.
 - **Command line:** `hermes chat --query-file - -Q --in <folder> --source tool [--resume <id>] [-m <model>] [--image <path>]`; the prompt is sent on stdin. Hermes writes plain reply text to stdout and `session_id: <id>` to stderr.
-- **Permissions:** `acceptEdits` is the default. `bypassPermissions` falls back to default; the bridge never passes `--yolo` and appends a note to the reply.
-- **Images and context:** the first image is passed with `--image`; additional paths are included in the prompt. The context block goes at the top of the prompt.
+- **Permissions:** `acceptEdits` is the default. `bypassPermissions` falls back to default; the bridge never passes `--yolo` and appends a note to the reply. The bridge has no tool limit for Hermes, so a mentor job on it is refused until there is one.
+- **Images and context:** the first image is passed with `--image`; additional paths are included in the prompt. The system prompt (with the marked game-context block) goes at the top of the prompt.
 
 ## Known limits
 
