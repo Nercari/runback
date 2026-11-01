@@ -157,15 +157,28 @@ local function ChatModel(c)
 	return (c and c.model and c.model ~= "") and c.model or ""
 end
 
-local function PoolName(agent, model)
-	return AgentName(agent) .. ((model and model ~= "") and (" · " .. model) or "")
+-- And an effort level of that model (backlog 45, "Claude · opus · high"); empty =
+-- the model's own default. Only kept while the chat has a model.
+local function ChatEffort(c)
+	return (c and c.effort and c.effort ~= "" and ChatModel(c) ~= "") and c.effort or ""
 end
 
--- The flags that pick a chat's agent and model ("agent=claude;model=sonnet").
+local function PoolName(agent, model, effort)
+	local name = AgentName(agent) .. ((model and model ~= "") and (" · " .. model) or "")
+	if model and model ~= "" and effort and effort ~= "" then name = name .. " · " .. effort end
+	return name
+end
+
+local function ChatPoolName(c)
+	return PoolName(c.agent, ChatModel(c), ChatEffort(c))
+end
+
+-- The flags that pick a chat's agent, model and effort ("agent=claude;model=opus;effort=high").
 local function PoolFlags(c)
 	local t = {}
 	if c.agent and c.agent ~= "" then table.insert(t, "agent=" .. c.agent) end
 	if ChatModel(c) ~= "" then table.insert(t, "model=" .. c.model) end
+	if ChatEffort(c) ~= "" then table.insert(t, "effort=" .. c.effort) end
 	return table.concat(t, ";")
 end
 
@@ -221,6 +234,7 @@ local function AddChat(name, cwd)
 		cwd = cwd or (current and current.cwd) or DEFAULT_CWD,
 		agent = (current and current.agent) or "",
 		model = (current and current.model) or "",
+		effort = (current and current.effort) or "",
 		history = {},
 		unread = 0,
 		created = time(),
@@ -323,6 +337,7 @@ local function InitDB()
 	for _, c in ipairs(db.chats) do
 		c.agent = c.agent or ""
 		c.model = c.model or ""
+		c.effort = c.effort or ""
 		for _, m in ipairs(c.history or {}) do
 			if m.role == "claude" then m.role, m.agent = "assistant", m.agent or "claude" end
 		end
@@ -944,6 +959,8 @@ local function TryLoadSlot(why)
 		if type(data.agent) == "string" and data.agent ~= "" then run.bridgeAgent = data.agent end
 		if type(data.agents) == "table" and #data.agents > 0 then run.bridgeAgents = data.agents end
 		if type(data.models) == "table" then run.bridgeModels = data.models end
+		if type(data.efforts) == "table" then run.bridgeEfforts = data.efforts end
+		if type(data.defaults) == "table" then run.bridgeDefaults = data.defaults end
 	end
 	local matched = ApplyReplies(type(data) == "table" and data.replies or nil)
 	if type(data) == "table" and data.restore then ImportRestore(data.restore) end
@@ -1064,6 +1081,8 @@ local function ProcessInbox()
 	if type(inbox.agent) == "string" and inbox.agent ~= "" then run.bridgeAgent = inbox.agent end
 	if type(inbox.agents) == "table" and #inbox.agents > 0 then run.bridgeAgents = inbox.agents end
 	if type(inbox.models) == "table" then run.bridgeModels = inbox.models end
+	if type(inbox.efforts) == "table" then run.bridgeEfforts = inbox.efforts end
+	if type(inbox.defaults) == "table" then run.bridgeDefaults = inbox.defaults end
 	ApplyReplies(inbox.replies)
 	if inbox.restore then ImportRestore(inbox.restore) end
 	if inbox.map and RunbackMap then RunbackMap.Sync(inbox.map) end
@@ -1513,6 +1532,7 @@ function Runback.Send(text, allow, opts)
 		ctx = ctx and ToHex(ctx) or nil,
 		agent = (c.agent and c.agent ~= "") and c.agent or nil,
 		model = ChatModel(c) ~= "" and c.model or nil,
+		effort = ChatEffort(c) ~= "" and c.effort or nil,
 		allow = allowHex,
 		cmd = (type(opts.cmd) == "string" and opts.cmd:match("^[a-z0-9-]+$") and #opts.cmd <= 24) and opts.cmd or nil,
 		newSession = newSession,
@@ -1690,7 +1710,7 @@ end
 
 -- The commands the box understands. Each maps onto the addon's own logic (the
 -- AI picker's model switch, new chat, review); none runs a game command.
-local BOX_HELP = "The box understands: /model [name] (this chat's model), /agent [name [model]] (which AI), /new [name] (new chat), /review (review your last fight), /look [question] (ask about your newest screenshot: press Print Screen first), /help. Anything else starting with / is not sent; type it in the game chat instead, or drop the / to ask the agent."
+local BOX_HELP = "The box understands: /model [name] (this chat's model), /agent [name [model [effort]]] (which AI), /new [name] (new chat), /review (review your last fight), /look [question] (ask about your newest screenshot: press Print Screen first), /help. Anything else starting with / is not sent; type it in the game chat instead, or drop the / to ask the agent."
 
 function Runback.BoxCommand(text)
 	local c = ActiveChat()
@@ -1850,35 +1870,55 @@ local function ModelsFor(agent)
 	return type(m) == "table" and m or nil
 end
 
+-- The effort levels the bridge offers for an agent's model, and its default
+-- (backlog 44). Nil / "" before the bridge has said, or for a model without levels.
+local function EffortsFor(agent, model)
+	local byModel = run.bridgeEfforts and run.bridgeEfforts[agent]
+	local list = type(byModel) == "table" and byModel[model] or nil
+	return (type(list) == "table" and #list > 0) and list or nil
+end
+
+local function DefaultEffortFor(agent, model)
+	local byModel = run.bridgeDefaults and run.bridgeDefaults[agent]
+	local e = type(byModel) == "table" and byModel[model] or nil
+	return type(e) == "string" and e or ""
+end
+
 local function DefaultPoolText()
 	return run.bridgeAgent and AgentName(run.bridgeAgent) or "unknown until connected"
 end
 
--- Switch a chat to an agent and model ("" and "" = the bridge's default).
-function Runback.SetPool(c, agent, model)
+-- Switch a chat to an agent, model and effort ("" = the bridge's or model's default).
+-- With no effort given, the chat keeps its level when the new model has it too.
+function Runback.SetPool(c, agent, model, effort)
 	if not c then return end
 	agent, model = agent or "", model or ""
 	if agent == "" then model = "" end
+	if effort == nil then effort = c.effort or "" end
+	if model == "" or not Contains(EffortsFor(agent, model) or {}, effort) then effort = "" end
 	local agentChanged = agent ~= (c.agent or "")
-	local changed = agentChanged or model ~= ChatModel(c)
-	c.agent, c.model = agent, model
+	local changed = agentChanged or model ~= ChatModel(c) or effort ~= ChatEffort(c)
+	c.agent, c.model, c.effort = agent, model, effort
 	if agent ~= "" then
-		AddHistory(c, "system", "agent set to " .. PoolName(agent, model) .. (agentChanged and #c.history > 1 and "; the next message starts a fresh session with it" or ""))
+		AddHistory(c, "system", "agent set to " .. PoolName(agent, model, effort) .. (agentChanged and #c.history > 1 and "; the next message starts a fresh session with it" or ""))
 	elseif changed then
 		AddHistory(c, "system", "agent reset to the bridge's default: " .. DefaultPoolText())
 	else
-		AddHistory(c, "system", "agent is the bridge's default: " .. DefaultPoolText() .. " (click the AI button under the chat, or /runback agent <name> [model], to change; agents: " .. AgentList() .. ")")
+		AddHistory(c, "system", "agent is the bridge's default: " .. DefaultPoolText() .. " (click the AI button under the chat, or /runback agent <name> [model [effort]], to change; agents: " .. AgentList() .. ")")
 	end
 	Runback.Render()
 end
 
--- /runback agent [name [model]]
+-- /runback agent [name [model [effort]]]
 function Runback.SetAgent(rest, c)
 	c = c or ActiveChat()
 	if not c then return end
 	local agent, model = Trim(rest or ""):match("^(%S*)%s*(.-)$")
 	agent, model = (agent or ""):lower(), Trim(model or "")
-	if agent == "-" or agent == "default" then agent, model = "", "" end
+	-- "opus high": a listed model, then one word for the effort level.
+	local m, effort = model:match("^(%S+)%s+(%a+)$")
+	if m and Contains(ModelsFor(agent) or {}, m) then model, effort = m, effort:lower() else effort = "" end
+	if agent == "-" or agent == "default" then agent, model, effort = "", "", "" end
 	if agent ~= "" and run.bridgeAgents and not Contains(run.bridgeAgents, agent) then
 		AddHistory(c, "system", "Unknown agent \"" .. agent .. "\". This PC has: " .. AgentList())
 		Runback.Render()
@@ -1892,7 +1932,16 @@ function Runback.SetAgent(rest, c)
 			return
 		end
 	end
-	Runback.SetPool(c, agent, model)
+	if effort ~= "" then
+		local levels = model ~= "" and EffortsFor(agent, model) or nil
+		if not levels or not Contains(levels, effort) then
+			AddHistory(c, "system", "Unknown effort \"" .. effort:sub(1, 16) .. "\" for " .. PoolName(agent, model) .. ". Levels: " .. (levels and table.concat(levels, ", ") or (model == "" and "pick a model first" or "none")))
+			Runback.Render()
+			return
+		end
+	end
+	-- No level typed: keep the chat's when the new model has it.
+	Runback.SetPool(c, agent, model, effort ~= "" and effort or nil)
 end
 
 -- /model [name]: the model for this chat's agent (the bridge's default agent
@@ -2119,7 +2168,7 @@ function Runback.UpdateStatus()
 	end
 	local agentText
 	if c and c.agent and c.agent ~= "" then
-		agentText = PoolName(c.agent, ChatModel(c))
+		agentText = ChatPoolName(c)
 	elseif run.bridgeAgent then
 		agentText = AgentName(run.bridgeAgent)
 	else
@@ -2134,10 +2183,10 @@ function Runback.UpdateStatus()
 		local t = c and Display(c.name) or "Runback"
 		local folder = FolderName(ChatFolder(c))
 		if folder ~= "" then t = t .. "  |cff888888" .. Display(folder) .. "|r" end
-		if c and c.agent and c.agent ~= "" then t = t .. "  |cff888888" .. PoolName(c.agent, ChatModel(c)) .. "|r" end
+		if c and c.agent and c.agent ~= "" then t = t .. "  |cff888888" .. ChatPoolName(c) .. "|r" end
 		ui.title:SetText(t)
 	end
-	if ui.pool then ui.pool:SetText("AI: " .. ((c and c.agent and c.agent ~= "") and PoolName(c.agent, ChatModel(c)) or (run.bridgeAgent and AgentName(run.bridgeAgent) or "default"))) end
+	if ui.pool then ui.pool:SetText("AI: " .. ((c and c.agent and c.agent ~= "") and ChatPoolName(c) or (run.bridgeAgent and AgentName(run.bridgeAgent) or "default"))) end
 	-- Reload and Resend share one place on the bottom row (backlog 82): when a
 	-- reload is the way forward, Reload (or Get reply) shows and Resend does not.
 	local reloadShown = mode ~= "pixel" or run.slotsExhausted or run.slotsMissing or run.pixelFailed or false
@@ -2534,7 +2583,7 @@ function Runback.RenderChatList()
 				label = label .. " |cff888888" .. Display(folder) .. "|r"
 			end
 			if c.agent and c.agent ~= "" then
-				label = label .. " |cff888888" .. PoolName(c.agent, ChatModel(c)) .. "|r"
+				label = label .. " |cff888888" .. ChatPoolName(c) .. "|r"
 			end
 			if c.pendingId then
 				label = label .. " |cffffd100...|r"
@@ -2947,6 +2996,31 @@ local function BuildUI()
 		picker.rows[i] = it
 		return it
 	end
+	-- The effort row (backlog 45): the levels of the chat's model as small buttons
+	-- under the list, the default marked with *, the chosen one green. A click picks
+	-- that level; clicking the chosen one goes back to the model's default.
+	picker.effortLabel = picker:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
+	picker.effortLabel:SetJustifyH("LEFT")
+	picker.levels = {}
+	local function EffortButton(i)
+		local b = picker.levels[i]
+		if b then return b end
+		b = CreateFrame("Button", nil, picker)
+		b:SetHeight(PICK_ROW)
+		local hl = b:CreateTexture(nil, "HIGHLIGHT")
+		hl:SetAllPoints()
+		hl:SetColorTexture(1, 1, 1, 0.12)
+		b.label = b:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+		b.label:SetPoint("CENTER", b, "CENTER", 0, 0)
+		b:SetScript("OnClick", function(self)
+			picker:Hide()
+			local c = FindChat(picker.chatId)
+			if not c then return end
+			Runback.SetPool(c, c.agent, ChatModel(c), self.effort == ChatEffort(c) and "" or self.effort)
+		end)
+		picker.levels[i] = b
+		return b
+	end
 	picker:SetScript("OnUpdate", menu:GetScript("OnUpdate"))
 	picker:Hide()
 	ui.picker = picker
@@ -2956,6 +3030,12 @@ local function BuildUI()
 		if not c then return end
 		if picker:IsShown() and picker.chatId == chatId then
 			picker:Hide()
+			return
+		end
+		-- Never in combat: it closes when a fight starts and waits for the end.
+		if InCombatLockdown() then
+			AddHistory(c, "system", "The AI picker opens after the fight.")
+			Runback.Render()
 			return
 		end
 		local choices = Runback.PoolChoices()
@@ -2968,8 +3048,29 @@ local function BuildUI()
 			it:Show()
 		end
 		for i = n + 1, #picker.rows do picker.rows[i]:Hide() end
+		local model = ChatModel(c)
+		local levels = (c.agent and c.agent ~= "" and model ~= "") and EffortsFor(c.agent, model) or {}
+		local default, x, y = DefaultEffortFor(c.agent, model), 6, -24 - n * PICK_ROW
+		picker.effortLabel:ClearAllPoints()
+		picker.effortLabel:SetPoint("TOPLEFT", picker, "TOPLEFT", 10, y - 4)
+		picker.effortLabel:SetText(#levels > 0 and ("Effort for " .. Display(model) .. ":") or "")
+		local shown = 0
+		for i, e in ipairs(levels) do
+			local text = e .. (e == default and "*" or "")
+			if x + 8 + 6 * #text > PICK_W - 6 then break end -- what does not fit stays typed-only
+			shown = i
+			local b = EffortButton(i)
+			b.effort = e
+			b.label:SetText((e == ChatEffort(c) and "|cff55ff55" or "|cffffffff") .. text .. "|r")
+			b:SetWidth(8 + 6 * #text)
+			b:ClearAllPoints()
+			b:SetPoint("TOPLEFT", picker, "TOPLEFT", x, y - PICK_ROW)
+			x = x + 8 + 6 * #text + 2
+			b:Show()
+		end
+		for i = shown + 1, #picker.levels do picker.levels[i]:Hide() end
 		picker.title:SetText(run.bridgeAgents and ("AI for " .. Display(c.name)) or "AI for this chat (connect to see what this PC has)")
-		picker:SetSize(PICK_W, 30 + n * PICK_ROW)
+		picker:SetSize(PICK_W, 30 + n * PICK_ROW + (#levels > 0 and 2 * PICK_ROW or 0))
 		picker.chatId = chatId
 		picker.owner = anchor
 		picker.away = 0
@@ -3491,7 +3592,7 @@ local HELP = table.concat({
 	"/runback rename [name]          rename the current chat (no name = dialog; right-clicking the chat in the left panel offers it too)",
 	"/runback delete                 delete the current chat",
 	"/runback cd <folder>            folder this chat's agent works in (relative to the bridge's folder; no folder = back to default). Right-clicking the chat in the left panel and picking Folder does the same",
-	"/runback agent [name [model]]   which AI (and model) this chat talks to (default = the bridge's). The AI button under the chat does the same with a click",
+	"/runback agent [name [model [effort]]]   which AI (and model, effort) this chat talks to (default = the bridge's). The AI button under the chat does the same with a click",
 	"/runback reset                  next message in this chat starts a fresh agent session",
 	"/runback context [on|off]       what the agent is told about your character and where you are (no argument = show it)",
 	"/runback guide [show|hide|next|prev|list|pick <n>]   the guide panel: current step and the next two of a guide the mentor wrote (no argument = show or hide it; hidden during fights)",
@@ -3526,13 +3627,16 @@ local function ChatArgument(rest)
 	return false
 end
 
--- "/ai agent codex" or "/ai agent claude sonnet"; anything longer ("/ai agent
--- tell me ...") is a message.
+-- "/ai agent codex", "/ai agent claude sonnet" or "/ai agent claude opus high"
+-- (the third word only after a model the bridge lists); anything longer ("/ai
+-- agent tell me ...") is a message.
 local function AgentArgument(rest)
 	local name, model = rest:match("^(%S*)%s*(.-)$")
 	if model == "" then return true end
-	if model:find("%s") then return false end
-	return Contains(run.bridgeAgents or { "claude", "codex", "grok", "agy", "hermes" }, name:lower())
+	if not Contains(run.bridgeAgents or { "claude", "codex", "grok", "agy", "hermes" }, name:lower()) then return false end
+	if not model:find("%s") then return true end
+	local m, effort = model:match("^(%S+)%s+(%a+)$")
+	return m ~= nil and #effort <= 16 and Contains(ModelsFor(name:lower()) or {}, m)
 end
 
 local COMMAND_ARGS = {
@@ -3817,6 +3921,7 @@ local ev = CreateFrame("Frame")
 ev:RegisterEvent("ADDON_LOADED")
 ev:RegisterEvent("PLAYER_LOGIN")
 ev:RegisterEvent("PLAYER_REGEN_ENABLED")
+ev:RegisterEvent("PLAYER_REGEN_DISABLED")
 ev:SetScript("OnEvent", function(self, event, arg1)
 	if event == "ADDON_LOADED" then
 		if arg1 == ADDON_NAME then
@@ -3860,6 +3965,8 @@ ev:SetScript("OnEvent", function(self, event, arg1)
 		if db.settings.longchat then ApplyLongChat() end
 		C_Timer.NewTicker(TICK_SECONDS, Tick)
 		C_Timer.After(3, Runback.SayHello)
+	elseif event == "PLAYER_REGEN_DISABLED" then
+		if ui.picker then ui.picker:Hide() end
 	elseif event == "PLAYER_REGEN_ENABLED" then
 		if Runback.reloadAfterCombat then
 			-- ReloadUI() is blocked outside a keypress or click, and this event is

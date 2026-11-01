@@ -1,0 +1,3 @@
+### Added
+
+- **Effort level in the AI picker (backlog 45).** When the chat's model has effort levels (Claude's opus, sonnet and fable today), the AI picker shows them as a row of small buttons under the list, the model's default marked with `*` and your choice in green; click it again to go back to the default. The chat label reads `Claude · opus · high`, and typed: `/runback agent claude opus high` or `/model opus high`. A level the model lacks is refused with the list it has, and switching to a model without your level drops it. The picker closes when a fight starts and does not open in combat. Needs a bridge from backlog 44 or later. Needs Nercari's live look.

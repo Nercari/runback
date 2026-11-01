@@ -113,7 +113,7 @@ Items 41 to 46 make the AI picker match each CLI's own models and effort levels 
 
 44. **Effort levels in the inbox** (done; `pools()` and `protocol.luaTable`, tests in `tests/bridge_test.js`, `tests/agents_test.js`, `tests/addon_test.js`). The bridge tells the addon which levels each model takes and its default.
 
-45. **Effort row in the AI picker.** Pick a level after the model; chat label "Agent · model · effort"; closed in combat. Live look by Nercari.
+45. **Effort row in the AI picker** (done; tests in `tests/addon_test.js`; live look pending). Pick a level after the model; chat label "Agent · model · effort"; closed in combat. Live look by Nercari.
 
 46. **Read the CLI's own model list.** Codex cache, `agy models`, `grok models`, behind an off → shadow → on switch.
 
