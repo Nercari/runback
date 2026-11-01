@@ -45,33 +45,40 @@ test('missing login fails with a one-line fix', () => {
   ].join('\n'));
 });
 
-test('Wayland warns that capture needs X11 or XWayland', () => {
+test('a Wayland session fails the X11 check even with XWayland DISPLAY set', () => {
   const display = run(env({ env: { DISPLAY: ':0', WAYLAND_DISPLAY: 'wayland-0' } }));
-  assert.equal(display.code, 0);
+  assert.equal(display.code, 1);
   assert.equal(display.text, [
     'PASS node: Node.js 22.2.0',
     'PASS login: an agent CLI is logged in',
-    'PASS x11: DISPLAY=:0',
+    'FAIL x11: XDG_SESSION_TYPE=unset, DISPLAY=:0 is XWayland: capture needs an X11 session. ' +
+      'Log out and pick an X11 session at the login screen (docs/INSTALL-LINUX.md, "No X11 session yet").',
     'PASS client: /wow/_forever_ (Interface 16001)',
-    'WARN: Screen capture needs X11 or XWayland.',
     '',
   ].join('\n'));
 
   const session = run(env({ env: { DISPLAY: ':0', XDG_SESSION_TYPE: 'Wayland' } }));
-  assert.equal(session.code, 0);
-  assert.equal(session.text, display.text);
+  assert.equal(session.code, 1);
+  assert.equal(session.text, display.text.replace('XDG_SESSION_TYPE=unset', 'XDG_SESSION_TYPE=wayland'));
 
   const blocked = run(env({ env: { WAYLAND_DISPLAY: 'wayland-0' } }));
   assert.equal(blocked.code, 1);
   assert.equal(blocked.text, [
     'PASS node: Node.js 22.2.0',
     'PASS login: an agent CLI is logged in',
-    'FAIL x11: DISPLAY is not set. Start an X11 session, or set DISPLAY under XWayland.',
+    'FAIL x11: XDG_SESSION_TYPE=unset, DISPLAY is not set: capture needs an X11 session. ' +
+      'Log out and pick an X11 session at the login screen (docs/INSTALL-LINUX.md, "No X11 session yet").',
     'PASS client: /wow/_forever_ (Interface 16001)',
-    'WARN: Screen capture needs X11 or XWayland.',
     '',
   ].join('\n'));
 });
+
+test('an X11 session passes the X11 check', () => {
+  const out = run(env({ env: { DISPLAY: ':0', XDG_SESSION_TYPE: 'x11' } }));
+  assert.equal(out.code, 0);
+  assert.match(out.text, /^PASS x11: DISPLAY=:0$/m);
+});
+
 
 test('all good passes with no warning', () => {
   const out = run(env({

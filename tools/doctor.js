@@ -47,24 +47,28 @@ function loginCheck(probe) {
   };
 }
 
+// A Wayland session has DISPLAY set (XWayland) and still cannot be counted on to
+// hand back another window's pixels, so it fails here instead of passing on DISPLAY.
 function x11Check(env, platform) {
   if (platform === 'win32') return { name: 'x11', status: 'PASS', detail: 'Windows does not need X11 for capture' };
+  const session = String(env.XDG_SESSION_TYPE || '').trim().toLowerCase();
   const display = String(env.DISPLAY || '').trim();
+  if (String(env.WAYLAND_DISPLAY || '').trim() || session === 'wayland') {
+    const where = display ? `DISPLAY=${display} is XWayland` : 'DISPLAY is not set';
+    return {
+      name: 'x11',
+      status: 'FAIL',
+      detail: `XDG_SESSION_TYPE=${session || 'unset'}, ${where}: capture needs an X11 session.`,
+      fix: 'Log out and pick an X11 session at the login screen (docs/INSTALL-LINUX.md, "No X11 session yet").',
+    };
+  }
   if (display) return { name: 'x11', status: 'PASS', detail: `DISPLAY=${display}` };
   return {
     name: 'x11',
     status: 'FAIL',
     detail: 'DISPLAY is not set.',
-    fix: 'Start an X11 session, or set DISPLAY under XWayland.',
+    fix: 'Start an X11 session (docs/INSTALL-LINUX.md, "No X11 session yet").',
   };
-}
-
-function waylandWarning(env) {
-  const session = String(env.XDG_SESSION_TYPE || '').trim().toLowerCase();
-  if (String(env.WAYLAND_DISPLAY || '').trim() || session === 'wayland') {
-    return 'Screen capture needs X11 or XWayland.';
-  }
-  return '';
 }
 
 // Which client folder setup found, and the TOC number inside the addon there.
@@ -101,9 +105,7 @@ function run(opts) {
     x11Check(env, opts.platform),
     clientCheck(opts.client),
   ];
-  const warning = waylandWarning(env);
   const lines = checks.map(formatCheck);
-  if (warning) lines.push(`WARN: ${warning}`);
   const code = checks.every((check) => check.status === 'PASS') ? 0 : 1;
   return { code, text: `${lines.join('\n')}\n` };
 }

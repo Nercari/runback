@@ -392,22 +392,25 @@ def grab(w):
 
 
 def run():
+    # The session type rides on every probe line so the pasted proof shows which
+    # session produced the strip instead of relying on a second command.
+    session = os.environ.get("XDG_SESSION_TYPE", "")
     if args.probe:
         w = find_window()
         if not w:
-            emit({"error": "no game window found"})
+            emit({"error": "no game window found", "session": session})
             sys.exit(1)
         if args.keep_composited:
             keep_composited(w)
             time.sleep(0.5)
         g = grab(w)
         if not g or isinstance(g, dict):
-            emit(g or {"error": "capture failed"})
+            emit(g or {"error": "capture failed", "session": session})
             sys.exit(1)
         px, width, height = g
         write_png(args.probe, px, width, height)
         msg, off = find_and_decode(px, width, height, None)
-        emit({"info": "saved %dx%d to %s" % (width, height, args.probe), "strip": msg, "offset": off})
+        emit({"info": "saved %dx%d to %s" % (width, height, args.probe), "strip": msg, "offset": off, "session": session})
         return
 
     last_key = None
