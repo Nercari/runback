@@ -159,7 +159,7 @@ Each ticket: one PR into `forever`, `node tools/safety-ci.js` and `npm test` gre
 ### 65. OpenCode models and reasoning in the picker
 
 - Needs: 64, 42, 44 and 45.
-- State: the flags are confirmed, but `opencode models` (2.2.5) prints one `provider/model` id per line and names no reasoning variants, so there is nothing to read per model yet. Models and levels come from `agents.opencode.models` in `config.json`; a chosen level goes into the model id as `#level`.
+- State: the flags are confirmed, but `opencode models` (2.2.5) prints one `provider/model` id per line and names no reasoning variants, so there is nothing to read per model yet. Models and levels come from `agents.opencode.models` in `config.json` (a plain `provider/model` id, plus an `{ "id": …, "efforts": […] }` item to record its variants); a chosen level goes into the argv as `#level`. A `#level` inside a listed model id is dropped, because that is not a valid model name.
 - Do next: an `opencode models` reader (same off → shadow → on switch as ticket 46) for the model list; the variants still need a source the CLI does not print.
 - Metric: OpenCode models and variants in the picker that `opencode` also offers, 0 → all. Today: 0 of them are automatic; every one is listed by hand.
 

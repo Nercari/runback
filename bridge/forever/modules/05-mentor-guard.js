@@ -71,13 +71,16 @@ function syncPrompt(templateDir, workspace) {
     return true;
   } catch { return false; }
 }
-// Hermes has no tool limit the bridge can set in the mentor folder, so a mentor
-// job on it is refused until it has one: other players' chat and game text would
-// reach its tools. Returns the line to show the player, or ''.
+// Hermes and OpenCode have no tool limit the bridge can set in the mentor
+// folder, so a mentor job on them is refused until they have one: other
+// players' chat and game text would reach their tools. Returns the line to
+// show the player, or ''.
+const NO_MENTOR_TOOL_LIMIT = { hermes: 'Hermes', opencode: 'OpenCode' };
 function refusal(agentId, cwd, mentorDir) {
-  if (agentId !== 'hermes' || !mentorDir) return '';
+  const name = NO_MENTOR_TOOL_LIMIT[agentId];
+  if (!name || !mentorDir) return '';
   if (!inside(String(cwd || ''), mentorDir)) return '';
-  return 'Hermes has no tool limit in the mentor folder, so Runback will not run a mentor job on it: other players\' chat and game text could reach its tools. Pick Claude, Codex, Grok or Antigravity with /runback agent, or move this chat to another folder.';
+  return `${name} has no tool limit in the mentor folder, so Runback will not run a mentor job on it: other players' chat and game text could reach its tools. Pick Claude, Codex, Grok or Antigravity with /runback agent, or move this chat to another folder.`;
 }
 module.exports = {
   inside,
