@@ -405,7 +405,9 @@ def run():
             time.sleep(0.5)
         g = grab(w)
         if not g or isinstance(g, dict):
-            emit(g if isinstance(g, dict) else {"error": "capture failed", "session": session})
+            error = g if isinstance(g, dict) else {"error": "capture failed"}
+            error.setdefault("session", session)
+            emit(error)
             sys.exit(1)
         px, width, height = g
         write_png(args.probe, px, width, height)

@@ -48,8 +48,11 @@ Type=Application
 DesktopNames=openbox
 EOF
 
-sudo cp /etc/sddm.conf.d/10-theme.conf /etc/sddm.conf.d/10-theme.conf.runback-backup
-sudo sed -i 's/^Current=.*/Current=elarun/' /etc/sddm.conf.d/10-theme.conf
+# A file that sorts after 99-omarchy-login.conf wins the [Theme] key; no existing file is edited.
+sudo tee /etc/sddm.conf.d/zz-runback-theme.conf >/dev/null <<'EOF'
+[Theme]
+Current=elarun
+EOF
 ```
 
 Log out, not reboot: `[Autologin]` in `/etc/sddm.conf.d/autologin.conf` skips the screen on boot. The login screen then lists the sessions; pick *Runback X11 (openbox)*. In the terminal it opens:
@@ -63,12 +66,14 @@ npm run doctor                                    # PASS x11, no Wayland line
 
 Then install Wine and the game and run `node setup.js --wow <client folder>` as above, start the bridge with `npm start`, and run the capture check below.
 
-To undo it, restore the theme first and then log out to Hyprland:
+To undo it, drop the extra theme file, then log out to Hyprland:
 
 ```bash
-sudo mv /etc/sddm.conf.d/10-theme.conf.runback-backup /etc/sddm.conf.d/10-theme.conf
+sudo rm /etc/sddm.conf.d/zz-runback-theme.conf
 sudo rm /usr/share/xsessions/runback-x11.desktop /usr/local/bin/runback-x11-session
 ```
+
+The next login is the Omarchy theme and Hyprland as before; `/usr/share/wayland-sessions` and the other `/etc/sddm.conf.d` files were never touched. If the greeter ever fails to draw, press `Ctrl+Alt+F2`, log in, run those two `rm` lines, and `sudo systemctl restart sddm`.
 
 The next login is Hyprland as before; `/usr/share/wayland-sessions` was never touched.
 
