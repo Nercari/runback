@@ -17,8 +17,8 @@ Two processes that can't talk to each other directly, and how they do anyway.
    │                          │                    │   resumed; agents.js)       │
    │                          │                    │        │                    │
    │  LoadAddOn(Runback_S…)     │  files on disk     │        ▼                    │
-   │  ◀───────────────────────┼────────────────────┤  writes 200 slot Inbox.lua  │
-   │  PlaySoundFile(sig/…)    │                    │  flips signal/heartbeat wav │
+   │  ◀───────────────────────┼────────────────────┤  writes 16 slot Inbox.lua   │
+   │  PlaySoundFile(sig/…)    │                    │  (all 200 with no report)   │
    └──────────────────────────┘                    └─────────────────────────────┘
 ```
 
@@ -63,7 +63,7 @@ Exclusive fullscreen blocks GDI capture; borderless/windowed works. HDR was not 
 
 `install-slots.js` creates `Runback_S001` … `Runback_S200`, each a `## LoadOnDemand: 1` addon with a single `Inbox.lua`. `C_AddOns.LoadAddOn` reads that file from disk at load time; each slot can be loaded once per UI session, and `/reload` unloads them all.
 
-The bridge doesn't know which slot the game will load next, so every publish writes the same content to all 200 (atomic rename per file, ~1 MB total, cheap). The content is the latest status of every chat:
+The bridge doesn't know which slot the game will load next, but it knows which ones it can still load: the addon reports the last slot it loaded and its poll cadence on the strip (`slot=NNN;poll=60|120`), and every publish writes the same content to the 16 slots after the one it has loaded *by then*. That last part matters: the strip only carries the slot while a message is unacknowledged, and the addon keeps loading one slot per poll while a reply is pending (every 60 s with the sound channel, every 120 s without, after the first five minutes that the 16-slot window already covers). So the bridge moves the window by the polls that cadence predicts during a run (a chat run or a module job such as council or the coach card), which keeps a 30-minute run's reply inside it. With no report (an addon before #144, or one that has not loaded a slot since login) it writes all 200, and a `/reload` (the game writing SavedVariables) writes all 200 again before the next poll, since the pool restarts at slot 1. The content is the latest status of every chat:
 
 ```lua
 Runback_SlotData = {

@@ -6,6 +6,7 @@
   "allowedFolders": [],
   "tocInterface": "16001",
   "slots": 200,
+  "slotWindow": 16,
   "actMax": 60,
   "presenceMax": 2000,
   "presenceIntervalMs": 30000,

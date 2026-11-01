@@ -483,9 +483,18 @@ end
 -- bridge can tell it from a separator inside the text.
 local function RecordFor(id, rec)
 	local flags = Wire(rec.flags)
+	if rec.ctx ~= nil then
+		flags = flags == "" and "c" or (flags .. ";c")
+	end
+	-- The last reply slot this session loaded and how often it polls for the next,
+	-- so the bridge writes only the ones the addon can still reach (#144). Absent
+	-- until a slot is loaded: an older bridge writes all of them.
+	if run.lastSlot then
+		local token = "slot=" .. run.lastSlot .. ";poll=" .. (run.pollTail or SLOT_ONLY_TAIL)
+		flags = flags == "" and token or (flags .. ";" .. token)
+	end
 	local fields = { Wire(db.session), Wire(rec.chat), tostring(id), Wire(rec.cwd), flags, Wire(rec.name) }
 	if rec.ctx ~= nil then
-		fields[5] = flags == "" and "c" or (flags .. ";c")
 		table.insert(fields, Wire(rec.ctx))
 	end
 	table.insert(fields, Wire(rec.text))
@@ -807,6 +816,7 @@ end
 local function ScheduleNextPoll()
 	local schedule, tail = POLL_SCHEDULE, POLL_TAIL
 	if not PresenceWorks() or run.signalUnreliable then schedule, tail = SLOT_ONLY_SCHEDULE, SLOT_ONLY_TAIL end
+	run.pollTail = tail -- the strip tells the bridge which cadence to expect (#144)
 	local idx = (run.polls or 0) + 1
 	local t = schedule[idx]
 	if not t then
@@ -950,6 +960,7 @@ local function TryLoadSlot(why)
 		return
 	end
 	run.polls = (run.polls or 0) + 1
+	run.lastSlot = tonumber(string.match(name, "(%d+)$"))
 	run.slotsUsed[why] = (run.slotsUsed[why] or 0) + 1
 	ScheduleNextPoll()
 	local data = Runback_SlotData

@@ -5,6 +5,7 @@ const assert = require('node:assert/strict');
 const path = require('path');
 const os = require('os');
 const fs = require('fs');
+const vm = require('vm');
 const { spawn, spawnSync } = require('child_process');
 const luaparse = require('luaparse');
 const P = require('../bridge/protocol');
@@ -16,7 +17,7 @@ test('luaStr escapes everything Lua 5.1 needs', () => {
 });
 
 test('parseFlags reads new-session, hello, forget, context and agent; permission rules from the game are ignored', () => {
-  const none = { newSession: false, hello: false, forget: false, stop: false, context: false, card: false, agent: '', model: '', effort: '', cmd: '' };
+  const none = { newSession: false, hello: false, forget: false, stop: false, context: false, card: false, agent: '', model: '', effort: '', cmd: '', slot: -1, pollTail: 60 };
   assert.deepEqual(P.parseFlags(''), none);
   assert.deepEqual(P.parseFlags('s'), { ...none, stop: true });
   assert.deepEqual(P.parseFlags('n'), { ...none, newSession: true });
@@ -41,11 +42,66 @@ test('parseFlags reads new-session, hello, forget, context and agent; permission
   }
 });
 
+test('parseFlags reads the last reply slot the addon loaded, and drops a bad one (#144)', () => {
+  assert.equal(P.parseFlags('slot=17').slot, 17);
+  assert.equal(P.parseFlags('h;c;slot=1').slot, 1);
+  assert.equal(P.parseFlags('slot=0').slot, 0);
+  assert.equal(P.parseFlags('').slot, -1, 'no token: an older addon');
+  for (const bad of ['slot=', 'slot=-1', 'slot=1.5', 'slot=abc', 'slot= 3', 'slot=0x10']) {
+    assert.equal(P.parseFlags(bad).slot, -1, bad);
+  }
+});
+
+test('slotTargets writes the window after the last slot loaded, or all of them (#144)', () => {
+  const all = Array.from({ length: 200 }, (_, i) => i + 1);
+  assert.deepEqual(P.slotTargets(0, 200, 16), all, 'nothing reported yet');
+  assert.deepEqual(P.slotTargets(-1, 200, 16), all);
+  assert.deepEqual(P.slotTargets(201, 200, 16), all, 'a number the pool cannot hold');
+  assert.deepEqual(P.slotTargets(1, 200, 16), [2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17]);
+  assert.deepEqual(P.slotTargets(200, 200, 16), [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16], 'wraps');
+  assert.deepEqual(P.slotTargets(195, 200, 16), [196, 197, 198, 199, 200, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11], 'wraps');
+  assert.equal(P.slotTargets(5, 200, 0).length, 1, 'a window of 0 still writes one');
+  assert.equal(P.slotTargets(5, 10, 16).length, 10, 'never more than the pool');
+  assert.deepEqual(P.slotTargets(5, 0, 16), []);
+});
+
+test('parseFlags reads the addon poll cadence, and only 60 or 120 (#144)', () => {
+  assert.equal(P.parseFlags('').pollTail, 60);
+  assert.equal(P.parseFlags('slot=3;poll=120').pollTail, 120);
+  assert.equal(P.parseFlags('slot=3;poll=60').pollTail, 60);
+  for (const bad of ['poll=', 'poll=30', 'poll=121', 'poll= 60', 'poll=1200']) {
+    assert.equal(P.parseFlags(bad).pollTail, 60, bad);
+  }
+});
+
+test('slotPolls counts the polls after the first five minutes at the cadence the addon reported (#144)', () => {
+  assert.equal(P.slotPolls(0, 60), 0);
+  assert.equal(P.slotPolls(-5000, 60), 0);
+  assert.equal(P.slotPolls(NaN, 60), 0);
+  assert.equal(P.slotPolls(300000, 60), 0, 'the first five minutes belong to the window itself');
+  assert.equal(P.slotPolls(360000, 60), 1);
+  assert.equal(P.slotPolls(360000, 120), 0);
+  assert.equal(P.slotPolls(1800000, 60), 25, 'a 30-minute dense run');
+  assert.equal(P.slotPolls(1800000, 120), 12, 'a 30-minute sparse run');
+});
+
+test('slotPolls matches the schedules the addon declares (#144)', () => {
+  const lua = fs.readFileSync(path.join(__dirname, '..', 'addon', 'Runback', 'Runback.lua'), 'utf8');
+  const number = name => Number(new RegExp('^local ' + name + ' = (\\d+)$', 'm').exec(lua)[1]);
+  assert.equal(number('POLL_TAIL'), 60);
+  assert.equal(number('SLOT_ONLY_TAIL'), 120);
+  // Both schedules end at 300 s, where slotPolls starts counting the tail.
+  for (const name of ['POLL_SCHEDULE', 'SLOT_ONLY_SCHEDULE']) {
+    const list = new RegExp('^local ' + name + ' = \\{([^}]*)\\}', 'm').exec(lua)[1];
+    assert.equal(Number(list.trim().split(',').pop()), 300, name);
+  }
+});
+
 test('jobsFromStrip parses the current record format and keeps separators inside text', () => {
   const rec = ['sess', 'chat1', '12', 'realms', 'allow=WebSearch', 'My chat', 'hello\x1Fworld'].join('\x1F');
   const jobs = P.jobsFromStrip(12, rec);
   assert.equal(jobs.length, 1);
-  assert.deepEqual(jobs[0], { session: 'sess', chat: 'chat1', id: 12, cwd: 'realms', newSession: false, hello: false, forget: false, stop: false, context: false, card: false, agent: '', model: '', effort: '', cmd: '', name: 'My chat', text: 'hello\x1Fworld', via: 'pixel' });
+  assert.deepEqual(jobs[0], { session: 'sess', chat: 'chat1', id: 12, cwd: 'realms', newSession: false, hello: false, forget: false, stop: false, context: false, card: false, agent: '', model: '', effort: '', cmd: '', slot: -1, pollTail: 60, name: 'My chat', text: 'hello\x1Fworld', via: 'pixel' });
   // A chat that picked its own agent says so in the flags.
   const codex = P.jobsFromStrip(13, ['sess', 'chat1', '13', '', 'agent=codex', 'My chat', 'hi'].join('\x1F'))[0];
   assert.equal(codex.agent, 'codex');
@@ -680,4 +736,186 @@ test('a broad folder is refused even when the terminal named it', () => {
     assert.equal(s.argv(), null);
     assert.match(fs.readFileSync(s.cfg.inboxFile, 'utf8'), /broad folder/);
   } finally { fs.rmSync(s.S, { recursive: true, force: true }); }
+});
+
+// ---------------------------------------------------------------------------
+// ---------------------------------------------------------------------------
+// #144: a publish writes the inbox and only the window of reply slots the addon
+// can still load (the ones after the slot it last reported on the strip, moved
+// forward by the polls it makes while a reply is pending), not all 200. These
+// run the bridge's own writer.
+// ---------------------------------------------------------------------------
+const SLOTS = 200, SLOT_WINDOW_SIZE = 16;
+const WINDOW = SLOT_WINDOW_SIZE; // the default `slotWindow`
+
+function functionSource(src, name) {
+  const start = src.indexOf('function ' + name + '(');
+  if (start < 0) throw new Error('missing function ' + name);
+  let depth = 0;
+  for (let i = src.indexOf('{', start); i < src.length; i++) {
+    if (src[i] === '{') depth++;
+    else if (src[i] === '}') {
+      depth--;
+      if (depth === 0) return src.slice(start, i + 1);
+    }
+  }
+  throw new Error('unclosed function ' + name);
+}
+
+// The real noteAddonSlot/addonSlotNow/writeSlots from bridge.js, with the file
+// write, the clock, the running jobs and the publish they trigger under test
+// control.
+function loadWriters() {
+  const src = fs.readFileSync(path.join(__dirname, '..', 'bridge', 'bridge.js'), 'utf8');
+  const w = { writes: [], publishes: 0, now: 1e9, onWrite: file => w.writes.push(file) };
+  const sandbox = {
+    P, path, pad3: P.pad3, Number,
+    Date: { now: () => w.now },
+    cfg: { addonDir: '/addons' },
+    SLOTS, SLOT_WINDOW: WINDOW,
+    running: new Map(), owned: new Set(),
+    addonSlot: 0, addonSlotAt: 0, addonPollTail: 60,
+    atomicWrite: file => { w.onWrite(String(file)); },
+    publishNow: () => { w.publishes++; sandbox.writeSlots('after a reset'); },
+  };
+  const code = ['noteAddonSlot', 'addonSlotNow', 'writeSlots'].map(name => functionSource(src, name)).join('\n');
+  vm.createContext(sandbox);
+  vm.runInContext(code + '\nthis.noteAddonSlot = noteAddonSlot; this.addonSlotNow = addonSlotNow; this.writeSlots = writeSlots;', sandbox);
+  w.noteAddonSlot = sandbox.noteAddonSlot;
+  w.addonSlotNow = sandbox.addonSlotNow;
+  w.writeSlots = sandbox.writeSlots;
+  w.running = sandbox.running;
+  w.owned = sandbox.owned;
+  w.slotOf = file => Number(/Runback_S(\d{3})/.exec(file)[1]);
+  w.slotsWritten = () => w.writes.map(w.slotOf); // in write order
+  w.reset = () => { w.writes.length = 0; w.publishes = 0; };
+  w.content = 'body';
+  return w;
+}
+
+test('a publish writes all slots until the addon reports one, then the 16 after it', () => {
+  const w = loadWriters();
+  w.writeSlots('body');
+  assert.equal(w.writes.length, SLOTS, 'no report yet (an older addon, or none loaded): every slot');
+  w.reset();
+  w.noteAddonSlot(17);
+  w.writeSlots('body');
+  assert.deepEqual(w.slotsWritten(), Array.from({ length: WINDOW }, (_, i) => 18 + i));
+  w.reset(); // the pool wraps at 200
+  w.noteAddonSlot(195);
+  w.writeSlots('body');
+  assert.deepEqual(w.slotsWritten(), [196, 197, 198, 199, 200, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]);
+});
+
+test('the window follows the addon polls while a reply is pending, and stops when nothing runs', () => {
+  const w = loadWriters();
+  w.now = 1e9;
+  w.noteAddonSlot(10, 60);
+  w.writeSlots('body');
+  assert.deepEqual(w.slotsWritten().slice(0, 2), [11, 12], 'idle: right after the slot it reported');
+  w.running.set('chat', {}); // an agent starts; the addon polls one slot a minute
+  w.now += (300 + 5 * 60) * 1000; // 5 minutes inside the dense schedule, plus 5 minutes of its tail
+  assert.equal(w.addonSlotNow(), 10 + 5);
+  w.reset();
+  w.writeSlots('body');
+  assert.deepEqual(w.slotsWritten().slice(0, 2), [16, 17]);
+  w.running.clear(); // the run is over: the addon stops spending slots
+  w.now += 3600 * 1000;
+  assert.equal(w.addonSlotNow(), 10, 'an hour idle never moves the window forward');
+});
+
+test('a 30-minute run at either poll cadence reads its reply on the poll after the final publish', () => {
+  for (const tail of [60, 120]) {
+    const w = loadWriters();
+    const files = new Map();
+    w.onWrite = file => files.set(w.slotOf(file), w.content);
+    const publish = content => { w.content = content; w.reset(); w.writeSlots(content); };
+    // Login: nothing reported yet, so every slot is written; the addon reads slot 1.
+    publish('hello');
+    const loaded = [];
+    const load = () => { const n = loaded.length + 1; loaded.push(n); return files.get(n); };
+    assert.equal(load(), 'hello');
+    // Its message says which slot it read and how often it polls from now on.
+    w.noteAddonSlot(1, tail);
+    w.running.set('chat', {}); // an agent runs: the addon polls while it waits
+    const schedule = tail === 60
+      ? [5, 10, 16, 24, 34, 46, 60, 80, 100, 130, 160, 200, 240, 300]
+      : [5, 15, 30, 60, 120, 180, 300];
+    const start = w.now = 1e9;
+    for (let t = 1; t <= 30 * 60; t++) {
+      w.now = start + t * 1000;
+      if (schedule.includes(t) || (t > 300 && (t - 300) % tail === 0)) load(); // a scheduled poll
+      if (t % 3 === 0) publish('working'); // progress, as during a real run
+    }
+    publish('the reply'); // the run ends
+    w.running.clear();
+    w.now += tail * 1000;
+    assert.equal(load(), 'the reply', `tail ${tail}: the reply is read on the next poll, not lost`);
+    assert.ok(loaded.length <= SLOTS, `${loaded.length} slots is inside the pool`);
+  }
+});
+
+test('a module job (council) moves the window too: it is in owned, not running', () => {
+  const w = loadWriters();
+  const files = new Map();
+  w.onWrite = file => files.set(w.slotOf(file), w.content);
+  w.content = 'hello';
+  w.writeSlots('hello');
+  const loaded = [];
+  const load = () => { const n = loaded.length + 1; loaded.push(n); return files.get(n); };
+  assert.equal(load(), 'hello'); // slot 1
+  w.noteAddonSlot(1, 60);
+  w.owned.add('sess#7'); // the council module owns the job; the bridge's `running` stays empty
+  const start = w.now = 1e9;
+  const schedule = [5, 10, 16, 24, 34, 46, 60, 80, 100, 130, 160, 200, 240, 300, 360, 420, 480];
+  for (let t = 1; t <= 480; t++) {
+    w.now = start + t * 1000;
+    if (schedule.includes(t)) load(); // the addon polls while it waits
+    if (t % 3 === 0) { w.content = 'working'; w.reset(); w.writeSlots('working'); }
+  }
+  assert.equal(w.addonSlotNow(), 1 + 3, 'an eight-minute council run moves the window');
+  w.content = 'the reply';
+  w.reset();
+  w.writeSlots('the reply'); // the module finishes and the reply is published
+  w.owned.clear();
+  w.now += 60 * 1000;
+  assert.equal(load(), 'the reply', 'the poll after that publish reads the reply');
+});
+
+test('an old addon without the slot field still gets replies from any slot', () => {
+  const w = loadWriters();
+  w.writeSlots('reply'); // no noteAddonSlot call: an addon before #144 never reports
+  assert.equal(w.writes.length, SLOTS);
+  assert.deepEqual(w.slotsWritten(), Array.from({ length: SLOTS }, (_, i) => i + 1));
+  assert.ok(w.writes.some(f => /Runback_S137[\\/]Inbox\.lua$/.test(f)));
+});
+
+test('a new slot pool (/reload) writes every slot again before the addon polls', () => {
+  const w = loadWriters();
+  w.noteAddonSlot(150);
+  assert.equal(w.publishes, 0, 'a higher number is not a reset');
+  w.noteAddonSlot(1); // the pool restarted: slot 1 is the first the addon loads again
+  assert.equal(w.publishes, 1, 'the bridge says everything again at once');
+  assert.equal(w.writes.length, SLOTS);
+  w.reset();
+  w.noteAddonSlot(0); // a session that has not loaded a slot yet
+  w.writeSlots('body');
+  assert.equal(w.writes.length, SLOTS, 'no slot reported: every slot');
+});
+
+test('an hour of work stays under the 30,300-write budget', () => {
+  // The measured baseline (issue #144): 272,839 writes per hour, i.e. one full
+  // publish of 200 slots every 2.64 s. Same cadence, now a window of 16.
+  const publishes = Math.round(272839 / SLOTS);
+  const w = loadWriters();
+  w.noteAddonSlot(1);
+  let slot = 1;
+  for (let i = 0; i < publishes; i++) {
+    w.writeSlots('body'); // one progress publish
+    w.writes.push('/addons/Runback/Inbox.lua'); // and the inbox it always writes
+    if (i % 60 === 0) { slot += 1; w.noteAddonSlot(slot); } // the addon keeps its own count
+  }
+  const perHour = w.writes.length;
+  console.log(`slot and inbox writes per hour of work: ${perHour} (window ${WINDOW} of ${SLOTS}, ${publishes} publishes)`);
+  assert.ok(perHour <= 30300, `${perHour} > 30300`);
 });
