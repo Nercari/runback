@@ -1,6 +1,8 @@
 #!/usr/bin/env node
 'use strict';
 
+const path = require('node:path');
+const fs = require('node:fs');
 const { spawnSync } = require('node:child_process');
 
 const LOGIN_PROBES = [
@@ -65,6 +67,27 @@ function waylandWarning(env) {
   return '';
 }
 
+// Which client folder setup found, and the TOC number inside the addon there.
+function clientCheck(client) {
+  if (!client || !client.dir) {
+    return {
+      name: 'client',
+      status: 'FAIL',
+      detail: 'no WoW client folder was found.',
+      fix: 'Run node setup.js, or pass --wow "<client folder>" to it.',
+    };
+  }
+  if (!client.interface) {
+    return {
+      name: 'client',
+      status: 'FAIL',
+      detail: `the Runback addon is not installed under ${client.dir}.`,
+      fix: 'Run node setup.js to install it.',
+    };
+  }
+  return { name: 'client', status: 'PASS', detail: `${client.dir} (Interface ${client.interface})` };
+}
+
 function formatCheck(check) {
   if (check.status === 'PASS') return `PASS ${check.name}: ${check.detail}`;
   return `FAIL ${check.name}: ${check.detail} ${check.fix}`;
@@ -76,6 +99,7 @@ function run(opts) {
     nodeCheck(opts.nodeVersion),
     loginCheck(opts.probe),
     x11Check(env, opts.platform),
+    clientCheck(opts.client),
   ];
   const warning = waylandWarning(env);
   const lines = checks.map(formatCheck);
@@ -103,17 +127,46 @@ function realProbe(env) {
   });
 }
 
+function tocNumber(clientDir) {
+  try {
+    const text = fs.readFileSync(path.join(clientDir, 'Interface', 'AddOns', 'Runback', 'Runback.toc'), 'utf8');
+    const m = /^## Interface:\s*(\d+)/m.exec(text);
+    return m ? m[1] : '';
+  } catch {
+    return '';
+  }
+}
+
+// The configured client folder wins; a fresh machine with no config gets the
+// same folder search setup.js does, so both name the same folder.
+function findClientInfo(configFile = path.join(__dirname, '..', 'bridge', 'config.json')) {
+  let dir = '';
+  try {
+    const cfg = JSON.parse(fs.readFileSync(configFile, 'utf8'));
+    if (cfg.addonDir) dir = path.resolve(cfg.addonDir, '..', '..');
+  } catch {}
+  if (!dir || !fs.existsSync(dir)) {
+    try {
+      dir = require('../setup').findClient();
+    } catch {
+      return null;
+    }
+  }
+  return { dir, interface: tocNumber(dir) };
+}
+
 function main() {
   const out = run({
     nodeVersion: process.versions.node,
     platform: process.platform,
     env: process.env,
     probe: () => realProbe(process.env),
+    client: findClientInfo(),
   });
   process.stdout.write(out.text);
   process.exit(out.code);
 }
 
-module.exports = { run };
+module.exports = { run, findClientInfo, tocNumber };
 
 if (require.main === module) main();

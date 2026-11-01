@@ -14,7 +14,7 @@ The addon is the same; only the bridge's screen capture differs. On Linux the br
 git clone https://github.com/Nercari/runback
 cd runback
 npm ci                      # only needed to run the tests
-node setup.js --wow "$HOME/.wine/drive_c/Program Files (x86)/World of Warcraft/_classic_beta_" --project ~/path/to/the/project
+node setup.js --wow "$HOME/.wine/drive_c/Program Files (x86)/World of Warcraft/_forever_" --project ~/path/to/the/project
 ```
 
 Without `--wow`, `setup.js` looks in `$WINEPREFIX`, `~/.wine` and `~/Games/battlenet`. Then fully restart the game, enable *Runback* on the AddOns screen, and start the bridge with `npm start`.

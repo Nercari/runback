@@ -139,14 +139,15 @@ test('the game context describes the character and rides on the hello, then only
   vm.run('STUB.RunTimers()');
   const hello = stripRecords(vm)[0];
   assert.deepEqual(hello.ctx.split('\n'), [
-    'Game: World of Warcraft: Forever (client 1.60.1.69913, interface 16001)',
+    'Game: World of Warcraft: Forever (client 1.60.1.70532, interface 16001)',
     'Character: Testchar on Test Realm, level 23 Night Elf Hunter (Alliance), guild <Test Guild>',
     'Location: Duskwood - Darkshire',
     'Position: 45.2, 67.8 (map 1431)',
     'Money: 1g 23s 45c; XP: 1234/5000',
-    'Talents: Beast Mastery 10 / Marksmanship 5 / Survival 0',
     'Professions: Skinning 75/75, First Aid 40/75',
   ]);
+  // Talents: the client has no Classic talent tabs; #134 restores the line
+  // through C_ClassTalents and C_Traits (see the skipped test below).
   // The bridge answers the hello: the context is now known to be on its side.
   nextSlot(vm, '{ now = time(), cwd = "", replies = {} }');
   vm.run('STUB.now = STUB.now + 6; STUB.Tick()');
@@ -176,6 +177,16 @@ test('the game context describes the character and rides on the hello, then only
   const on = stripRecords(vm).filter(r => r.flags === 'h;c');
   assert.ok(on.some(r => r.ctx.includes('Character: Testchar')));
   assert.ok(vm.evaluate('RunbackDB.chats[2].history[#RunbackDB.chats[2].history].text').includes('Game context is ON'));
+});
+
+// The stub no longer fakes the Classic talent tabs, so the addon has no
+// Talents line on Forever. #134 reads the build through C_ClassTalents and
+// C_Traits and restores it; remove the skip there.
+test('the game context has a Talents line on Forever', { skip: '#134: talents move to C_ClassTalents and C_Traits' }, () => {
+  const vm = newVM();
+  login(vm);
+  vm.run('STUB.RunTimers()');
+  assert.match(stripRecords(vm)[0].ctx, /^Talents: /m);
 });
 
 test('a shift-clicked link lands in the focused input and is sent as its name plus tooltip', () => {
@@ -402,7 +413,7 @@ test('while the agent works: one timer (the status line) and an action count tha
   assert.ok(!later.includes('no activity seen yet'), 'no "no activity seen yet" next to a listed action count');
 });
 
-test('a denied reply shows Allow, and Allow resends with the rules as flags', () => {
+test('a denied reply offers How to allow, and the click explains the PC step and sends nothing', () => {
   const vm = newVM();
   login(vm);
   connect(vm);
@@ -412,11 +423,14 @@ test('a denied reply shows Allow, and Allow resends with the rules as flags', ()
   nextSlot(vm, `{ now = time(), cwd = "", replies = { { chat = "${chatId}", id = ${id}, status = "done", text = "need permission", denied = { "WebSearch", "Bash(cargo:*)" } } } }`);
   vm.run('STUB.now = STUB.now + 6; STUB.Tick()');
   assert.equal(vm.evaluate('RunbackDB.chats[1].history[#RunbackDB.chats[1].history].denied[2]'), 'Bash(cargo:*)');
+  const before = vm.num('RunbackDB.lastSeq');
   vm.run(`Runback.Allow("${chatId}", { "WebSearch", "Bash(cargo:*)" })`);
-  const rec = stripRecords(vm).find(r => r.flags.includes('allow='));
-  assert.ok(rec, 'allow record on the strip');
-  assert.equal(rec.flags, 'allow=WebSearch,Bash(cargo:*)');
-  assert.equal(rec.id, id + 1);
+  // Decision 5 (issue 137): no permission rule leaves the game, and no message is sent.
+  assert.ok(stripRecords(vm).every(r => !r.flags.includes('allow=')), 'no allow record on the strip');
+  assert.equal(vm.num('RunbackDB.lastSeq'), before, 'nothing sent');
+  const last = vm.evaluate('RunbackDB.chats[1].history[#RunbackDB.chats[1].history].text');
+  assert.match(last, /bridge\/config\.json/);
+  assert.match(last, /agents\.<agent>\.allowedTools/);
 });
 
 test('the Allow button names tools plainly, connector tools included (backlog 81)', () => {
@@ -430,8 +444,8 @@ test('the Allow button names tools plainly, connector tools included (backlog 81
   nextSlot(vm, `{ now = time(), cwd = "", replies = { { chat = "${chatId}", id = ${id}, status = "done", text = "need permission", denied = ${denied} } } }`);
   vm.run('STUB.texts = {}; STUB.now = STUB.now + 6; STUB.Tick(); Runback.Render()');
   const texts = vm.evaluate('table.concat(STUB.texts, "|")').split('|');
-  assert.ok(texts.includes('Allow PowerShell, node, Google Drive (create file), playwright (browser click), Read & retry'),
-    texts.filter(t => t.startsWith('Allow')).join(' / ') || 'no Allow label');
+  assert.ok(texts.includes('How to allow: PowerShell, node, Google Drive (create file), playwright (browser click), Read'),
+    texts.filter(t => t.startsWith('How to allow')).join(' / ') || 'no allow label');
 });
 
 test('the window opens at the top centre on a fresh install and where it was left afterwards', () => {
@@ -1327,4 +1341,38 @@ test('a bridge reply carries its follow-up questions into the history: strings o
   assert.equal(vm.evaluate('table.concat(RunbackDB.chats[1].history[#RunbackDB.chats[1].history].followUps, "|")'), 'a?|b?');
   deliver('');
   assert.equal(vm.evaluate('RunbackDB.chats[1].history[#RunbackDB.chats[1].history].followUps'), null, 'no tag, none stored');
+});
+
+// The stub client itself: it stands in for the Forever client at build 70532,
+// not for the Classic client (the moonshot audit of #132).
+test('the stub reports the Forever client build', () => {
+  const vm = newVM();
+  assert.equal(vm.evaluate('select(1, GetBuildInfo()) .. "/" .. select(2, GetBuildInfo()) .. "/" .. select(4, GetBuildInfo())'), '1.60.1/70532/16001');
+});
+
+test('the stub has no Classic talent or skill globals', () => {
+  const vm = newVM();
+  for (const name of ['GetNumTalentTabs', 'GetTalentTabInfo', 'GetNumSkillLines', 'GetSkillLineInfo']) {
+    assert.equal(vm.evaluate(`type(${name})`), 'nil', `${name} is gone in build 70532`);
+  }
+});
+
+test('the stub has the Forever talent and skill namespaces', () => {
+  const vm = newVM();
+  assert.equal(vm.evaluate('type(C_ClassTalents) .. "/" .. type(C_ClassTalents.GetActiveConfigID)'), 'table/function');
+  assert.equal(vm.evaluate('type(C_Traits) .. "/" .. type(C_Traits.GetNodeInfo)'), 'table/function');
+  assert.equal(vm.evaluate('C_SkillInfo.GetNumSkillLines()'), '8');
+  assert.equal(vm.evaluate('C_SkillInfo.GetSkillLineInfo(4).name .. " " .. C_SkillInfo.GetSkillLineInfo(4).rank'), 'Skinning 75');
+});
+
+test('UnitHealth returns a plain number or a secret-like value', () => {
+  const vm = newVM();
+  assert.equal(vm.evaluate('UnitHealth("player")'), null, 'no health until a test sets one');
+  vm.run('STUB.health = 1000; STUB.healthMax = 1000');
+  assert.equal(vm.evaluate('UnitHealth("player")'), '1000');
+  vm.run('STUB.health = STUB.Secret()');
+  assert.equal(vm.evaluate('issecretvalue(UnitHealth("player"))'), 'true');
+  assert.equal(vm.evaluate('pcall(function() return UnitHealth("player") * 100 end)'), 'false', 'arithmetic on a secret raises');
+  assert.equal(vm.evaluate('pcall(function() return tostring(UnitHealth("player")) end)'), 'false');
+  assert.equal(vm.evaluate('issecretvalue(999)'), 'false');
 });

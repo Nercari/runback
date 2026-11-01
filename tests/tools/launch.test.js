@@ -1,5 +1,6 @@
 "use strict";
 const test = require("node:test");
+const { after } = require("node:test");
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const os = require("node:os");
@@ -14,7 +15,16 @@ function tmp(t) {
   return dir;
 }
 
-const GIT_ENV = { ...process.env, GIT_AUTHOR_NAME: "t", GIT_AUTHOR_EMAIL: "t@t", GIT_COMMITTER_NAME: "t", GIT_COMMITTER_EMAIL: "t@t" };
+// A global core.hooksPath replaces .git/hooks, so the hooks these tests plant
+// would never run and three cases would pass for the wrong reason. Pin git,
+// for the direct calls here and for update()'s own env, to an empty global
+// config (the audit of #132).
+const GIT_CONFIG = path.join(fs.mkdtempSync(path.join(os.tmpdir(), "runback-git-config-")), "gitconfig");
+fs.writeFileSync(GIT_CONFIG, "");
+process.env.GIT_CONFIG_GLOBAL = GIT_CONFIG;
+after(() => fs.rmSync(path.dirname(GIT_CONFIG), { recursive: true, force: true }));
+
+const GIT_ENV = { ...process.env, GIT_CONFIG_GLOBAL: GIT_CONFIG, GIT_AUTHOR_NAME: "t", GIT_AUTHOR_EMAIL: "t@t", GIT_COMMITTER_NAME: "t", GIT_COMMITTER_EMAIL: "t@t" };
 function git(cwd, ...args) {
   const r = spawnSync("git", args, { cwd, encoding: "utf8", env: GIT_ENV });
   assert.equal(r.status, 0, `git ${args.join(" ")}: ${r.stderr}`);

@@ -3,6 +3,7 @@
   "savedVariablesFile": "C:\\Program Files (x86)\\World of Warcraft\\_classic_beta_\\WTF\\Account\\YOUR_ACCOUNT\\SavedVariables\\Runback.lua",
   "inboxFile": "C:\\Program Files (x86)\\World of Warcraft\\_classic_beta_\\Interface\\AddOns\\Runback\\Inbox.lua",
   "defaultCwd": "",
+  "allowedFolders": [],
   "tocInterface": "16001",
   "slots": 200,
   "actMax": 60,
@@ -35,6 +36,7 @@
     "claude": {
       "path": "",
       "model": "",
+      "coachModel": "",
       "models": ["opus", "sonnet", "haiku"],
       "permissionMode": "acceptEdits",
       "allowedTools": [
@@ -56,6 +58,7 @@
     "codex": {
       "path": "",
       "model": "",
+      "coachModel": "",
       "models": [],
       "permissionMode": "acceptEdits",
       "networkAccess": false,
@@ -64,6 +67,7 @@
     "agy": {
       "path": "",
       "model": "",
+      "coachModel": "",
       "models": [],
       "permissionMode": "acceptEdits",
       "extraArgs": []
@@ -71,6 +75,7 @@
     "hermes": {
       "path": "",
       "model": "",
+      "coachModel": "",
       "models": [],
       "permissionMode": "acceptEdits",
       "extraArgs": []
@@ -78,6 +83,7 @@
     "grok": {
       "path": "",
       "model": "",
+      "coachModel": "",
       "models": [],
       "permissionMode": "acceptEdits",
       "allowedTools": [
