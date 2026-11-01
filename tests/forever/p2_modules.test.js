@@ -59,17 +59,19 @@ test('a translate job in the mentor folder keeps no allow rules', () => {
     ['--tools', '', '--permission-mode', 'dontAsk']);
 });
 
-test('a mentor job on Hermes is refused until the bridge has a tool limit for it', () => {
+test('a mentor job on Hermes or OpenCode is refused until the bridge has a tool limit for it', () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'mentor-refusal-'));
   const root = path.join(dir, 'wow-mentor');
   fs.mkdirSync(root, { recursive: true });
   fs.mkdirSync(path.join(root, 'journal'), { recursive: true });
   try {
-    // Hermes gets only --in from the guard, so game text could reach its tools.
+    // Neither gets a tool limit from the guard, so game text could reach its tools.
     assert.match(mentor.refusal('hermes', root, root), /no tool limit/);
     assert.match(mentor.refusal('hermes', path.join(root, 'journal'), root), /no tool limit/);
+    assert.match(mentor.refusal('opencode', root, root), /^OpenCode has no tool limit/);
+    assert.match(mentor.refusal('opencode', path.join(root, 'journal'), root), /no tool limit/);
     // Outside the mentor folder, or on an agent the guard limits, nothing is refused.
-    assert.equal(mentor.refusal('hermes', path.join(dir, 'elsewhere'), root), '');
+    for (const id of ['hermes', 'opencode']) assert.equal(mentor.refusal(id, path.join(dir, 'elsewhere'), root), '', id);
     for (const id of ['claude', 'codex', 'grok', 'agy']) assert.equal(mentor.refusal(id, root, root), '', id);
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 });

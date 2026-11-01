@@ -687,8 +687,8 @@ test('the AI picker switches between the agents installed on the PC and their mo
   const vm = newVM();
   login(vm);
   vm.run('STUB.RunTimers()');
-  // This bridge PC has Claude (three models) and Hermes (no model list); Codex is not installed.
-  const slot = replies => `{ now = time(), cwd = "", agent = "claude", agents = { "claude", "hermes" }, models = { claude = { "opus", "sonnet", "haiku" }, hermes = { } }, replies = { ${replies || ''} } }`;
+  // This bridge PC has Claude (three models), Hermes and OpenCode (no model list); Codex is not installed.
+  const slot = replies => `{ now = time(), cwd = "", agent = "claude", agents = { "claude", "hermes", "opencode" }, models = { claude = { "opus", "sonnet", "haiku" }, hermes = { }, opencode = { } }, replies = { ${replies || ''} } }`;
   nextSlot(vm, slot());
   vm.run('STUB.now = STUB.now + 6; STUB.Tick()');
   assert.equal(vm.evaluate('Runback.IsConnected()'), 'true');
@@ -698,9 +698,10 @@ test('the AI picker switches between the agents installed on the PC and their mo
   assert.equal(vm.evaluate('RunbackPoolPicker.shown'), 'true');
   const labels = () => vm.evaluate('(function() local t = {} for _, r in ipairs(RunbackPoolPicker.rows) do if r.shown then t[#t + 1] = r.label.text end end return table.concat(t, "\\n") end)()');
   const rows = labels().split('\n');
-  assert.equal(rows.length, 6);
+  assert.equal(rows.length, 7);
   assert.match(rows[0], /> Bridge default \(Claude\)/, 'the current choice is marked');
   assert.ok(rows.some(r => r.includes('Claude · sonnet')));
+  assert.ok(rows.some(r => r.includes('OpenCode')), 'an agent added to the bridge shows under its own name');
   assert.ok(!labels().includes('Codex'), 'agents the PC does not have are not offered');
   // Pick Claude · sonnet: the strip and the reload outbox carry agent and model.
   vm.run(`for _, r in ipairs(RunbackPoolPicker.rows) do if r.shown and r.model == "sonnet" then r.scripts.OnClick(r) end end`);

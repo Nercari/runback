@@ -6,6 +6,7 @@
 //   claude  Claude Code   `claude -p --output-format stream-json`, prompt on stdin
 //   codex   OpenAI Codex  `codex exec --json`, prompt on stdin
 //   grok    xAI Grok      `grok --prompt-file … --output-format streaming-json`
+//   opencode OpenCode     `opencode run --format json`, prompt on stdin
 //
 // Everything is pure (no I/O) except resolveCommand, which looks for the
 // executable on disk. Adding an agent: an entry in AGENTS (args, input, parser,
@@ -323,6 +324,87 @@ function agyParser() {
   };
 }
 
+// ---------------------------------------------------------------------------
+// OpenCode
+// ---------------------------------------------------------------------------
+
+// OpenCode 2.2.5 `run --format json` prints one JSON event per line: `step_start`,
+// `tool_use` (`part.tool` plus `part.state.input`), `text` (one whole text part),
+// `step_finish` with `reason` `stop` or `tool-calls`, and `error` (which exits 0,
+// so its event, not the exit code, is the failure). A run ends at the `stop`
+// step; the text parts of the last message are the reply. Tool names are
+// OpenCode's own: shell, read, write, edit, grep, glob, webfetch, task.
+const OPENCODE_TOOL = {
+  shell: 'Bash', bash: 'Bash', read: 'Read', write: 'Write', edit: 'Edit',
+  grep: 'Grep', glob: 'Glob', webfetch: 'WebFetch', websearch: 'WebSearch', task: 'Agent',
+};
+
+// One progress line for an OpenCode tool_use part, in the shared `$ cmd` /
+// `read file` vocabulary (protocol.describeToolUse).
+function opencodeCall(part) {
+  const input = (part && part.state && part.state.input) || {};
+  const raw = String((part && part.tool) || '').toLowerCase();
+  if (!raw) return '';
+  const name = OPENCODE_TOOL[raw] || raw;
+  const mapped = name === 'Bash' ? { command: input.command || '' }
+    : name === 'Grep' || name === 'Glob' ? { pattern: input.pattern || input.query || '' }
+    : name === 'WebFetch' ? { url: input.url || '' }
+    : name === 'WebSearch' ? { query: input.query || '' }
+    : name === 'Agent' ? { description: input.description || input.prompt || '' }
+    : { file_path: input.path || input.filePath || '' };
+  return describeToolUse({ name, input: mapped });
+}
+
+function opencodeParser() {
+  let text = '';      // text parts of the current message
+  let lastText = '';  // the previous message's text, for a run that ends on a tool call
+  let message = '';   // the message the accumulated text belongs to
+  return {
+    feed(ev) {
+      const out = empty();
+      const part = ev.part && typeof ev.part === 'object' ? ev.part : {};
+      if (ev.sessionID) out.session = ev.sessionID;
+      switch (ev.type) {
+        case 'text': {
+          if (part.messageID && message && part.messageID !== message) { lastText = text; text = ''; }
+          if (part.messageID) message = part.messageID;
+          const chunk = typeof part.text === 'string' ? part.text : '';
+          text += chunk;
+          if (chunk.trim()) out.progress.push(snippet(chunk));
+          break;
+        }
+        case 'tool_use': {
+          const line = opencodeCall(part);
+          if (line) out.progress.push(line);
+          break;
+        }
+        case 'step_finish': {
+          const reason = String(part.reason || '');
+          if (reason === 'tool-calls') break; // another step follows
+          lastText = text || lastText;
+          text = '';
+          message = '';
+          if (reason === 'stop') out.done = { text: lastText, error: false };
+          else {
+            const msg = `OpenCode stopped early: ${reason || 'no reason given'}.`;
+            out.done = { text: lastText || msg, error: true };
+            if (lastText) out.notes.push(msg);
+          }
+          break;
+        }
+        case 'error': {
+          const err = ev.error || {};
+          const msg = typeof err === 'string' ? err : (err.message || '');
+          out.done = { text: String(msg || 'OpenCode reported an error'), error: true };
+          break;
+        }
+        default: break; // step_start and whatever a newer OpenCode adds
+      }
+      return out;
+    },
+  };
+}
+
 function hermesParser() {
   return {
     feed() { return empty(); },
@@ -503,6 +585,32 @@ const AGENTS = {
       return { stdin: text, note };
     },
     env: env => env, parser: hermesParser,
+  },
+  opencode: {
+    name: 'OpenCode', command: 'opencode',
+    install: 'https://opencode.ai (or `npm install -g opencode-ai`), then run `opencode auth login` once',
+    takesEffort: true, // a variant in the model id: provider/model#high (OpenCode 2.2.5)
+    windowsPaths: () => [path.join(os.homedir(), '.opencode', 'bin', 'opencode.exe')],
+    posixPaths: () => [
+      path.join(os.homedir(), '.opencode', 'bin', 'opencode'),
+      path.join(os.homedir(), '.local', 'bin', 'opencode'),
+    ],
+    args({ cfg, resume }) {
+      const a = ['run', '--format', 'json'];
+      const mode = cfg.permissionMode || 'acceptEdits';
+      // Plan mode is OpenCode's own read-only agent: no edit, no command. It is
+      // the floor the bridge asks for in a folder that is not the mentor's.
+      if (mode === 'default') a.push('--agent', 'plan');
+      else if (mode === 'bypassPermissions') a.push('--auto');
+      if (cfg.model) a.push('--model', cfg.effort ? `${cfg.model}#${cfg.effort}` : cfg.model);
+      if (resume) a.push('--session', resume);
+      return a.concat(Array.isArray(cfg.extraArgs) ? cfg.extraArgs : []);
+    },
+    input: ({ prompt, system, systemShort, resume }) => {
+      const ctx = resume ? systemShort : system;
+      return { stdin: (ctx ? ctx + '\n\n' : '') + prompt };
+    },
+    env: env => env, parser: opencodeParser,
   },
 };
 
@@ -713,6 +821,8 @@ module.exports = {
   grokParser,
   agyParser,
   hermesParser,
+  opencodeParser,
+  opencodeCall,
   codexItemLine,
   grokCall,
   grokRefusal,
