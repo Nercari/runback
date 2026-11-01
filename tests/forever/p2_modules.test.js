@@ -55,6 +55,7 @@ test('a mentor job on Hermes is refused until the bridge has a tool limit for it
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'mentor-refusal-'));
   const root = path.join(dir, 'wow-mentor');
   fs.mkdirSync(root, { recursive: true });
+  fs.mkdirSync(path.join(root, 'journal'), { recursive: true });
   try {
     // Hermes gets only --in from the guard, so game text could reach its tools.
     assert.match(mentor.refusal('hermes', root, root), /no tool limit/);
