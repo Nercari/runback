@@ -1189,6 +1189,40 @@ function Runback.SkillLines()
 	return out
 end
 
+-- The talent build, through the Forever namespaces: the Classic talent tabs are
+-- gone in build 70532. C_ClassTalents names the active config, C_Traits lists its
+-- trees and nodes, and the Legacy tree is one node outside the config. Read-only,
+-- and it runs outside combat only.
+local function TalentLine()
+	if type(InCombatLockdown) == "function" and InCombatLockdown() then return nil end
+	local configID = Try(C_ClassTalents and C_ClassTalents.GetActiveConfigID)
+	if type(configID) ~= "number" then return nil end
+	local config = Try(C_Traits and C_Traits.GetConfigInfo, configID)
+	local treeIDs = type(config) == "table" and config.treeIDs
+	if type(treeIDs) ~= "table" then return nil end
+	local parts = {}
+	for _, treeID in ipairs(treeIDs) do
+		local tree = Try(C_Traits.GetTreeInfo, configID, treeID)
+		local nodes = Try(C_Traits.GetTreeNodes, treeID)
+		if type(nodes) == "table" then
+			local points = 0
+			for _, nodeID in ipairs(nodes) do
+				local node = Try(C_Traits.GetNodeInfo, configID, nodeID)
+				local ranks = type(node) == "table" and tonumber(node.ranksPurchased)
+				if ranks then points = points + ranks end
+			end
+			local name = type(tree) == "table" and type(tree.name) == "string" and tree.name or ("Tree " .. tostring(treeID))
+			parts[#parts + 1] = name .. " " .. points
+		end
+	end
+	local legacy = Constants and Constants.LegacyConsts and Constants.LegacyConsts.LEGACY_TREE_ADVENTURE_TALENTED_NODE_ID
+	local legacyNode = type(legacy) == "number" and Try(C_Traits.GetNodeInfo, configID, legacy)
+	local legacyRanks = type(legacyNode) == "table" and tonumber(legacyNode.ranksPurchased)
+	if legacyRanks then parts[#parts + 1] = "Legacy " .. legacyRanks end
+	if #parts == 0 then return nil end
+	return table.concat(parts, " / ")
+end
+
 function Runback.GameContext(kind)
 	local lines = {}
 	local version, build, _, toc = Try(GetBuildInfo)
@@ -1254,18 +1288,8 @@ function Runback.GameContext(kind)
 	end
 	if #progress > 0 then table.insert(lines, table.concat(progress, "; ")) end
 
-	-- Classic-style talent tabs: name, icon, points spent.
-	local tabs = Try(GetNumTalentTabs)
-	if type(tabs) == "number" and tabs > 0 then
-		local parts = {}
-		for i = 1, tabs do
-			local tname, _, points = Try(GetTalentTabInfo, i)
-			if type(tname) == "string" and type(points) == "number" then
-				table.insert(parts, tname .. " " .. points)
-			end
-		end
-		if #parts > 0 then table.insert(lines, "Talents: " .. table.concat(parts, " / ")) end
-	end
+	local talents = TalentLine()
+	if talents then table.insert(lines, "Talents: " .. talents) end
 
 	-- Skill lines under the Professions and Secondary Skills headers.
 	local header, parts = nil, {}

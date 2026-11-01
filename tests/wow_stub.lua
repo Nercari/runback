@@ -11,6 +11,7 @@ STUB = {
 	frames = {}, texts = {}, timers = {}, tickers = {}, prints = {}, bindings = {},
 	now = 1000, epoch = 1700000000, sounds = {}, loaded = {}, reloaded = false,
 	tooltips = {}, zone = "Duskwood", subzone = "Darkshire", level = 23, money = 12345,
+	configID = 1, traitReads = 0,
 }
 
 local function noop() end
@@ -280,14 +281,37 @@ C_SkillInfo = {
 }
 -- Forever reads talents through these; the Classic talent tabs are gone in
 -- build 70532. #134 fills the config and Legacy rows.
+local TRAIT_TREES = { [11] = "Beast Mastery", [12] = "Marksmanship" }
+local TRAIT_TREE_IDS = { 11, 12 }
+local LEGACY_NODE = 900
+-- Shapes follow the retail C_Traits API; the in-game read is still to be checked.
+local TRAIT_NODES = {
+	{ id = 101, tree = 11, name = "Improved Aspect of the Hawk", ranksPurchased = 5, maxRanks = 5 },
+	{ id = 102, tree = 11, name = "Thick Hide", ranksPurchased = 3, maxRanks = 3 },
+	{ id = 103, tree = 12, name = "Lethal Shots", ranksPurchased = 2, maxRanks = 2 },
+	{ id = LEGACY_NODE, tree = 0, name = "Legacy", ranksPurchased = 24, maxRanks = 51 },
+}
+Constants = { LegacyConsts = { LEGACY_TREE_ADVENTURE_TALENTED_NODE_ID = LEGACY_NODE } }
 C_ClassTalents = {
-	GetActiveConfigID = function() end,
+	GetActiveConfigID = function() STUB.traitReads = STUB.traitReads + 1; return STUB.configID end,
 }
 C_Traits = {
-	GetConfigInfo = function(configID) end,
-	GetTreeInfo = function(configID, treeID) end,
-	GetTreeNodes = function(treeID) return {} end,
-	GetNodeInfo = function(configID, nodeID) end,
+	GetConfigInfo = function(configID)
+		if type(configID) ~= "number" or configID ~= STUB.configID then return nil end
+		return { ID = configID, name = "Leveling", treeIDs = TRAIT_TREE_IDS }
+	end,
+	GetTreeInfo = function(configID, treeID) return { treeID = treeID, name = TRAIT_TREES[treeID] } end,
+	GetTreeNodes = function(treeID)
+		local out = {}
+		for _, node in ipairs(TRAIT_NODES) do if node.tree == treeID then out[#out + 1] = node.id end end
+		return out
+	end,
+	GetNodeInfo = function(configID, nodeID)
+		STUB.traitReads = STUB.traitReads + 1
+		for _, node in ipairs(TRAIT_NODES) do
+			if node.id == nodeID then return { ID = node.id, name = node.name, ranksPurchased = node.ranksPurchased, maxRanks = node.maxRanks } end
+		end
+	end,
 	GetDefinitionInfo = function(definitionID) end,
 }
 ITEM_QUALITY2_DESC = "Uncommon"
