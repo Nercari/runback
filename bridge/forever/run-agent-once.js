@@ -18,6 +18,9 @@ function runAgentOnce({ agentId, cwd, prompt, timeoutMs }, deps) {
       ? `${cwd} is a broad folder, so an agent there could read unrelated files. Pick a narrower one with /runback cd.`
       : `${cwd} is outside the folders this bridge allows. Add it to allowedFolders in bridge/config.json on the PC, or use /runback cd for a folder inside one of them.` });
   }
+  // A mentor job on Hermes is refused: the guard has no tool limit for it there.
+  const refusal = require('./modules/05-mentor-guard').refusal(agentId, cwd, deps.mentorDir || (cfg.forever && cfg.forever.mentorDir));
+  if (refusal) return Promise.resolve({ status: 'error', text: refusal });
   let acfg = A.agentConfig(cfg, agentId);
   if (!deps.mentorDir || !P.folderInside(cwd, deps.mentorDir)) {
     if (agent.readOnly === false) {

@@ -51,6 +51,29 @@ test('command prefix and mentor argument rewrites', () => {
   assert.deepEqual(mentor.rewrite('hermes', ['--yolo'], '/mentor', '/repo'), ['--in', '/mentor']);
 });
 
+test('a translate job in the mentor folder keeps no allow rules', () => {
+  // The guard's mentor allowlist must not add tools back to a job that runs with --tools "".
+  assert.deepEqual(mentor.rewrite('claude', ['--tools', '', '--allowedTools', 'Bash(*)'], '/mentor', '/repo', true),
+    ['--tools', '', '--permission-mode', 'acceptEdits']);
+  assert.deepEqual(mentor.rewrite('grok', ['--tools', '', '--allow', 'Bash(*)'], '/mentor', '/repo', true),
+    ['--tools', '', '--permission-mode', 'dontAsk']);
+});
+
+test('a mentor job on Hermes is refused until the bridge has a tool limit for it', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'mentor-refusal-'));
+  const root = path.join(dir, 'wow-mentor');
+  fs.mkdirSync(root, { recursive: true });
+  fs.mkdirSync(path.join(root, 'journal'), { recursive: true });
+  try {
+    // Hermes gets only --in from the guard, so game text could reach its tools.
+    assert.match(mentor.refusal('hermes', root, root), /no tool limit/);
+    assert.match(mentor.refusal('hermes', path.join(root, 'journal'), root), /no tool limit/);
+    // Outside the mentor folder, or on an agent the guard limits, nothing is refused.
+    assert.equal(mentor.refusal('hermes', path.join(dir, 'elsewhere'), root), '');
+    for (const id of ['claude', 'codex', 'grok', 'agy']) assert.equal(mentor.refusal(id, root, root), '', id);
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
 test('audit appends prompt fields and prunes old dated files', () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'p2-audit-'));
   const ctx = { HERE: dir, log() {} };

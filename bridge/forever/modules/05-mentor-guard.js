@@ -16,7 +16,9 @@ function setOption(args, names, values) {
 }
 // Flags that lift the sandbox or approvals; a mentor chat never keeps them.
 const BYPASS = /^(--dangerously-skip-permissions|--dangerously-bypass-approvals-and-sandbox|--always-approve|--full-auto|-y|--yolo)(=.*)?$/;
-function rewrite(agent, args, cwd, repo) {
+// noTools: a translate job already runs with --tools "", so the mentor allowlist
+// must not add rules back (other players' text must never reach a tool).
+function rewrite(agent, args, cwd, repo, noTools) {
   args = args.filter(arg => !BYPASS.test(String(arg)));
   if (agent === 'claude') {
     setOption(args, ['--permission-mode'], ['--permission-mode', 'acceptEdits']);
@@ -26,7 +28,7 @@ function rewrite(agent, args, cwd, repo) {
         while (i < args.length && !args[i].startsWith('-')) args.splice(i, 1);
       } else i++;
     }
-    args.push('--allowedTools', 'Read', 'Grep', 'Glob', 'Edit', 'Write', 'WebFetch', 'WebSearch', `Bash(node ${path.join(repo, 'tools', 'slice-fight.js')}:*)`,
+    if (!noTools) args.push('--allowedTools', 'Read', 'Grep', 'Glob', 'Edit', 'Write', 'WebFetch', 'WebSearch', `Bash(node ${path.join(repo, 'tools', 'slice-fight.js')}:*)`,
       `Bash(node ${path.join(repo, 'tools', 'check-citations.js')}:*)`,
       `Bash(node ${path.join(repo, 'tools', 'theorycraft.js')}:*)`,
       `Bash(node ${path.join(repo, 'tools', 'practice-compare.js')}:*)`,
@@ -45,7 +47,7 @@ function rewrite(agent, args, cwd, repo) {
     setOption(args, ['--permission-mode'], ['--permission-mode', 'dontAsk']);
     // ponytail: no Bash rule, so grok mentor chats can't run the slicer; add one if grok becomes a reviewer.
     for (let i = args.length - 2; i >= 0; i--) if (args[i] === '--allow') args.splice(i, 2);
-    for (const rule of ['Read', 'Grep', 'Edit']) args.push('--allow', rule);
+    if (!noTools) for (const rule of ['Read', 'Grep', 'Edit']) args.push('--allow', rule);
   } else if (agent === 'hermes') {
     setOption(args, ['--in'], ['--in', cwd]);
   }
@@ -69,14 +71,23 @@ function syncPrompt(templateDir, workspace) {
     return true;
   } catch { return false; }
 }
+// Hermes has no tool limit the bridge can set in the mentor folder, so a mentor
+// job on it is refused until it has one: other players' chat and game text would
+// reach its tools. Returns the line to show the player, or ''.
+function refusal(agentId, cwd, mentorDir) {
+  if (agentId !== 'hermes' || !mentorDir) return '';
+  if (!inside(String(cwd || ''), mentorDir)) return '';
+  return 'Hermes has no tool limit in the mentor folder, so Runback will not run a mentor job on it: other players\' chat and game text could reach its tools. Pick Claude, Codex, Grok or Antigravity with /runback agent, or move this chat to another folder.';
+}
 module.exports = {
   inside,
   rewrite,
+  refusal,
   syncPrompt,
   augment(job, info, ctx) {
     const root = ctx.cfg.forever && ctx.cfg.forever.mentorDir || path.join(ctx.REPO, '..', 'wow-mentor');
     const cwd = job.cwd || '';
     if (!inside(cwd, root)) return;
-    info.args = rewrite(info.agentId || job.agent, info.args || [], cwd, ctx.REPO);
+    info.args = rewrite(info.agentId || job.agent, info.args || [], cwd, ctx.REPO, job.cmd === 'translate');
   },
 };
