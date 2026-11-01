@@ -81,6 +81,27 @@ test('the count survives a reload the same day and starts over the next day', ()
   assert.doesNotMatch(nextDay, /lowStart=/);
 });
 
+test('a secret-like or failing health read at pull start gives no error and no start health', () => {
+  const v = vm();
+  v.run('UnitHealth = function() return STUB.health end; UnitHealthMax = function() return STUB.healthMax end');
+  v.run('STUB.health = STUB.Secret(); STUB.healthMax = STUB.Secret()');
+  // The addon wraps event handlers in pcall, so call the context module directly to
+  // see an error; a pull start in game must never raise.
+  v.run('CONTEXT = nil; for _, m in ipairs(RunbackForever.modules) do if m.name == "context" then CONTEXT = m end end');
+  v.run('OK = tostring(pcall(CONTEXT.onEvent, "PLAYER_REGEN_DISABLED"))');
+  assert.equal(v.get('OK'), 'true', 'StartHealth raised on a secret value');
+  v.run('CONTEXT.onEvent("PLAYER_REGEN_ENABLED")');
+  v.run('UnitHealth = function() error("this value is secret") end');
+  v.run('OK = tostring(pcall(CONTEXT.onEvent, "PLAYER_REGEN_DISABLED"))');
+  assert.equal(v.get('OK'), 'true', 'StartHealth raised on a blocked health read');
+  v.run('CONTEXT.onEvent("PLAYER_REGEN_ENABLED")');
+  const review = send(v, 'Review my last fight.', 'review');
+  assert.match(review, /lastFight=start=[^\n]*(\n|$)/);
+  assert.doesNotMatch(review, /hp=/);
+  assert.doesNotMatch(review, /lowStart=/);
+  assert.equal(v.get('RunbackForeverDB.lowStart and RunbackForeverDB.lowStart.n or 0'), '0');
+});
+
 test('nothing is sent while the fight is on', () => {
   const v = vm();
   v.run('HP = 100; STUB.combat = true; STUB.FireEvent("PLAYER_REGEN_DISABLED")');

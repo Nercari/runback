@@ -13,11 +13,20 @@ end
 -- Backlog 63: health when combat starts, read once at PLAYER_REGEN_DISABLED. Today's
 -- count of fights started below half health lives in saved data so a /reload keeps it;
 -- it only goes out with a recap or review, which the addon never sends in combat.
+-- Forever marks live health secret in some fights: reading or doing arithmetic on
+-- it raises. A pull start must never error, so a secret value (or any raise) gives
+-- no start health instead.
 local function StartHealth()
 	if type(UnitHealth) ~= "function" or type(UnitHealthMax) ~= "function" then return nil end
-	local hp, max = tonumber(UnitHealth("player")), tonumber(UnitHealthMax("player"))
-	if not hp or not max or max <= 0 then return nil end
-	return math.floor(hp * 100 / max)
+	local ok, value = pcall(function()
+		local hp, max = UnitHealth("player"), UnitHealthMax("player")
+		if type(issecretvalue) == "function" and (issecretvalue(hp) or issecretvalue(max)) then return nil end
+		hp, max = tonumber(hp), tonumber(max)
+		if not hp or not max or max <= 0 then return nil end
+		return math.floor(hp * 100 / max)
+	end)
+	if not ok then return nil end
+	return value
 end
 
 local function LowStarts(add)
