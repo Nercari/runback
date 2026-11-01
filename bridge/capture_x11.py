@@ -392,22 +392,27 @@ def grab(w):
 
 
 def run():
+    # A probe failure still has to show which session it ran in, so the pasted
+    # proof does not rely on a second command.
+    session = os.environ.get("XDG_SESSION_TYPE", "")
     if args.probe:
         w = find_window()
         if not w:
-            emit({"error": "no game window found"})
+            emit({"error": "no game window found", "session": session})
             sys.exit(1)
         if args.keep_composited:
             keep_composited(w)
             time.sleep(0.5)
         g = grab(w)
         if not g or isinstance(g, dict):
-            emit(g or {"error": "capture failed"})
+            error = g if isinstance(g, dict) else {"error": "capture failed"}
+            error.setdefault("session", session)
+            emit(error)
             sys.exit(1)
         px, width, height = g
         write_png(args.probe, px, width, height)
         msg, off = find_and_decode(px, width, height, None)
-        emit({"info": "saved %dx%d to %s" % (width, height, args.probe), "strip": msg, "offset": off})
+        emit({"info": "saved %dx%d to %s" % (width, height, args.probe), "strip": msg, "offset": off, "session": session})
         return
 
     last_key = None
