@@ -1158,8 +1158,8 @@ local PROFESSION_SKILL_IDS = {
 }
 
 -- The character's skill lines as { name, isHeader, rank, maxRank, skillID }.
--- Forever has one SkillLineAttributes table per line under C_SkillInfo; the
--- classic GetNumSkillLines and GetSkillLineInfo globals are gone in build 70532.
+-- Forever has one SkillLineAttributes table per line under C_SkillInfo; the bare
+-- skill line globals are gone in build 70532.
 function Runback.SkillLines()
 	local out = {}
 	local n = Try(C_SkillInfo and C_SkillInfo.GetNumSkillLines)

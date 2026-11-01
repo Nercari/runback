@@ -180,7 +180,7 @@ test('the game context describes the character and rides on the hello, then only
 });
 
 // The stub client has one SkillLineAttributes table per line under C_SkillInfo
-// and no Classic skill globals (#135): the context lists the profession lines.
+// and no Classic skill globals: the context lists the profession lines.
 test('the game context lists skills through C_SkillInfo, without the bare skill globals', () => {
   const vm = newVM();
   login(vm);
@@ -190,9 +190,13 @@ test('the game context lists skills through C_SkillInfo, without the bare skill 
 });
 
 test('the addon reads skill lines only through C_SkillInfo', () => {
+  // The old code passed the globals as values, so the scan must match the name
+  // anywhere but after a dot; these two samples prove the pattern catches it.
+  const bare = /(?<![.\w])Get(NumSkillLines|SkillLineInfo)\b/;
+  assert.match('Try(GetNumSkillLines)', bare);
+  assert.match('Try(GetSkillLineInfo, i)', bare);
   for (const file of ['Runback.lua', 'Forever_Guide.lua']) {
-    const src = fs.readFileSync(path.join(ADDON, file), 'utf8');
-    assert.doesNotMatch(src, /[^.\w]Get(NumSkillLines|SkillLineInfo)\s*\(/, `${file} calls a bare skill global`);
+    assert.doesNotMatch(fs.readFileSync(path.join(ADDON, file), 'utf8'), bare, `${file} names a bare skill global`);
   }
 });
 
