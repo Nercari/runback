@@ -128,7 +128,9 @@ const SLOTS = cfg.slots || 200;
 // 200. 16 was measured to cover a reply's polls; tests/bridge_test.js holds
 // the evidence.
 const SLOT_WINDOW = Math.max(1, Math.min(cfg.slotWindow || 16, SLOTS));
-let addonSlot = 0; // last slot the addon reported loading; 0 = unknown, write all
+let addonSlot = 0;     // last slot the addon reported loading; 0 = unknown, write all
+let addonSlotAt = 0;   // when that report was read: the addon's poll clock starts there
+let addonPollTail = 60; // its poll cadence after the first 5 minutes (60 s with the sound channel)
 const MAX_PARALLEL = cfg.maxParallel || 3;
 const cap = Object.assign({ enabled: true, processName: 'WowB', cellPx: 4, cellsPerRow: 200, maxRows: 48, intervalMs: 250 }, cfg.capture || {});
 cfg.forever.clientDir = path.resolve(cfg.forever.clientDir || path.resolve(cfg.addonDir || '', '..', '..'));
@@ -413,17 +415,30 @@ let warnedNoAddon = false;
 // The addon reports the last slot it loaded on the strip. A lower number than
 // before is a new slot pool (/reload, or a client restart the bridge did not
 // see), so every slot is written again before the next poll.
-function noteAddonSlot(n) {
+function noteAddonSlot(n, tail) {
   if (!Number.isInteger(n) || n < 0) return;
+  if (tail === 60 || tail === 120) addonPollTail = tail;
   const reset = n === 0 || (addonSlot > 0 && n < addonSlot);
   addonSlot = reset ? 0 : n;
+  addonSlotAt = Date.now();
   if (reset && n > 0) publishNow();
+}
+
+// The last slot the addon has loaded by now. The strip only carries its slot
+// number while a message is unacknowledged; after that it keeps loading one slot
+// per poll while a reply is pending, so the window has to follow that clock or it
+// stops at the number from send time (a run longer than the window then loses its
+// reply). No run, no polls: the addon spends no slot while it waits for nothing.
+function addonSlotNow(now = Date.now()) {
+  if (!addonSlot) return 0;
+  if (!running.size) return addonSlot;
+  return addonSlot + P.slotPolls(now - addonSlotAt, addonPollTail);
 }
 
 // Slot files are the largest thing a publish writes: write only the ones the
 // addon can still load (#144).
 function writeSlots(body) {
-  for (const i of P.slotTargets(addonSlot, SLOTS, SLOT_WINDOW)) {
+  for (const i of P.slotTargets(addonSlotNow(), SLOTS, SLOT_WINDOW)) {
     try { atomicWrite(path.join(cfg.addonDir, 'Runback_S' + pad3(i), 'Inbox.lua'), body); } catch {}
   }
 }
@@ -577,7 +592,7 @@ function runAgentOnce(options) {
 // ---------------------------------------------------------------------------
 
 function submit(job) {
-  if (job.slot >= 0) noteAddonSlot(job.slot);
+  if (job.slot >= 0) noteAddonSlot(job.slot, job.pollTail);
   job.cwd = resolveCwd(job.cwd);
   if (job.agent) state.chatAgents[job.chat] = job.agent;
   job.agent = job.agent || state.chatAgents[job.chat] || DEFAULT_AGENT;
@@ -981,7 +996,6 @@ function finish(job, status, text, session, denied, stall) {
   Forever.onFinish(job, status, text);
   job.finished = true;
   owned.delete(`${job.session || ''}#${job.id}`);
-  running.delete(chatKey(job));
   markHandled(job);
   saveState();
   // A finished reply ends with the "TL;DR:" block the system prompt asks for:
@@ -995,6 +1009,9 @@ function finish(job, status, text, session, denied, stall) {
   if (denied && denied.length) summary = 'Needs your permission. Open the window and click How to allow.';
   noteMessage(job, status === 'done' ? 'assistant' : 'system', status === 'done' ? text : 'Bridge error: ' + text);
   publish(chatKey(job), { chat: job.chat, id: job.id, status, text, summary, followUps, cwd: job.cwd, session, denied, agent: job.agent || '', stall: stall || '' }, true);
+  // After the final publish: the window of that publish follows the polls made
+  // during the run (addonSlotNow reads `running`).
+  running.delete(chatKey(job));
   // A module may finish a job the addon must not read a slot for (a card with
   // nothing to say): no sig flip, so no reply slot is spent.
   if (!job.noSignal) signal('sig', job.id, true);

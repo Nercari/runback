@@ -44,6 +44,19 @@ function slotTargets(lastSlot, slots, window) {
   return Array.from({ length: size }, (_, i) => ((n + i) % max) + 1);
 }
 
+// Polls the addon makes on its schedule while a reply is pending. Its first
+// five minutes are covered by the window itself (14 polls on the dense schedule,
+// 7 on the sparse one); after that it is one poll every `tail` seconds, 60 with
+// the sound channel and 120 without (POLL_TAIL / SLOT_ONLY_TAIL in
+// addon/Runback/Runback.lua, checked by tests/addon_test.js). Counting the real
+// cadence matters: a dense run counted as sparse falls behind the addon.
+function slotPolls(ms, tail) {
+  const t = Number(ms) / 1000;
+  if (!Number.isFinite(t) || t <= 300) return 0;
+  const step = Number(tail) === 120 ? 120 : 60;
+  return Math.floor((t - 300) / step);
+}
+
 // Reply slot / signal file number for a message id (1-based, wraps at `slots`).
 function slotNumber(id, slots) {
   const n = Number(id);
@@ -190,7 +203,7 @@ function validModel(m) { return typeof m === 'string' && MODEL_TOKEN.test(m); }
 const EFFORT_TOKEN = /^[a-z]{1,16}$/;
 function validEffort(e) { return typeof e === 'string' && EFFORT_TOKEN.test(e); }
 function parseFlags(flags) {
-  const out = { newSession: false, hello: false, forget: false, stop: false, context: false, card: false, agent: '', model: '', effort: '', cmd: '', slot: -1 };
+  const out = { newSession: false, hello: false, forget: false, stop: false, context: false, card: false, agent: '', model: '', effort: '', cmd: '', slot: -1, pollTail: 60 };
   for (const tok of String(flags || '').split(';')) {
     if (tok === 'n') out.newSession = true;
     else if (tok === 'h') out.hello = true;
@@ -203,6 +216,8 @@ function parseFlags(flags) {
     else if (tok.startsWith('effort=')) { const e = tok.slice(7).trim(); if (validEffort(e)) out.effort = e; }
     else if (tok.startsWith('cmd=')) { const cmd = tok.slice(4); if (/^[a-z0-9-]{1,24}$/.test(cmd)) out.cmd = cmd; }
     else if (tok.startsWith('slot=')) { const v = tok.slice(5); if (/^\d{1,6}$/.test(v)) out.slot = Number(v); }
+    // The addon's poll cadence: 60 s with the sound channel, 120 s without.
+    else if (tok.startsWith('poll=')) { const v = tok.slice(5); if (v === '60' || v === '120') out.pollTail = Number(v); }
   }
   return out;
 }
@@ -988,6 +1003,7 @@ module.exports = {
   pad3,
   slotNumber,
   slotTargets,
+  slotPolls,
   chatKey,
   sessKey,
   alreadyHandled,
