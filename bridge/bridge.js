@@ -428,10 +428,12 @@ function noteAddonSlot(n, tail) {
 // number while a message is unacknowledged; after that it keeps loading one slot
 // per poll while a reply is pending, so the window has to follow that clock or it
 // stops at the number from send time (a run longer than the window then loses its
-// reply). No run, no polls: the addon spends no slot while it waits for nothing.
+// reply). A module job (council, the coach card) runs through runAgentOnce and is
+// in `owned`, not `running`, and the addon polls for that reply just the same.
+// No run, no polls: the addon spends no slot while it waits for nothing.
 function addonSlotNow(now = Date.now()) {
   if (!addonSlot) return 0;
-  if (!running.size) return addonSlot;
+  if (!running.size && !owned.size) return addonSlot;
   return addonSlot + P.slotPolls(now - addonSlotAt, addonPollTail);
 }
 
@@ -995,7 +997,6 @@ function finish(job, status, text, session, denied, stall) {
   if (job.finished) return; // spawn failures fire both 'error' and 'close'
   Forever.onFinish(job, status, text);
   job.finished = true;
-  owned.delete(`${job.session || ''}#${job.id}`);
   markHandled(job);
   saveState();
   // A finished reply ends with the "TL;DR:" block the system prompt asks for:
@@ -1010,8 +1011,9 @@ function finish(job, status, text, session, denied, stall) {
   noteMessage(job, status === 'done' ? 'assistant' : 'system', status === 'done' ? text : 'Bridge error: ' + text);
   publish(chatKey(job), { chat: job.chat, id: job.id, status, text, summary, followUps, cwd: job.cwd, session, denied, agent: job.agent || '', stall: stall || '' }, true);
   // After the final publish: the window of that publish follows the polls made
-  // during the run (addonSlotNow reads `running`).
+  // during the run (addonSlotNow reads `running` and `owned`).
   running.delete(chatKey(job));
+  owned.delete(`${job.session || ''}#${job.id}`);
   // A module may finish a job the addon must not read a slot for (a card with
   // nothing to say): no sig flip, so no reply slot is spent.
   if (!job.noSignal) signal('sig', job.id, true);

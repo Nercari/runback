@@ -773,7 +773,7 @@ function loadWriters() {
     Date: { now: () => w.now },
     cfg: { addonDir: '/addons' },
     SLOTS, SLOT_WINDOW: WINDOW,
-    running: new Map(),
+    running: new Map(), owned: new Set(),
     addonSlot: 0, addonSlotAt: 0, addonPollTail: 60,
     atomicWrite: file => { w.onWrite(String(file)); },
     publishNow: () => { w.publishes++; sandbox.writeSlots('after a reset'); },
@@ -785,6 +785,7 @@ function loadWriters() {
   w.addonSlotNow = sandbox.addonSlotNow;
   w.writeSlots = sandbox.writeSlots;
   w.running = sandbox.running;
+  w.owned = sandbox.owned;
   w.slotOf = file => Number(/Runback_S(\d{3})/.exec(file)[1]);
   w.slotsWritten = () => w.writes.map(w.slotOf); // in write order
   w.reset = () => { w.writes.length = 0; w.publishes = 0; };
@@ -852,6 +853,33 @@ test('a 30-minute run at either poll cadence reads its reply on the poll after t
     assert.equal(load(), 'the reply', `tail ${tail}: the reply is read on the next poll, not lost`);
     assert.ok(loaded.length <= SLOTS, `${loaded.length} slots is inside the pool`);
   }
+});
+
+test('a module job (council) moves the window too: it is in owned, not running', () => {
+  const w = loadWriters();
+  const files = new Map();
+  w.onWrite = file => files.set(w.slotOf(file), w.content);
+  w.content = 'hello';
+  w.writeSlots('hello');
+  const loaded = [];
+  const load = () => { const n = loaded.length + 1; loaded.push(n); return files.get(n); };
+  assert.equal(load(), 'hello'); // slot 1
+  w.noteAddonSlot(1, 60);
+  w.owned.add('sess#7'); // the council module owns the job; the bridge's `running` stays empty
+  const start = w.now = 1e9;
+  const schedule = [5, 10, 16, 24, 34, 46, 60, 80, 100, 130, 160, 200, 240, 300, 360, 420, 480];
+  for (let t = 1; t <= 480; t++) {
+    w.now = start + t * 1000;
+    if (schedule.includes(t)) load(); // the addon polls while it waits
+    if (t % 3 === 0) { w.content = 'working'; w.reset(); w.writeSlots('working'); }
+  }
+  assert.equal(w.addonSlotNow(), 1 + 3, 'an eight-minute council run moves the window');
+  w.content = 'the reply';
+  w.reset();
+  w.writeSlots('the reply'); // the module finishes and the reply is published
+  w.owned.clear();
+  w.now += 60 * 1000;
+  assert.equal(load(), 'the reply', 'the poll after that publish reads the reply');
 });
 
 test('an old addon without the slot field still gets replies from any slot', () => {
