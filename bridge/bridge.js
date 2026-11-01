@@ -125,8 +125,8 @@ function siblingFolders() {
 const SLOTS = cfg.slots || 200;
 // #144: one publish writes the inbox and only the slots the addon can still
 // read (it loads them in order and reports the last one on the strip), not all
-// 200. 16 was measured to cover a reply's polls; tools/upgrade-proof.js and
-// tests/forever/slot_window.test.js hold the evidence.
+// 200. 16 was measured to cover a reply's polls; tests/bridge_test.js holds
+// the evidence.
 const SLOT_WINDOW = Math.max(1, Math.min(cfg.slotWindow || 16, SLOTS));
 let addonSlot = 0; // last slot the addon reported loading; 0 = unknown, write all
 const MAX_PARALLEL = cfg.maxParallel || 3;

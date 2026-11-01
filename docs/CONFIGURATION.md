@@ -98,7 +98,7 @@ These sizes are baked into the files `install-slots.js` creates, and the addon h
 | Key | Default | Meaning |
 |---|---|---|
 | `slots` | `200` | Reply-slot addons `Runback_S001` … `Runback_S200`. Each slot can be loaded once per UI session; `/reload` frees them all. |
-| `slotWindow` | `16` | How many of those slots one publish writes: the ones after the last slot the addon reported loading (#144). All of them are written when the addon has not reported one (an older addon, or none loaded yet), and after a `/reload`. A larger window needs a new measured write count (`tests/slot_window.test.js`). |
+| `slotWindow` | `16` | How many of those slots one publish writes: the ones after the last slot the addon reported loading (#144). All of them are written when the addon has not reported one (an older addon, or none loaded yet), and after a `/reload`. A larger window needs a new measured write count (`tests/bridge_test.js`). |
 | `actMax` | `60` | Heartbeat files per message (`act/NNN/01..60.wav`). One flips per agent action. |
 | `presenceMax` | `2000` | Presence files (`presence/0001..2000.wav`). One flips per `presenceIntervalMs`. |
 | `presenceIntervalMs` | `30000` | How often the bridge flips a presence file so the in-game light stays green. |
