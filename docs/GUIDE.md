@@ -134,9 +134,9 @@ To remove a guide, send a guide with the same `id`; there is no clear command ye
   | `requires` | A listed quest is not turned in. |
   | `exclusive` | A listed quest is turned in. |
   | `rep` | Your standing with that faction is lower (`GetFactionInfoByID`, or `C_Reputation.GetFactionDataByID` where the client has it). |
-  | `profession` | Your rank is lower, or you do not have it (`GetProfessions` / `GetProfessionInfo`, else the skill lines `GetSkillLineInfo`). |
+  | `profession` | Your rank is lower, or you do not have it (`GetProfessions` / `GetProfessionInfo`, else the skill lines `C_SkillInfo.GetSkillLineInfo`). |
 
-  The rules apply only while the step's own quest is neither in your log nor turned in. **Unknown never hides a step:** a missing API, a call that fails, an answer that is not a plain yes or no, a faction the client does not know or a collapsed skill header all count as "can take it". A step that becomes available behind the current one is not pulled back; Previous reaches it.
+  The rules apply only while the step's own quest is neither in your log nor turned in. **Unknown never hides a step:** a missing API, a call that fails, an answer that is not a plain yes or no or a faction the client does not know all count as "can take it". A step that becomes available behind the current one is not pulled back; Previous reaches it.
 - **XP pace (item 76).** Under the steps one line says `About N min to level, from your last M minutes`, from the game's own `UnitXP` and `UnitXPMax`, read on `PLAYER_XP_UPDATE`. It shows once there are five minutes of readings from the last ten and some XP was gained in them, and counts XP across a level up. It hides with the panel in a fight.
 - **Time per level (item 76).** The addon counts the minutes you play at each level (between XP, level-up and logout events, so also on `/reload`) and when you reached it, per character, in `RunbackGuideDB.levels["Name-Realm"][level] = { at, sec }`. A session recap (`/ai recap`, item 40) carries `levelMinutes=24:38,25:12`: minutes at each of the last five levels the addon saw you reach, the last one still counting. A level reached before this version is not listed.
 - Text is shown as plain text: a `|` in it shows as `|`, never as a game escape code. Text is shown as plain text: a `|` in it shows as `|`, never as a game escape code.

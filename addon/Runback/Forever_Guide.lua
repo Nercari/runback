@@ -216,30 +216,24 @@ local function Standing(id)
 end
 
 -- Profession ranks by name, read once: a lookup name -> rank, or nil when the client
--- lists none. A profession not listed is rank 0, unless a collapsed skill header
--- may hide it, then unknown.
+-- lists none. A profession not listed is rank 0. The skill lines come from
+-- Runback.SkillLines (C_SkillInfo), the same reader as the game context.
 function M.Skills()
-	local ranks, found, complete = {}, false, true
+	local ranks, found = {}, false
 	local a, b, c, d, e = Call(GetProfessions)
 	for _, index in pairs({ a, b, c, d, e }) do
 		local name, _, rank = Call(GetProfessionInfo, index)
 		if type(name) == "string" and tonumber(rank) then ranks[Norm(name)] = tonumber(rank); found = true end
 	end
-	local n = not found and Call(GetNumSkillLines)
-	for i = 1, type(n) == "number" and math.min(n, 100) or 0 do
-		local name, isHeader, isExpanded, rank = Call(GetSkillLineInfo, i)
-		if Yes(isHeader) then
-			if not Yes(isExpanded) then complete = false end
-		elseif type(name) == "string" and tonumber(rank) then
-			ranks[Norm(name)] = tonumber(rank); found = true
+	if not found and type(Runback) == "table" and type(Runback.SkillLines) == "function" then
+		for _, sk in ipairs(Runback.SkillLines()) do
+			if not sk.isHeader and type(sk.name) == "string" and tonumber(sk.rank) then
+				ranks[Norm(sk.name)] = tonumber(sk.rank); found = true
+			end
 		end
 	end
 	if not found then return nil end
-	return function(name)
-		local rank = ranks[Norm(name)]
-		if rank == nil and complete then return 0 end
-		return rank
-	end
+	return function(name) return ranks[Norm(name)] or 0 end
 end
 
 -- Whether a step is done. A hand tick or untick ({ done, at }) wins while the

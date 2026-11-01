@@ -1158,32 +1158,22 @@ local PROFESSION_SKILL_IDS = {
 }
 
 -- The character's skill lines as { name, isHeader, rank, maxRank, skillID }.
--- Forever only has C_SkillInfo (one table per line); the classic globals
--- (multiple returns) are the fallback for other clients.
+-- Forever has one SkillLineAttributes table per line under C_SkillInfo; the
+-- classic GetNumSkillLines and GetSkillLineInfo globals are gone in build 70532.
 function Runback.SkillLines()
 	local out = {}
-	if C_SkillInfo and C_SkillInfo.GetNumSkillLines then
-		local n = Try(C_SkillInfo.GetNumSkillLines)
-		local seen = {}
-		for i = 1, (type(n) == "number" and n or 0) do
-			local sk = Try(C_SkillInfo.GetSkillLineInfo, i)
-			-- Child lines (parentSkillLineID ~= 0) repeat their parent; Blizzard's
-			-- skills frame skips them too.
-			if type(sk) == "table" and type(sk.name) == "string" and (sk.parentSkillLineID or 0) == 0 then
-				local key = sk.isHeader and ("h:" .. sk.name) or (sk.skillID or sk.name)
-				if not seen[key] then
-					seen[key] = true
-					out[#out + 1] = { name = sk.name, isHeader = sk.isHeader, rank = sk.rank, maxRank = sk.maxRank, skillID = sk.skillID }
-				end
-			end
-		end
-		return out
-	end
-	local n = Try(GetNumSkillLines)
+	local n = Try(C_SkillInfo and C_SkillInfo.GetNumSkillLines)
+	local seen = {}
 	for i = 1, (type(n) == "number" and n or 0) do
-		local sname, isHeader, _, rank, _, _, maxRank = Try(GetSkillLineInfo, i)
-		if type(sname) == "string" then
-			out[#out + 1] = { name = sname, isHeader = isHeader and true or false, rank = rank, maxRank = maxRank }
+		local sk = Try(C_SkillInfo.GetSkillLineInfo, i)
+		-- Child lines (parentSkillLineID ~= 0) repeat their parent; Blizzard's
+		-- skills frame skips them too.
+		if type(sk) == "table" and type(sk.name) == "string" and (sk.parentSkillLineID or 0) == 0 then
+			local key = sk.isHeader and ("h:" .. sk.name) or (sk.skillID or sk.name)
+			if not seen[key] then
+				seen[key] = true
+				out[#out + 1] = { name = sk.name, isHeader = sk.isHeader, rank = sk.rank, maxRank = sk.maxRank, skillID = sk.skillID }
+			end
 		end
 	end
 	return out
@@ -1267,7 +1257,8 @@ function Runback.GameContext(kind)
 		if #parts > 0 then table.insert(lines, "Talents: " .. table.concat(parts, " / ")) end
 	end
 
-	-- Skill lines under the Professions and Secondary Skills headers.
+	-- Skill lines under the Professions and Secondary Skills headers; class and
+	-- weapon skills stay out to keep the context short.
 	local header, parts = nil, {}
 	local wanted = { [TRADE_SKILLS or "Professions"] = true, [SECONDARY_SKILLS or "Secondary Skills"] = true }
 	for _, sk in ipairs(Runback.SkillLines()) do
@@ -1277,7 +1268,7 @@ function Runback.GameContext(kind)
 			table.insert(parts, sk.name .. (sk.rank and (" " .. tostring(sk.rank) .. (sk.maxRank and ("/" .. tostring(sk.maxRank)) or "")) or ""))
 		end
 	end
-	if #parts > 0 then table.insert(lines, "Professions: " .. table.concat(parts, ", ")) end
+	if #parts > 0 then table.insert(lines, "Skills: " .. table.concat(parts, ", ")) end
 
 	-- Quest log ids (what is accepted, and which are done), so route planning can
 	-- skip pickups and turn-ins that no longer apply.

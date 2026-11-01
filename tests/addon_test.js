@@ -144,7 +144,7 @@ test('the game context describes the character and rides on the hello, then only
     'Location: Duskwood - Darkshire',
     'Position: 45.2, 67.8 (map 1431)',
     'Money: 1g 23s 45c; XP: 1234/5000',
-    'Professions: Skinning 75/75, First Aid 40/75',
+    'Skills: Skinning 75/75, First Aid 40/75',
   ]);
   // Talents: the client has no Classic talent tabs; #134 restores the line
   // through C_ClassTalents and C_Traits (see the skipped test below).
@@ -177,6 +177,23 @@ test('the game context describes the character and rides on the hello, then only
   const on = stripRecords(vm).filter(r => r.flags === 'h;c');
   assert.ok(on.some(r => r.ctx.includes('Character: Testchar')));
   assert.ok(vm.evaluate('RunbackDB.chats[2].history[#RunbackDB.chats[2].history].text').includes('Game context is ON'));
+});
+
+// The stub client has one SkillLineAttributes table per line under C_SkillInfo
+// and no Classic skill globals (#135): the context lists the profession lines.
+test('the game context lists skills through C_SkillInfo, without the bare skill globals', () => {
+  const vm = newVM();
+  login(vm);
+  vm.run('STUB.RunTimers()');
+  assert.match(stripRecords(vm)[0].ctx, /^Skills: Skinning 75\/75, First Aid 40\/75$/m);
+  assert.equal(vm.evaluate('type(GetNumSkillLines) .. type(GetSkillLineInfo)'), 'nilnil');
+});
+
+test('the addon reads skill lines only through C_SkillInfo', () => {
+  for (const file of ['Runback.lua', 'Forever_Guide.lua']) {
+    const src = fs.readFileSync(path.join(ADDON, file), 'utf8');
+    assert.doesNotMatch(src, /[^.\w]Get(NumSkillLines|SkillLineInfo)\s*\(/, `${file} calls a bare skill global`);
+  }
 });
 
 // The stub no longer fakes the Classic talent tabs, so the addon has no
