@@ -663,6 +663,81 @@ test('the AI picker switches between the agents installed on the PC and their mo
   assert.equal(vm.evaluate('RunbackDB.chats[2].model'), 'opus');
 });
 
+test('the AI picker shows the chosen model\'s effort levels; the level is sent, labelled and checked (backlog 45)', () => {
+  const vm = newVM();
+  login(vm);
+  vm.run('STUB.RunTimers()');
+  nextSlot(vm, '{ now = time(), cwd = "", agent = "claude", agents = { "claude", "hermes" }, models = { claude = { "opus", "sonnet", "haiku" }, hermes = { } }, efforts = { claude = { opus = { "low", "medium", "high", "xhigh", "max" }, sonnet = { "low", "medium", "high" } } }, defaults = { claude = { opus = "high", sonnet = "medium" } }, replies = { } }');
+  vm.run('STUB.now = STUB.now + 6; STUB.Tick()');
+  assert.equal(vm.evaluate('Runback.IsConnected()'), 'true');
+  const levels = () => vm.evaluate('(function() local t = {} for _, b in ipairs(RunbackPoolPicker.levels) do if b.shown then t[#t + 1] = b.label.text end end return table.concat(t, "|") end)()');
+  const last = () => vm.evaluate('RunbackDB.chats[1].history[#RunbackDB.chats[1].history].text');
+  // No model yet: no effort row.
+  vm.run('Runback.AgentPrompt()');
+  assert.equal(levels(), '');
+  vm.run('Runback.AgentPrompt()');
+  // Opus: five levels, the default marked, none chosen yet.
+  vm.run('SlashCmdList.RUNBACK("agent claude opus")');
+  vm.run('Runback.AgentPrompt()');
+  assert.equal(levels(), '|cffffffffl' + 'ow|r|' + '|cffffffffmedium|r|' + '|cffffffffhigh*|r|' + '|cffffffffxhigh|r|' + '|cffffffffmax|r');
+  assert.equal(vm.evaluate('RunbackPoolPicker.effortLabel.text'), 'Effort for opus:');
+  // A click picks it: label, strip flags and reload outbox carry the level.
+  vm.run('for _, b in ipairs(RunbackPoolPicker.levels) do if b.shown and b.effort == "xhigh" then b.scripts.OnClick(b) end end');
+  assert.equal(vm.evaluate('RunbackDB.chats[1].effort'), 'xhigh');
+  assert.equal(vm.evaluate('RunbackPoolButton.text'), 'AI: Claude · opus · xhigh');
+  assert.ok(last().includes('agent set to Claude · opus · xhigh'));
+  vm.run('Runback.Send("think hard")');
+  assert.equal(stripRecords(vm).find(r => r.text === 'think hard').flags, 'agent=claude;model=opus;effort=xhigh');
+  assert.equal(vm.evaluate('RunbackDB.outbox.effort'), 'xhigh');
+  vm.run('SlashCmdList.RUNBACK("cancel")');
+  // Reopened, the chosen level is green; clicking it again goes back to the default.
+  vm.run('Runback.AgentPrompt()');
+  assert.ok(levels().includes('|cff55ff55xhigh|r'));
+  vm.run('for _, b in ipairs(RunbackPoolPicker.levels) do if b.shown and b.effort == "xhigh" then b.scripts.OnClick(b) end end');
+  assert.equal(vm.evaluate('RunbackDB.chats[1].effort'), '');
+  assert.equal(vm.evaluate('RunbackPoolButton.text'), 'AI: Claude · opus');
+  // Typed: a level the model has is kept across a switch to a model that has it, cleared otherwise.
+  vm.run('SlashCmdList.RUNBACK("agent claude opus high")');
+  assert.equal(vm.evaluate('RunbackDB.chats[1].effort'), 'high');
+  vm.run('SlashCmdList.RUNBACK("agent claude sonnet")');
+  assert.equal(vm.evaluate('RunbackDB.chats[1].effort'), 'high', 'sonnet has high too');
+  vm.run('SlashCmdList.RUNBACK("agent claude haiku")');
+  assert.equal(vm.evaluate('RunbackDB.chats[1].effort'), '', 'haiku has no levels');
+  vm.run('Runback.Send("quick one")');
+  assert.equal(stripRecords(vm).find(r => r.text === 'quick one').flags, 'agent=claude;model=haiku');
+  vm.run('SlashCmdList.RUNBACK("cancel")');
+  // Unknown levels are refused and change nothing.
+  vm.run('SlashCmdList.RUNBACK("agent claude sonnet max")');
+  assert.equal(vm.evaluate('RunbackDB.chats[1].model'), 'haiku');
+  assert.ok(last().includes('Unknown effort "max" for Claude · sonnet. Levels: low, medium, high'));
+  // Two words after an agent are a level only after a model it lists; otherwise it is a message.
+  vm.run('SlashCmdList.RUNBACK("agent claude tell me")');
+  assert.equal(vm.evaluate('RunbackDB.chats[1].history[#RunbackDB.chats[1].history].role'), 'user');
+  assert.equal(vm.evaluate('RunbackDB.chats[1].model'), 'haiku');
+  vm.run('SlashCmdList.RUNBACK("cancel")');
+  // /model takes a level too, and a new chat inherits it.
+  vm.run('RunbackInput:SetText("/model opus low"); Runback.SendFromInput()');
+  assert.equal(vm.evaluate('RunbackDB.chats[1].effort'), 'low');
+  vm.run('Runback.NewChat("Second")');
+  assert.equal(vm.evaluate('RunbackDB.chats[2].effort'), 'low');
+});
+
+test('the AI picker never opens in combat and closes when a fight starts (backlog 45)', () => {
+  const vm = newVM();
+  login(vm);
+  vm.run('STUB.RunTimers()');
+  vm.run('Runback.AgentPrompt()');
+  assert.equal(vm.evaluate('RunbackPoolPicker.shown'), 'true');
+  vm.run('STUB.combat = true; STUB.FireEvent("PLAYER_REGEN_DISABLED")');
+  assert.equal(vm.evaluate('RunbackPoolPicker.shown'), 'false', 'closed at combat start');
+  vm.run('Runback.AgentPrompt()');
+  assert.equal(vm.evaluate('RunbackPoolPicker.shown'), 'false', 'refused in combat');
+  assert.ok(vm.evaluate('RunbackDB.chats[1].history[#RunbackDB.chats[1].history].text').includes('opens after the fight'));
+  vm.run('STUB.combat = false; STUB.FireEvent("PLAYER_REGEN_ENABLED")');
+  vm.run('Runback.AgentPrompt()');
+  assert.equal(vm.evaluate('RunbackPoolPicker.shown'), 'true');
+});
+
 test('a box line starting with / never reaches the agent: known commands run here, unknown ones get one plain line (backlog 55)', () => {
   const vm = newVM();
   login(vm);
