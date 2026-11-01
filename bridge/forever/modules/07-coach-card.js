@@ -68,7 +68,9 @@ async function handle(job, ctx) {
     ctx.log(`#${job.id} coach card: none${why ? ` (${why})` : ''}`);
   }
   // Never a chat reply: no bubble, no chat line and no transcript row for a card.
+  // With no card, no sig flip either: the addon then reads no reply slot for it.
   job.chat = '';
+  job.noSignal = !card;
   ctx.finish(job, 'done', '', job.session || '', []);
   return true;
 }

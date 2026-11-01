@@ -182,8 +182,9 @@ test('only the player-click switch calls LoggingCombat with an argument', () => 
 });
 
 // ---------------------------------------------------------------------------
-// The between-pull coach card (#140): asked for once a fight, shown out of combat
-// only, counted locally, and off with the setting or the combat log.
+// The between-pull coach card (#140): asked for once a fight, read from a slot
+// only when the bridge says it wrote one, shown out of combat only, counted
+// locally, and off with the setting or the combat log.
 // ---------------------------------------------------------------------------
 function cardVm(logging = true) {
   const L = lauxlib.luaL_newstate(); lualib.luaL_openlibs(L);
@@ -201,16 +202,29 @@ function cardVm(logging = true) {
   // The log is only ever read here: a write with an argument would be the player's click.
   run(`STUB.logging = ${logging}
     LOG_SETS = {}
-    function LoggingCombat(on) if on ~= nil then table.insert(LOG_SETS, tostring(on)); STUB.logging = on end return STUB.logging end`);
+    function LoggingCombat(on) if on ~= nil then table.insert(LOG_SETS, tostring(on)); STUB.logging = on end return STUB.logging end
+    LOADS = 0
+    local origLoad = C_AddOns.LoadAddOn
+    C_AddOns.LoadAddOn = function(name) LOADS = LOADS + 1; return origLoad(name) end
+    -- The signal self-test: a valid file plays, an empty one does not.
+    STUB.sounds["Interface\\\\AddOns\\\\Runback\\\\ctl\\\\valid.wav"] = true`);
   for (const file of ['Codec.lua', 'Inbox.lua', 'Runback.lua', 'Forever.lua', 'Forever_Lockout.lua', 'Forever_Context.lua', 'Forever_Card.lua']) run(read(file));
   run('STUB.FireEvent("ADDON_LOADED", "Runback"); STUB.FireEvent("PLAYER_LOGIN"); STUB.RunTimers()');
   run('Runback.IsConnected = function() return true end');
   return { run, get };
 }
 
+// The bridge's own signals for the newest record: sig when it wrote a card, ack when it answered.
+const cardSignal = (v, kind) => {
+  const id = Number(v.get('RunbackDB.lastSeq'));
+  const slot = String(((id - 1) % 200) + 1).padStart(3, '0');
+  v.run(`STUB.sounds["Interface\\\\AddOns\\\\Runback\\\\${kind}\\\\${slot}.wav"] = true`);
+};
 const cardPrints = v => v.get('table.concat(STUB.prints, "\\n")');
+const loads = v => Number(v.get('LOADS'));
 // The request is made one frame after the fight, once the context has the end time.
-const cardFight = v => v.run('STUB.combat = true; STUB.FireEvent("PLAYER_REGEN_DISABLED"); STUB.now = STUB.now + 30; STUB.combat = false; STUB.FireEvent("PLAYER_REGEN_ENABLED"); STUB.RunTimers()');
+// The login hello poll is spent first, so a load count starts from zero.
+const cardFight = v => v.run('STUB.combat = true; STUB.FireEvent("PLAYER_REGEN_DISABLED"); STUB.now = STUB.now + 30; STUB.combat = false; STUB.FireEvent("PLAYER_REGEN_ENABLED"); STUB.RunTimers(); STUB.now = STUB.now + 6; STUB.Tick()');
 const cardSlot = card => `STUB.onLoadAddOn = function() Runback_SlotData = { now = time(), cwd = "", card = ${card} } end`;
 const CARD = '{ key = "2026-09-25T20:00:10/2026-09-25T20:00:43", text = "One change: keep attacking; the gaps cost you damage.", why = "Why: you did nothing for 6 s of the 33 s pull.", counts = "33 s pull, 7 hits taken, 6 enemy casts." }';
 const cardClick = (v, label) => v.run(`(function()
@@ -228,7 +242,7 @@ const cardTextOf = v => v.get(`(function()
   return table.concat(out, " | ")
 end)()`);
 
-test('a fight asks for one card; the slot answer shows it out of combat, never in the chat', () => {
+test('a fight asks for one card; the bridge signal makes the addon read one slot and show it, never in the chat', () => {
   const v = cardVm();
   const before = v.get('#RunbackDB.chats[1].history');
   cardFight(v);
@@ -236,9 +250,12 @@ test('a fight asks for one card; the slot answer shows it out of combat, never i
   assert.equal(v.get('RunbackStrip.shown'), 'true', 'the request went out on the strip');
   assert.equal(v.get('STUB.logging'), 'true', 'nothing here switches the log');
   assert.equal(v.get('table.concat(LOG_SETS, ",")'), '');
+  const beforeLoads = loads(v);
 
   v.run(cardSlot(CARD));
-  v.run('STUB.now = STUB.now + 9; STUB.Tick()');
+  cardSignal(v, 'sig');
+  v.run('STUB.Tick()');
+  assert.equal(loads(v) - beforeLoads, 1, 'one slot read for the card');
   assert.equal(cardShown(v), 'true');
   assert.match(cardTextOf(v), /One change: keep attacking/);
   assert.match(cardTextOf(v), /Why: you did nothing for 6 s of the 33 s pull/);
@@ -247,11 +264,25 @@ test('a fight asks for one card; the slot answer shows it out of combat, never i
   assert.equal(v.get('RunbackForeverDB.card.counts.got'), '0');
 });
 
+test('a fight with nothing to say costs no reply slot', () => {
+  const v = cardVm();
+  cardFight(v);
+  const beforeLoads = loads(v);
+  cardSignal(v, 'ack'); // the bridge answered, and flipped no sig: no card was made
+  v.run('STUB.Tick()');
+  assert.equal(v.get('RunbackForeverDB.card.requested'), '12:00/12:00', 'still asked');
+  assert.equal(loads(v) - beforeLoads, 0, 'no slot read without a card');
+  assert.equal(cardShown(v), 'false');
+  assert.equal(v.get('RunbackForeverDB.card.seen'), 'nil');
+});
+
 test('the card is held in combat and shows when the lockout ends', () => {
   const v = cardVm();
+  cardFight(v);
   v.run('STUB.combat = true; STUB.FireEvent("PLAYER_REGEN_DISABLED")');
   v.run(cardSlot(CARD));
-  v.run('STUB.now = STUB.now + 9; STUB.Tick()');
+  cardSignal(v, 'sig');
+  v.run('STUB.Tick()');
   assert.equal(cardShown(v), 'false', 'nothing shows in a fight');
   assert.equal(v.get('RunbackForeverDB.card.seen'), '2026-09-25T20:00:10/2026-09-25T20:00:43', 'the card is kept');
   v.run('STUB.combat = false; STUB.FireEvent("PLAYER_REGEN_ENABLED")');
@@ -260,8 +291,10 @@ test('the card is held in combat and shows when the lockout ends', () => {
 
 test('a card that arrives during a fight is hidden again if the fight restarts', () => {
   const v = cardVm();
+  cardFight(v);
   v.run(cardSlot(CARD));
-  v.run('STUB.now = STUB.now + 9; STUB.Tick()');
+  cardSignal(v, 'sig');
+  v.run('STUB.Tick()');
   assert.equal(cardShown(v), 'true');
   v.run('STUB.combat = true; STUB.FireEvent("PLAYER_REGEN_DISABLED")');
   assert.equal(cardShown(v), 'false', 'hidden when the next pull starts');
@@ -269,8 +302,10 @@ test('a card that arrives during a fight is hidden again if the fight restarts',
 
 test('Got it, Why? and Not useful each add to the local count that /ai card prints', () => {
   const v = cardVm();
+  cardFight(v);
   v.run(cardSlot(CARD));
-  v.run('STUB.now = STUB.now + 9; STUB.Tick()');
+  cardSignal(v, 'sig');
+  v.run('STUB.Tick()');
 
   cardClick(v, 'Got it');
   assert.equal(v.get('RunbackForeverDB.card.counts.got'), '1');
@@ -299,7 +334,8 @@ test('the setting turns the card off, and /ai card says so', () => {
   cardFight(v);
   assert.equal(v.get('RunbackForeverDB.card.requested'), 'nil', 'no request while off');
   v.run(cardSlot(CARD));
-  v.run('STUB.now = STUB.now + 9; STUB.Tick()');
+  cardSignal(v, 'sig');
+  v.run('STUB.Tick()');
   assert.equal(cardShown(v), 'false', 'no card while off');
   v.run('SlashCmdList["RUNBACK"]("card on")');
   assert.equal(v.get('RunbackForeverDB.card.enabled'), 'true');
@@ -310,7 +346,8 @@ test('with the combat log off there is no request and no card', () => {
   cardFight(v);
   assert.equal(v.get('RunbackForeverDB.card.requested'), 'nil');
   v.run(cardSlot(CARD));
-  v.run('STUB.now = STUB.now + 9; STUB.Tick()');
+  cardSignal(v, 'sig');
+  v.run('STUB.Tick()');
   assert.equal(cardShown(v), 'false', 'a card is not shown with the log off');
   v.run('SlashCmdList["RUNBACK"]("card")');
   assert.ok(cardPrints(v).includes('It stays off while the combat log is off.'), cardPrints(v));
@@ -320,16 +357,22 @@ test('a slot with no card shows nothing and raises nothing', () => {
   const v = cardVm();
   v.run('STUB.onLoadAddOn = function() Runback_SlotData = { now = time(), cwd = "" } end');
   cardFight(v);
-  v.run('STUB.now = STUB.now + 9; STUB.Tick()');
+  cardSignal(v, 'sig');
+  v.run('STUB.Tick()');
   assert.equal(cardShown(v), 'false');
   assert.equal(v.get('RunbackForeverDB.card.seen'), 'nil');
 });
 
-test('the same card is not shown twice', () => {
+test('with the sound channel off the card is read once after the request', () => {
   const v = cardVm();
+  v.run('RunbackDB.settings.signal = false');
+  cardFight(v);
+  assert.equal(v.get('RunbackForeverDB.card.requested'), '12:00/12:00');
   v.run(cardSlot(CARD));
-  v.run('STUB.now = STUB.now + 9; STUB.Tick()');
-  cardClick(v, 'Got it');
-  v.run('STUB.now = STUB.now + 9; STUB.Tick()');
-  assert.equal(cardShown(v), 'false', 'a second slot with the same card changes nothing');
+  const beforeLoads = loads(v);
+  v.run('STUB.now = STUB.now + 13; STUB.Tick()');
+  assert.equal(loads(v) - beforeLoads, 1, 'one read, not a poll loop');
+  assert.equal(cardShown(v), 'true');
+  v.run('STUB.now = STUB.now + 30; STUB.Tick()');
+  assert.equal(loads(v) - beforeLoads, 1, 'and no second read');
 });

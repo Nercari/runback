@@ -951,7 +951,9 @@ function finish(job, status, text, session, denied, stall) {
   if (denied && denied.length) summary = 'Needs your permission. Open the window and click How to allow.';
   noteMessage(job, status === 'done' ? 'assistant' : 'system', status === 'done' ? text : 'Bridge error: ' + text);
   publish(chatKey(job), { chat: job.chat, id: job.id, status, text, summary, followUps, cwd: job.cwd, session, denied, agent: job.agent || '', stall: stall || '' }, true);
-  signal('sig', job.id, true);
+  // A module may finish a job the addon must not read a slot for (a card with
+  // nothing to say): no sig flip, so no reply slot is spent.
+  if (!job.noSignal) signal('sig', job.id, true);
   log(`#${job.id}${job.session ? '@' + job.session : ''} ${status} (${text.length} chars${summary ? ', summary ' + summary.length : ', no summary'})`);
   drainQueue();
   if (exitWhenIdle && running.size === 0) process.exit(status === 'done' ? 0 : 1);

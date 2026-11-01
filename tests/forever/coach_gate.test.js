@@ -247,7 +247,7 @@ function make({ text = MODEL_SAYS, logDir = LOGS, reply = CTX } = {}) {
     state,
     log: () => {},
     saveState: () => {},
-    finish: (job, status, body) => finished.push({ status, body }),
+    finish: (job, status, body) => finished.push({ job, status, body }),
     runAgentOnce: async o => { calls.push(o); return { status: 'done', text }; },
   };
   return { ctx, state, finished, calls };
@@ -269,6 +269,7 @@ test('a card request is answered from the fixture with the counted numbers', asy
   assert.equal(calls[0].model, 'haiku', 'the cheap coach model writes the note');
   assert.equal(finished.length, 1);
   assert.equal(finished[0].body, '', 'no reply text: a card is not a chat reply');
+  assert.ok(!finished[0].job.noSignal, 'a card flips the sig, so the addon reads it');
 });
 
 test('a model sentence with a number the file did not count is dropped for the code sentence', async () => {
@@ -291,6 +292,7 @@ test('the combat log off gives no card and no error', async () => {
   assert.equal(owned, true, 'the request is still answered');
   assert.equal(state.forever.card, undefined);
   assert.equal(finished.length, 1, 'the job finishes so the addon stops sending it');
+  assert.equal(finished[0].job.noSignal, true, 'no card: no sig flip, so no reply slot is spent');
 });
 
 test('no usable log gives no card and no error', async () => {
