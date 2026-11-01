@@ -24,6 +24,7 @@ Permanent rule (Nercari, 2026-10-03): runback must comply 100% with Blizzard's T
 | Combat | No AI output or advice during combat or encounters: sends are blocked, replies are held until the fight ends, and a window opened by hand mid-fight shows "Replies are hidden during combat" instead of earlier replies, with the copy box closed (backlog 79). | `Forever_Lockout.lua`, `Forever_Calm.lua`; tests in `tests/forever/` |
 | Code and money | Code stays readable (no obfuscation), free, with no advertising or donation requests. | `OBFUSCATION`, `POLICY-SOLICIT` |
 | Agent advice | The mentor gives settings as menu paths, not `/run` scripts, and never suggests anything that automates play. It names only the addon's real buttons and commands (backlog 80). | `mentor/AGENTS.md` hard rule 9 and the game system prompt in `bridge/protocol.js`; `tests/bridge_test.js`, `tests/forever/game_controls.test.js` |
+| Permissions | Game text never widens what an agent may do: an `allow=` rule on a strip or reload record is ignored, the in-game **How to allow** button only explains the `config.json` step, and the bridge refuses a broad folder or one outside `allowedFolders`. Outside the mentor workspace the defaults are read-only. | `tests/bridge_test.js`, `tests/agents_test.js` |
 | Agent-built addons | Addons the agent writes go through the untrusted lint before they can be loaded, and the player loads them by hand. | `tools/safety-ci.js --untrusted`; `bridge/forever/modules/60-builder.js` |
 
 ## Audit, 2026-10-03

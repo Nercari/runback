@@ -413,7 +413,7 @@ test('while the agent works: one timer (the status line) and an action count tha
   assert.ok(!later.includes('no activity seen yet'), 'no "no activity seen yet" next to a listed action count');
 });
 
-test('a denied reply shows Allow, and Allow resends with the rules as flags', () => {
+test('a denied reply offers How to allow, and the click explains the PC step and sends nothing', () => {
   const vm = newVM();
   login(vm);
   connect(vm);
@@ -423,11 +423,14 @@ test('a denied reply shows Allow, and Allow resends with the rules as flags', ()
   nextSlot(vm, `{ now = time(), cwd = "", replies = { { chat = "${chatId}", id = ${id}, status = "done", text = "need permission", denied = { "WebSearch", "Bash(cargo:*)" } } } }`);
   vm.run('STUB.now = STUB.now + 6; STUB.Tick()');
   assert.equal(vm.evaluate('RunbackDB.chats[1].history[#RunbackDB.chats[1].history].denied[2]'), 'Bash(cargo:*)');
+  const before = vm.num('RunbackDB.lastSeq');
   vm.run(`Runback.Allow("${chatId}", { "WebSearch", "Bash(cargo:*)" })`);
-  const rec = stripRecords(vm).find(r => r.flags.includes('allow='));
-  assert.ok(rec, 'allow record on the strip');
-  assert.equal(rec.flags, 'allow=WebSearch,Bash(cargo:*)');
-  assert.equal(rec.id, id + 1);
+  // Decision 5 (issue 137): no permission rule leaves the game, and no message is sent.
+  assert.ok(stripRecords(vm).every(r => !r.flags.includes('allow=')), 'no allow record on the strip');
+  assert.equal(vm.num('RunbackDB.lastSeq'), before, 'nothing sent');
+  const last = vm.evaluate('RunbackDB.chats[1].history[#RunbackDB.chats[1].history].text');
+  assert.match(last, /bridge\/config\.json/);
+  assert.match(last, /agents\.<agent>\.allowedTools/);
 });
 
 test('the Allow button names tools plainly, connector tools included (backlog 81)', () => {
@@ -441,8 +444,8 @@ test('the Allow button names tools plainly, connector tools included (backlog 81
   nextSlot(vm, `{ now = time(), cwd = "", replies = { { chat = "${chatId}", id = ${id}, status = "done", text = "need permission", denied = ${denied} } } }`);
   vm.run('STUB.texts = {}; STUB.now = STUB.now + 6; STUB.Tick(); Runback.Render()');
   const texts = vm.evaluate('table.concat(STUB.texts, "|")').split('|');
-  assert.ok(texts.includes('Allow PowerShell, node, Google Drive (create file), playwright (browser click), Read & retry'),
-    texts.filter(t => t.startsWith('Allow')).join(' / ') || 'no Allow label');
+  assert.ok(texts.includes('How to allow: PowerShell, node, Google Drive (create file), playwright (browser click), Read'),
+    texts.filter(t => t.startsWith('How to allow')).join(' / ') || 'no allow label');
 });
 
 test('the window opens at the top centre on a fresh install and where it was left afterwards', () => {

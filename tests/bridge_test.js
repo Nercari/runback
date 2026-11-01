@@ -4,6 +4,8 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const path = require('path');
 const os = require('os');
+const fs = require('fs');
+const { spawn, spawnSync } = require('child_process');
 const luaparse = require('luaparse');
 const P = require('../bridge/protocol');
 
@@ -13,17 +15,19 @@ test('luaStr escapes everything Lua 5.1 needs', () => {
   assert.equal(P.luaStr(42), '"42"');
 });
 
-test('parseFlags reads new-session, hello, forget, context, agent and allow lists', () => {
-  const none = { newSession: false, hello: false, forget: false, stop: false, context: false, allow: [], agent: '', model: '', effort: '', cmd: '' };
+test('parseFlags reads new-session, hello, forget, context and agent; permission rules from the game are ignored', () => {
+  const none = { newSession: false, hello: false, forget: false, stop: false, context: false, agent: '', model: '', effort: '', cmd: '' };
   assert.deepEqual(P.parseFlags(''), none);
   assert.deepEqual(P.parseFlags('s'), { ...none, stop: true });
   assert.deepEqual(P.parseFlags('n'), { ...none, newSession: true });
   assert.deepEqual(P.parseFlags('h'), { ...none, hello: true });
   assert.deepEqual(P.parseFlags('d'), { ...none, forget: true });
   assert.deepEqual(P.parseFlags('h;c'), { ...none, hello: true, context: true });
-  assert.deepEqual(P.parseFlags('n;allow=WebSearch, Bash(git:*),'), { ...none, newSession: true, allow: ['WebSearch', 'Bash(git:*)'] });
+  // Decision 5 (issue 137): an old addon's allow= token changes nothing.
+  assert.deepEqual(P.parseFlags('n;allow=WebSearch, Bash(git:*),'), { ...none, newSession: true });
+  assert.deepEqual(P.parseFlags('allow=Bash(*)'), none);
   assert.deepEqual(P.parseFlags('agent=Codex'), { ...none, agent: 'codex' });
-  assert.deepEqual(P.parseFlags('n;agent=grok;allow=WebSearch'), { ...none, newSession: true, agent: 'grok', allow: ['WebSearch'] });
+  assert.deepEqual(P.parseFlags('n;agent=grok;allow=WebSearch'), { ...none, newSession: true, agent: 'grok' });
   // A model keeps its case; anything that could be read as a CLI flag or shell text is dropped.
   assert.deepEqual(P.parseFlags('agent=claude;model=claude-sonnet-4-5[1m]'), { ...none, agent: 'claude', model: 'claude-sonnet-4-5[1m]' });
   assert.equal(P.parseFlags('agent=hermes;model=openrouter/x-ai/grok-4').model, 'openrouter/x-ai/grok-4');
@@ -41,7 +45,7 @@ test('jobsFromStrip parses the current record format and keeps separators inside
   const rec = ['sess', 'chat1', '12', 'realms', 'allow=WebSearch', 'My chat', 'hello\x1Fworld'].join('\x1F');
   const jobs = P.jobsFromStrip(12, rec);
   assert.equal(jobs.length, 1);
-  assert.deepEqual(jobs[0], { session: 'sess', chat: 'chat1', id: 12, cwd: 'realms', newSession: false, hello: false, forget: false, stop: false, context: false, allow: ['WebSearch'], agent: '', model: '', effort: '', cmd: '', name: 'My chat', text: 'hello\x1Fworld', via: 'pixel' });
+  assert.deepEqual(jobs[0], { session: 'sess', chat: 'chat1', id: 12, cwd: 'realms', newSession: false, hello: false, forget: false, stop: false, context: false, agent: '', model: '', effort: '', cmd: '', name: 'My chat', text: 'hello\x1Fworld', via: 'pixel' });
   // A chat that picked its own agent says so in the flags.
   const codex = P.jobsFromStrip(13, ['sess', 'chat1', '13', '', 'agent=codex', 'My chat', 'hi'].join('\x1F'))[0];
   assert.equal(codex.agent, 'codex');
@@ -150,8 +154,9 @@ test('parseOutbox decodes the SavedVariables fallback', () => {
   const hex = s => Buffer.from(s, 'utf8').toString('hex');
   const src = `RunbackDB = {\n["outbox"] = {\n["id"] = 7,\n["session"] = "abc123",\n["chat"] = "c1",\n["text"] = "${hex('héllo')}",\n["cwd"] = "${hex('realms')}",\n["newSession"] = true,\n},\n["settings"] = {},\n}`;
   assert.deepEqual(P.parseOutbox(src), { id: 7, session: 'abc123', chat: 'c1', text: 'héllo', cwd: 'realms', newSession: true, via: 'reload' });
+  // A reload outbox from an old addon may carry allow rules; the bridge drops them.
   const withAllow = src.replace('["newSession"]', `["allow"] = "${hex('WebSearch\x1fBash(git:*)')}",\n["newSession"]`);
-  assert.deepEqual(P.parseOutbox(withAllow).allow, ['WebSearch', 'Bash(git:*)']);
+  assert.equal(P.parseOutbox(withAllow).allow, undefined);
   const withCtx = src.replace('["newSession"]', `["ctx"] = "${hex('Character: Testchar')}",\n["newSession"]`);
   assert.equal(P.parseOutbox(withCtx).ctx, 'Character: Testchar');
   const withAgent = src.replace('["newSession"]', '["agent"] = "codex",\n["newSession"]');
@@ -260,6 +265,22 @@ test('isBroadFolder: drive root, home and above, Documents/Desktop/Downloads; a 
   for (const d of [path.join(home, 'Documents', 'wow-mentor'), path.join(home, 'code'), path.join(os.tmpdir(), 'elsewhere', 'Documents')]) {
     assert.equal(P.isBroadFolder(d, home), false, d);
   }
+});
+
+test('folderProblem: a broad folder and any folder outside the allowed roots are refused', () => {
+  const home = path.join(os.tmpdir(), 'runback-home', 'nercari');
+  const mentor = path.join(home, 'Documents', 'wow-mentor');
+  const project = path.join(home, 'code', 'realms');
+  const roots = [mentor, project];
+  assert.equal(P.folderProblem(path.join(mentor, 'reviews'), roots, home), '');
+  assert.equal(P.folderProblem(project, roots, home), '');
+  assert.equal(P.folderProblem(path.join(home, 'code', 'other'), roots, home), 'outside');
+  assert.equal(P.folderProblem(path.join(mentor, '..', 'realms'), roots, home), 'outside');
+  // A folder named on purpose is still refused when it is broad.
+  assert.equal(P.folderProblem(home, roots, home), 'broad');
+  assert.equal(P.folderProblem(path.join(home, 'Documents'), roots, home), 'broad');
+  // No roots means no folder is allowed, not every folder.
+  assert.equal(P.folderProblem(project, [], home), 'outside');
 });
 
 test('pickDefaultCwd: explicit wins, broad start and config folders fall back to the mentor workspace', () => {
@@ -508,4 +529,151 @@ test('jobsFromStrip keeps only ids that survive as integers', () => {
   assert.equal(P.jobsFromStrip(1, rec('12'))[0].id, 12);
   const old = ['sess', 'chat1', huge, 'C:\\x', 'n', 'second'].join('\x1F');
   assert.deepEqual(P.jobsFromStrip(9, old), []);
+});
+
+// ---------------------------------------------------------------------------
+// Decision 5 (issue 137), end to end: the real bridge and a fake Claude CLI.
+// ---------------------------------------------------------------------------
+
+const FAKE = `
+const fs = require('fs');
+if (process.env.FAKE_ARGV) fs.writeFileSync(process.env.FAKE_ARGV, JSON.stringify(process.argv.slice(2)));
+let input = '';
+process.stdin.on('data', c => { input += c; });
+process.stdin.on('end', () => {
+  console.log(JSON.stringify({ type: 'result', session_id: 's1', is_error: false, result: 'PONG' }));
+});
+`;
+const MARK = 'PONG';
+
+function sandbox({ allowed = [], defaultCwd } = {}) {
+  const S = fs.mkdtempSync(path.join(os.tmpdir(), 'runback-perm-'));
+  const repo = path.join(S, 'repo');
+  fs.cpSync(path.join(__dirname, '..', 'bridge'), path.join(repo, 'bridge'), { recursive: true, filter: f => !/[\\/]bridge[\\/]tmp/.test(f) });
+  fs.cpSync(path.join(__dirname, '..', 'mentor'), path.join(repo, 'mentor'), { recursive: true });
+  fs.mkdirSync(path.join(S, 'addons', 'Runback'), { recursive: true });
+  fs.mkdirSync(path.join(S, 'proj'), { recursive: true });
+  fs.mkdirSync(path.join(S, 'outside'), { recursive: true });
+  fs.writeFileSync(path.join(S, 'addons', 'Runback', 'Runback.toc'), '## Interface: 16001\n');
+  fs.writeFileSync(path.join(S, 'fake-claude.js'), FAKE);
+  const cfg = JSON.parse(fs.readFileSync(path.join(repo, 'bridge', 'config.example.json'), 'utf8'));
+  Object.assign(cfg, {
+    addonDir: path.join(S, 'addons'), inboxFile: path.join(S, 'addons', 'Runback', 'Inbox.lua'),
+    savedVariablesFile: path.join(S, 'saved.lua'), defaultCwd: defaultCwd || path.join(S, 'proj'),
+    allowedFolders: allowed, slots: 5, progressWriteMs: 1, pollMs: 50,
+  });
+  cfg.capture = { ...(cfg.capture || {}), enabled: false };
+  cfg.agent = 'claude';
+  cfg.agents = { ...(cfg.agents || {}), claude: { ...((cfg.agents || {}).claude || {}), path: path.join(S, 'fake-claude.js') } };
+  cfg.forever = { ...(cfg.forever || {}), mentorDir: path.join(S, 'mentor-workspace') };
+  fs.writeFileSync(path.join(repo, 'bridge', 'config.json'), JSON.stringify(cfg, null, 2));
+  assert.equal(spawnSync(process.execPath, ['install-slots.js'], { cwd: path.join(repo, 'bridge'), encoding: 'utf8' }).status, 0);
+  const env = { ...process.env, FAKE_ARGV: path.join(S, 'argv.json') };
+  delete env.CLAUDECODE;
+  const run = args => spawnSync(process.execPath, args, { cwd: path.join(repo, 'bridge'), encoding: 'utf8', env, timeout: 60000 });
+  const argv = () => fs.existsSync(env.FAKE_ARGV) ? JSON.parse(fs.readFileSync(env.FAKE_ARGV, 'utf8')) : null;
+  const config = () => fs.readFileSync(path.join(repo, 'bridge', 'config.json'), 'utf8');
+  // The reload path: the addon's SavedVariables outbox, with an old allow= rule.
+  const outbox = (id, cwd, allow, cmd) => {
+    const hex = s => Buffer.from(s, 'utf8').toString('hex');
+    fs.writeFileSync(cfg.savedVariablesFile, 'RunbackDB = {\n["outbox"] = {\n' +
+      `["id"] = ${id},\n["text"] = "${hex('hello')}",\n["cwd"] = "${hex(cwd)}",\n` +
+      (allow ? `["allow"] = "${hex(allow)}",\n` : '') +
+      (cmd ? `["cmd"] = "${cmd}",\n` : '') + '},\n}\n');
+  };
+  // The bridge stays up while the reload poll picks the outbox up (an async
+  // module owns the job briefly, so --once would exit too early).
+  const runLive = (id, cwd, marker, allow, cmd) => {
+    outbox(id, cwd, allow, cmd);
+    return new Promise((resolve, reject) => {
+      const child = spawn(process.execPath, ['bridge.js'], { cwd: path.join(repo, 'bridge'), env, stdio: 'ignore' });
+      const started = Date.now();
+      const stop = () => {
+        child.kill();
+        if (child.exitCode !== null || child.signalCode) resolve();
+        else child.once('exit', resolve);
+      };
+      const timer = setInterval(() => {
+        let text = '';
+        try { text = fs.readFileSync(cfg.inboxFile, 'utf8'); } catch {}
+        if (text.includes(marker)) { clearInterval(timer); stop(); return; }
+        if (Date.now() - started > 15000) { clearInterval(timer); stop(); reject(new Error(`timed out waiting for ${marker}`)); }
+      }, 50);
+    });
+  };
+  return { S, repo, cfg, run, argv, config, outbox, runLive };
+}
+
+test('outside the mentor workspace the default tools are read-only', () => {
+  const s = sandbox();
+  try {
+    const r = s.run(['bridge.js', '--inject', 'hello', '--agent', 'claude']);
+    assert.equal(r.status, 0, r.stdout + r.stderr);
+    const args = s.argv();
+    const mode = args.indexOf('--permission-mode');
+    assert.equal(args[mode + 1], 'default');
+    const at = args.indexOf('--allowedTools');
+    assert.ok(at >= 0);
+    const rules = [];
+    for (let i = at + 1; i < args.length && !args[i].startsWith('--'); i++) rules.push(args[i]);
+    assert.deepEqual(rules, ['Read', 'Grep', 'Glob', 'WebSearch', 'WebFetch']);
+    assert.ok(!rules.some(rule => /^(Bash|Write|Edit)/.test(rule)), rules.join(', '));
+  } finally { fs.rmSync(s.S, { recursive: true, force: true }); }
+});
+
+test('an allow= rule from the game leaves config.json unchanged', async () => {
+  const s = sandbox();
+  try {
+    const before = s.config();
+    await s.runLive(1, path.join(s.S, 'proj'), MARK, 'Bash(*)');
+    assert.equal(s.config(), before, 'config.json is byte-for-byte the same');
+    const args = s.argv();
+    assert.ok(!args.some(a => /^Bash\(/.test(a)), args.join(' '));
+  } finally { fs.rmSync(s.S, { recursive: true, force: true }); }
+});
+
+test('a folder outside allowedFolders is refused, and added only by config.json', async () => {
+  let s = sandbox();
+  try {
+    await s.runLive(1, path.join(s.S, 'outside'), 'outside the folders this bridge allows');
+    assert.equal(s.argv(), null, 'no agent run in a refused folder');
+  } finally { fs.rmSync(s.S, { recursive: true, force: true }); }
+
+  // The terminal adds it: the same chat now runs, read-only.
+  s = sandbox({ allowed: [path.join(os.tmpdir(), 'runback-not-this-one')] });
+  try {
+    const cfg = JSON.parse(s.config());
+    cfg.allowedFolders = [path.join(s.S, 'outside')];
+    fs.writeFileSync(path.join(s.repo, 'bridge', 'config.json'), JSON.stringify(cfg, null, 2));
+    await s.runLive(1, path.join(s.S, 'outside'), MARK);
+    assert.ok(s.argv(), 'the agent ran inside an allowed folder');
+  } finally { fs.rmSync(s.S, { recursive: true, force: true }); }
+});
+
+test('a module job (council) cannot claim a refused folder', async () => {
+  const s = sandbox();
+  try {
+    await s.runLive(1, path.join(s.S, 'outside'), 'outside the folders this bridge allows', '', 'council');
+    assert.equal(s.argv(), null, 'council never started an agent in a refused folder');
+  } finally { fs.rmSync(s.S, { recursive: true, force: true }); }
+});
+
+test('an agent with no read-only limit is refused outside the mentor workspace', () => {
+  const s = sandbox();
+  try {
+    const r = s.run(['bridge.js', '--inject', 'hello', '--agent', 'hermes']);
+    assert.notEqual(r.status, 0, r.stdout + r.stderr);
+    assert.equal(s.argv(), null);
+    assert.match(fs.readFileSync(s.cfg.inboxFile, 'utf8'), /read-only tools outside the mentor workspace/);
+  } finally { fs.rmSync(s.S, { recursive: true, force: true }); }
+});
+
+test('a broad folder is refused even when the terminal named it', () => {
+  const s = sandbox();
+  try {
+    const r = s.run(['bridge.js', '--project', os.homedir(), '--inject', 'hello', '--agent', 'claude']);
+    assert.notEqual(r.status, 0, r.stdout + r.stderr);
+    assert.equal(s.argv(), null);
+    assert.match(fs.readFileSync(s.cfg.inboxFile, 'utf8'), /broad folder/);
+  } finally { fs.rmSync(s.S, { recursive: true, force: true }); }
 });

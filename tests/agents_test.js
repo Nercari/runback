@@ -68,6 +68,19 @@ test('Claude Code: headless stream-json with the allowlist, resume and system pr
   assert.equal(env.PATH, 'x');
 });
 
+test('readOnlyConfig: outside the mentor workspace the defaults are read-only', () => {
+  const cfg = A.readOnlyConfig({ permissionMode: 'acceptEdits', allowedTools: ['Bash(git:*)', 'Write'], model: 'opus' });
+  assert.equal(cfg.permissionMode, 'default');
+  assert.deepEqual(cfg.allowedTools, A.READ_ONLY_TOOLS);
+  assert.equal(cfg.model, 'opus', 'model and other settings are kept');
+  assert.ok(!A.AGENTS.claude.args({ cfg, resume: '', system: '', cwd: 'x' }).includes('Bash(git:*)'));
+  const claude = A.AGENTS.claude.args({ cfg, resume: '', system: '', cwd: 'x' });
+  assert.ok(claude.includes('--permission-mode') && claude.includes('default'));
+  assert.ok(A.AGENTS.codex.args({ cfg, resume: '', cwd: 'x' }).includes('read-only'));
+  const grok = A.AGENTS.grok.args({ cfg, resume: '', cwd: 'x', system: '', promptFile: 'f' });
+  assert.ok(!grok.includes('Edit') && !grok.some(a => /^Bash/.test(a)), grok.join(' '));
+});
+
 test('Codex: exec --json in the chat folder, sandbox from permissionMode, resume as a subcommand, prompt on stdin with the context on top', () => {
   const args = A.AGENTS.codex.args({ cfg: { permissionMode: 'acceptEdits', model: 'gpt-5-codex' }, resume: '', cwd: 'C:\\p' });
   assert.deepEqual(args, ['exec', '--json', '--skip-git-repo-check', '-C', 'C:\\p', '--sandbox', 'workspace-write', '-m', 'gpt-5-codex', '-']);
