@@ -180,3 +180,156 @@ test('only the player-click switch calls LoggingCombat with an argument', () => 
     'elseif Runback.SetCombatLog(true) then',
   ]);
 });
+
+// ---------------------------------------------------------------------------
+// The between-pull coach card (#140): asked for once a fight, shown out of combat
+// only, counted locally, and off with the setting or the combat log.
+// ---------------------------------------------------------------------------
+function cardVm(logging = true) {
+  const L = lauxlib.luaL_newstate(); lualib.luaL_openlibs(L);
+  const run = code => {
+    const loaded = lauxlib.luaL_loadstring(L, to_luastring(code));
+    assert.equal(loaded, lua.LUA_OK, loaded === lua.LUA_OK ? '' : to_jsstring(lua.lua_tostring(L, -1)));
+    if (lua.lua_pcall(L, 0, 0, 0) !== lua.LUA_OK) throw new Error(to_jsstring(lua.lua_tostring(L, -1)));
+  };
+  const get = expr => {
+    run(`RESULT = tostring(${expr})`); lua.lua_getglobal(L, to_luastring('RESULT'));
+    const value = to_jsstring(lua.lua_tolstring(L, -1)); lua.lua_pop(L, 1); return value;
+  };
+  run(fs.readFileSync(path.join(__dirname, '..', 'wow_stub.lua'), 'utf8'));
+  run('unpack = table.unpack');
+  // The log is only ever read here: a write with an argument would be the player's click.
+  run(`STUB.logging = ${logging}
+    LOG_SETS = {}
+    function LoggingCombat(on) if on ~= nil then table.insert(LOG_SETS, tostring(on)); STUB.logging = on end return STUB.logging end`);
+  for (const file of ['Codec.lua', 'Inbox.lua', 'Runback.lua', 'Forever.lua', 'Forever_Lockout.lua', 'Forever_Context.lua', 'Forever_Card.lua']) run(read(file));
+  run('STUB.FireEvent("ADDON_LOADED", "Runback"); STUB.FireEvent("PLAYER_LOGIN"); STUB.RunTimers()');
+  run('Runback.IsConnected = function() return true end');
+  return { run, get };
+}
+
+const cardPrints = v => v.get('table.concat(STUB.prints, "\\n")');
+// The request is made one frame after the fight, once the context has the end time.
+const cardFight = v => v.run('STUB.combat = true; STUB.FireEvent("PLAYER_REGEN_DISABLED"); STUB.now = STUB.now + 30; STUB.combat = false; STUB.FireEvent("PLAYER_REGEN_ENABLED"); STUB.RunTimers()');
+const cardSlot = card => `STUB.onLoadAddOn = function() Runback_SlotData = { now = time(), cwd = "", card = ${card} } end`;
+const CARD = '{ key = "2026-09-25T20:00:10/2026-09-25T20:00:43", text = "One change: keep attacking; the gaps cost you damage.", why = "Why: you did nothing for 6 s of the 33 s pull.", counts = "33 s pull, 7 hits taken, 6 enemy casts." }';
+const cardClick = (v, label) => v.run(`(function()
+  for _, f in ipairs(RunbackCardFrame.children) do
+    if f.kind == "Button" and f.text == ${JSON.stringify(label)} then f.scripts.OnClick(f); return true end
+  end
+  error("no button " .. ${JSON.stringify(label)})
+end)()`);
+const cardShown = v => v.get(`(RunbackCardFrame ~= nil and RunbackCardFrame.shown == true) and "true" or "false"`);
+const cardTextOf = v => v.get(`(function()
+  local out = {}
+  for _, c in ipairs(RunbackCardFrame.children) do
+    if c.kind == "FontString" and c.shown ~= false and c.text and c.text ~= "" then out[#out + 1] = c.text end
+  end
+  return table.concat(out, " | ")
+end)()`);
+
+test('a fight asks for one card; the slot answer shows it out of combat, never in the chat', () => {
+  const v = cardVm();
+  const before = v.get('#RunbackDB.chats[1].history');
+  cardFight(v);
+  assert.equal(v.get('RunbackForeverDB.card.requested'), '12:00/12:00', 'asked for once per fight');
+  assert.equal(v.get('RunbackStrip.shown'), 'true', 'the request went out on the strip');
+  assert.equal(v.get('STUB.logging'), 'true', 'nothing here switches the log');
+  assert.equal(v.get('table.concat(LOG_SETS, ",")'), '');
+
+  v.run(cardSlot(CARD));
+  v.run('STUB.now = STUB.now + 9; STUB.Tick()');
+  assert.equal(cardShown(v), 'true');
+  assert.match(cardTextOf(v), /One change: keep attacking/);
+  assert.match(cardTextOf(v), /Why: you did nothing for 6 s of the 33 s pull/);
+  assert.equal(v.get('#RunbackDB.chats[1].history'), before, 'no chat message');
+  assert.doesNotMatch(cardPrints(v), /One change/, 'no chat line');
+  assert.equal(v.get('RunbackForeverDB.card.counts.got'), '0');
+});
+
+test('the card is held in combat and shows when the lockout ends', () => {
+  const v = cardVm();
+  v.run('STUB.combat = true; STUB.FireEvent("PLAYER_REGEN_DISABLED")');
+  v.run(cardSlot(CARD));
+  v.run('STUB.now = STUB.now + 9; STUB.Tick()');
+  assert.equal(cardShown(v), 'false', 'nothing shows in a fight');
+  assert.equal(v.get('RunbackForeverDB.card.seen'), '2026-09-25T20:00:10/2026-09-25T20:00:43', 'the card is kept');
+  v.run('STUB.combat = false; STUB.FireEvent("PLAYER_REGEN_ENABLED")');
+  assert.equal(cardShown(v), 'true', 'shown once the fight ends');
+});
+
+test('a card that arrives during a fight is hidden again if the fight restarts', () => {
+  const v = cardVm();
+  v.run(cardSlot(CARD));
+  v.run('STUB.now = STUB.now + 9; STUB.Tick()');
+  assert.equal(cardShown(v), 'true');
+  v.run('STUB.combat = true; STUB.FireEvent("PLAYER_REGEN_DISABLED")');
+  assert.equal(cardShown(v), 'false', 'hidden when the next pull starts');
+});
+
+test('Got it, Why? and Not useful each add to the local count that /ai card prints', () => {
+  const v = cardVm();
+  v.run(cardSlot(CARD));
+  v.run('STUB.now = STUB.now + 9; STUB.Tick()');
+
+  cardClick(v, 'Got it');
+  assert.equal(v.get('RunbackForeverDB.card.counts.got'), '1');
+  assert.equal(cardShown(v), 'false', 'the card closes');
+
+  v.run('RunbackCard.Sync({ key = "next/2", text = "One change: second note.", why = "Why: 2 hits in 3 s.", counts = "33 s pull, 7 hits taken, 6 enemy casts." })');
+  assert.equal(cardShown(v), 'true', 'a new card replaces the answered one');
+  cardClick(v, 'Why?');
+  assert.equal(v.get('RunbackForeverDB.card.counts.why'), '1');
+  assert.equal(cardShown(v), 'true', 'Why? opens the numbers and keeps the card');
+  assert.match(cardTextOf(v), /33 s pull, 7 hits taken, 6 enemy casts/);
+
+  cardClick(v, 'Not useful');
+  assert.equal(v.get('RunbackForeverDB.card.counts.no'), '1');
+  assert.equal(cardShown(v), 'false');
+
+  v.run('SlashCmdList["RUNBACK"]("card")');
+  assert.ok(cardPrints(v).includes('Coach card: on. Got it 1, Why? 1, Not useful 1.'), cardPrints(v));
+});
+
+test('the setting turns the card off, and /ai card says so', () => {
+  const v = cardVm();
+  v.run('SlashCmdList["RUNBACK"]("card off")');
+  assert.equal(v.get('RunbackForeverDB.card.enabled'), 'false');
+  assert.ok(cardPrints(v).includes('Coach card: off. Got it 0, Why? 0, Not useful 0.'), cardPrints(v));
+  cardFight(v);
+  assert.equal(v.get('RunbackForeverDB.card.requested'), 'nil', 'no request while off');
+  v.run(cardSlot(CARD));
+  v.run('STUB.now = STUB.now + 9; STUB.Tick()');
+  assert.equal(cardShown(v), 'false', 'no card while off');
+  v.run('SlashCmdList["RUNBACK"]("card on")');
+  assert.equal(v.get('RunbackForeverDB.card.enabled'), 'true');
+});
+
+test('with the combat log off there is no request and no card', () => {
+  const v = cardVm(false);
+  cardFight(v);
+  assert.equal(v.get('RunbackForeverDB.card.requested'), 'nil');
+  v.run(cardSlot(CARD));
+  v.run('STUB.now = STUB.now + 9; STUB.Tick()');
+  assert.equal(cardShown(v), 'false', 'a card is not shown with the log off');
+  v.run('SlashCmdList["RUNBACK"]("card")');
+  assert.ok(cardPrints(v).includes('It stays off while the combat log is off.'), cardPrints(v));
+});
+
+test('a slot with no card shows nothing and raises nothing', () => {
+  const v = cardVm();
+  v.run('STUB.onLoadAddOn = function() Runback_SlotData = { now = time(), cwd = "" } end');
+  cardFight(v);
+  v.run('STUB.now = STUB.now + 9; STUB.Tick()');
+  assert.equal(cardShown(v), 'false');
+  assert.equal(v.get('RunbackForeverDB.card.seen'), 'nil');
+});
+
+test('the same card is not shown twice', () => {
+  const v = cardVm();
+  v.run(cardSlot(CARD));
+  v.run('STUB.now = STUB.now + 9; STUB.Tick()');
+  cardClick(v, 'Got it');
+  v.run('STUB.now = STUB.now + 9; STUB.Tick()');
+  assert.equal(cardShown(v), 'false', 'a second slot with the same card changes nothing');
+});
