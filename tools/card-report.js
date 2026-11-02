@@ -53,6 +53,7 @@ function summarise(cards, saved) {
   const known = noted.filter((r) => typeof r.cost === "number");
   const spent = known.reduce((sum, r) => sum + r.cost, 0);
   const per = known.length ? spent / known.length : 0;
+  const dearest = known.reduce((m, r) => Math.max(m, r.cost), 0);
   const pulls = saved ? saved.got + saved.why + saved.no : 0;
 
   const keepState = rows.length < 20 || !noted.length
@@ -60,7 +61,7 @@ function summarise(cards, saved) {
     : state(kept / noted.length >= KEEP_SHARE);
   const costState = !noted.length || known.length < noted.length
     ? "PENDING"
-    : state(per < MAX_COST);
+    : state(dearest < MAX_COST); // "under $0.01 each": the dearest note decides, not the mean
   const uses = saved
     ? pulls < 5 ? "PENDING" : state(pulls >= 5 && saved.got >= 3)
     : "PENDING";
@@ -72,10 +73,11 @@ function summarise(cards, saved) {
       (noted.length ? ` (${Math.round((100 * kept) / noted.length)}%) ` : " ") +
       `${keepState} (${KEEP_SHARE * 100}% of the notes)`,
     `Cost: ${money(spent)} over ${known.length} of ${noted.length} notes, ` +
-      `${known.length ? money(per) : "$?"} a note ${costState} (under ${money(MAX_COST)})`,
+      `${known.length ? money(per) : "$?"} a note, dearest ${money(dearest)} ${costState} (each under ${money(MAX_COST)})`,
   ];
   if (saved) {
     lines.push(`Card counts: got ${saved.got}, why ${saved.why}, no ${saved.no}`);
+    // "Got it" is the addon's closest count to "used the note on the next pull"; Pedro's own call stays the final word.
     lines.push(`Uses: ${saved.got} of ${pulls} ${uses} (at 3 of 5)`);
   } else {
     lines.push(`Card counts: not read (give --saved <Runback.lua>) Uses: PENDING`);

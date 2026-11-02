@@ -54,7 +54,7 @@ function runAgentOnce({ agentId, cwd, prompt, timeoutMs, model }, deps) {
     const done = (status, text) => {
       if (ended) return; ended = true; clearTimeout(timer);
       if (promptFile) fs.rm(promptFile, { force: true }, () => {});
-      resolve({ status, text, cost });
+      resolve(cost === undefined ? { status, text } : { status, text, cost });
     };
     const line = src => {
       let ev;

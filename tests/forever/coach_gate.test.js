@@ -384,7 +384,7 @@ test('the 20-fight table passes at 19 kept notes under a cent each', () => {
   assert.equal(r.failed, false);
   assert.match(text, /Fights: 20 \(notes 20, quiet 0\)/);
   assert.match(text, /Kept: 19 of 20 \(95%\) PASS/);
-  assert.match(text, /Cost: \$0\.00400 over 20 of 20 notes, \$0\.00020 a note PASS/);
+  assert.match(text, /Cost: \$0\.00400 over 20 of 20 notes, \$0\.00020 a note, dearest \$0\.00020 PASS/);
   assert.match(text, /Card counts: got 3, why 1, no 1/);
   assert.match(text, /Uses: 3 of 5 PASS/);
   assert.match(text, /\| 1 \| 2026-10-01T20:00:00 \| 30 \| 3 \| 2 \| 0 \| 0 \| 1 \| 1 \| interrupt \| code \| \$0\.00020 \|/);
@@ -399,14 +399,20 @@ test('the table fails when the kept facts drop below 90% or a note passes a cent
   assert.match(text, /Uses: 2 of 5 FAIL/);
 
   const dear = Array.from({ length: 20 }, (_, i) => row(i, { cost: 0.02 }));
-  assert.match(R.summarise(dear, null).lines.join('\n'), /FAIL \(under \$0\.01000\)/);
+  assert.match(R.summarise(dear, null).lines.join('\n'), /FAIL \(each under \$0\.01000\)/);
+});
+
+test('one note over a cent fails even when the mean is under it', () => {
+  const rows = Array.from({ length: 20 }, (_, i) => row(i, i === 0 ? { cost: 0.03 } : { cost: 0.0001 }));
+  const text = R.summarise(rows, null).lines.join('\n');
+  assert.match(text, /dearest \$0\.03000 FAIL/);
 });
 
 test('a note with no reported cost is pending, never a pass', () => {
   const rows = Array.from({ length: 20 }, (_, i) => row(i, i === 0 ? { cost: null } : {}));
   const text = R.summarise(rows, { got: 3, why: 1, no: 1 }).lines.join('\n');
   assert.match(text, /Cost: \$0\.00380 over 19 of 20 notes/);
-  assert.match(text, /\$0\.00020 a note PENDING/);
+  assert.match(text, /a note, dearest \$0\.00020 PENDING/);
 });
 
 test('the table waits for 20 fights and for the addon counts', () => {
