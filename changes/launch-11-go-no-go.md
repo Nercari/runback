@@ -1,0 +1,3 @@
+### Added
+
+- **`/runback check` for the launch go/no-go checklist (#141).** One command prints the values rows 3 to 6 and 11 of `probe/CHECKLIST.md` ask for: client build and interface, the addon's own TOC interface with out-of-date state, the type of each API the mentor reads (`PlaySoundFile`, `GetNumTalentTabs`, `C_ClassTalents.GetActiveConfigID`, `MouseIsOver`, `GetMacroIndexByName`), both `C_Secrets` answers (out of combat only), the combat-log state and the transport mode. The block opens selected, so one Ctrl+C pastes it into the issue, and the command sends nothing to the game. `probe/CHECKLIST.md` is the 15-minute table with the go/no-go rule.
