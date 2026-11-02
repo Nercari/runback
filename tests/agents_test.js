@@ -297,6 +297,7 @@ test('Claude stream: tool calls and text become progress, the result carries the
   const costed = p.feed({ type: 'result', result: 'Done.', total_cost_usd: 0.0012 });
   assert.equal(costed.cost, 0.0012);
   assert.deepEqual(costed.done, { text: 'Done.', error: false });
+  assert.equal(p.feed({ type: 'result', result: 'Done.', total_cost_usd: null }).cost, undefined, 'a null cost is no cost, not $0');
   assert.deepEqual(r.denied, ['Bash(cargo:*)', 'WebSearch']);
   assert.deepEqual(r.notes, ['Claude needs your OK to continue. Click Allow in the window.']);
   // A raw multi-line command never reaches the note the game chat prints.

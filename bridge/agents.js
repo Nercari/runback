@@ -80,8 +80,7 @@ function claudeParser() {
         }
       } else if (ev.type === 'result') {
         const text = typeof ev.result === 'string' ? ev.result : JSON.stringify(ev.result ?? '', null, 2);
-        const cost = Number(ev.total_cost_usd);
-        if (Number.isFinite(cost)) out.cost = cost;
+        if (typeof ev.total_cost_usd === 'number' && Number.isFinite(ev.total_cost_usd)) out.cost = ev.total_cost_usd;
         const denials = Array.isArray(ev.permission_denials) ? ev.permission_denials : [];
         if (denials.length) {
           out.denied = [...new Set(denials.flatMap(rulesFor))];
