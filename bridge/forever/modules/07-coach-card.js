@@ -23,12 +23,23 @@ async function sentence(ctx, counts, check) {
   const model = A.coachModel(acfg, agentId);
   const cwd = ctx.cfg.forever.mentorDir || ctx.REPO;
   const r = await ctx.runAgentOnce({ agentId, cwd, model, prompt: C.modelPrompt(counts, check), timeoutMs: TIMEOUT_MS });
-  if (!r || r.status !== 'done') return '';
+  const cost = r && Number.isFinite(r.cost) ? r.cost : null;
+  if (!r || r.status !== 'done') return { text: '', cost };
   const { text: body, summary } = P.splitSummary(String(r.text || ''));
   const line = (summary || body).split('\n').map(s => s.trim()).filter(Boolean).pop() || '';
   const clean = line.replace(/^["'`]|["'`]$/g, '').replace(/^one change:\s*/i, '').trim();
-  if (clean.length > MAX_TEXT) return '';
-  return C.numbersOk(clean, counts) ? clean : '';
+  if (clean.length > MAX_TEXT) return { text: '', cost };
+  return { text: C.numbersOk(clean, counts) ? clean : '', cost };
+}
+
+// One row per fight that the card looked at, kept in state.json for
+// tools/card-report.js (#143): the counts, the sentence's source and what it cost.
+const MAX_ROWS = 60;
+function remember(ctx, row) {
+  const rows = ctx.state.forever.cards = Array.isArray(ctx.state.forever.cards) ? ctx.state.forever.cards : [];
+  rows.push(row);
+  if (rows.length > MAX_ROWS) rows.splice(0, rows.length - MAX_ROWS);
+  if (ctx.saveState) ctx.saveState();
 }
 
 // Null means no card: the log was off, there is no usable log, the fight shows
@@ -45,14 +56,19 @@ async function build(ctx, text) {
   if (!lines || !lines.length) return null;
   const counts = C.count(lines, { player, start: w.start, end: w.end });
   const check = C.pick(counts);
-  if (!check) return null;
-  const said = await sentence(ctx, counts, check).catch(() => '');
-  return {
+  if (!check) {
+    remember(ctx, { at: new Date().toISOString(), key, counts, check: null, source: 'none', text: '', cost: null });
+    return null;
+  }
+  const said = await sentence(ctx, counts, check).catch(() => ({ text: '', cost: null }));
+  const card = {
     key,
-    text: 'One change: ' + (said || C.change(check)),
+    text: 'One change: ' + (said.text || C.change(check)),
     why: 'Why: ' + C.reason(check, counts),
     counts: C.countsLine(counts),
   };
+  remember(ctx, { at: new Date().toISOString(), key, counts, check: check.rule, source: said.text ? 'model' : 'code', text: card.text, cost: said.cost });
+  return card;
 }
 
 async function handle(job, ctx) {

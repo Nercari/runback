@@ -50,11 +50,11 @@ function runAgentOnce({ agentId, cwd, prompt, timeoutMs, model }, deps) {
   return new Promise(resolve => {
     const child = spawn(cmd.file, args, { cwd, env, windowsHide: true, stdio: [input.stdin !== undefined ? 'pipe' : 'ignore', 'pipe', 'pipe'] });
     if (onSpawn) onSpawn(child);
-    const parser = agent.parser(); let buffer = '', stdoutText = '', stderr = '', result = null, ended = false;
+    const parser = agent.parser(); let buffer = '', stdoutText = '', stderr = '', result = null, ended = false, cost;
     const done = (status, text) => {
       if (ended) return; ended = true; clearTimeout(timer);
       if (promptFile) fs.rm(promptFile, { force: true }, () => {});
-      resolve({ status, text });
+      resolve({ status, text, cost });
     };
     const line = src => {
       let ev;
@@ -62,6 +62,8 @@ function runAgentOnce({ agentId, cwd, prompt, timeoutMs, model }, deps) {
       try {
         const r = parser.feed(ev);
         if (r && r.done) result = r.done;
+        // The coach card records what one note cost (#143); only some agents report it.
+        if (r && Number.isFinite(r.cost)) cost = r.cost;
       } catch (e) { result = { text: e.message, error: true }; }
     };
     child.stdout.on('data', chunk => {
