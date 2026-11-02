@@ -3695,8 +3695,45 @@ local HELP = table.concat({
 	"/runback signal on|off          the cheap sound-file readiness check (off if it spams errors)",
 	"/runback slots                  how many reply slots are still free this session",
 	"/runback diag                   transport diagnostics (is the cheap sound-file channel working?)",
+	"/runback check                  launch go/no-go: build, interface, API types, secret values and combat log in one block, selected for Ctrl+C",
 	"/runback clear                  clear this chat's transcript",
 }, "\n")
+
+-- Launch go/no-go (#141), rows 3 to 6 and 11 of probe/CHECKLIST.md in one block:
+-- the same values the checklist's /dump lines ask for, so the live run is one
+-- command and a Ctrl+C instead of seven pastes. Reads only; sends nothing.
+local function CheckBlock()
+	local version, build, _, toc = Try(GetBuildInfo)
+	toc = tonumber(toc)
+	local addonName = ADDON_NAME or "Runback"
+	local addonToc = tonumber(Try(C_AddOns.GetAddOnMetadata, addonName, "Interface"))
+	local loaded = Try(C_AddOns.IsAddOnLoaded, addonName)
+	local tocLine = tostring(addonToc)
+	if addonToc and toc then
+		tocLine = addonToc .. (addonToc == toc and " (current)"
+			or (addonToc < toc and " (OUT OF DATE: tick Load out of date addons)" or " (newer than the client)"))
+	end
+	local secrets
+	if InCombatLockdown() then
+		secrets = "in combat; run this again after the fight"
+	elseif type(C_Secrets) ~= "table" then
+		secrets = "C_Secrets absent"
+	else
+		secrets = "HasSecretRestrictions " .. tostring(Try(C_Secrets.HasSecretRestrictions))
+			.. ", ShouldUnitHealthMaxBeSecret(player) " .. tostring(Try(C_Secrets.ShouldUnitHealthMaxBeSecret, "player"))
+	end
+	return table.concat({
+		"build " .. tostring(version) .. "." .. tostring(build) .. ", interface " .. tostring(toc),
+		"addon " .. (loaded and "loaded" or "NOT loaded") .. ", toc interface " .. tocLine,
+		"sound PlaySoundFile " .. type(PlaySoundFile),
+		"talents GetNumTalentTabs " .. type(GetNumTalentTabs) .. ", C_ClassTalents.GetActiveConfigID "
+			.. type(C_ClassTalents and C_ClassTalents.GetActiveConfigID),
+		"mouse MouseIsOver " .. type(MouseIsOver) .. ", GetMacroIndexByName " .. type(GetMacroIndexByName),
+		"secrets " .. secrets,
+		"combat log " .. (type(LoggingCombat) == "function" and (LoggingCombat() and "on" or "off") or "?"),
+		"transport mode " .. tostring(db.settings.mode),
+	}, "\n")
+end
 
 -- What each subcommand accepts, so that free text which happens to start with
 -- one of these words ("delete the unused imports", "help me with this macro")
@@ -3728,7 +3765,7 @@ end
 
 local COMMAND_ARGS = {
 	mini = 0, min = 0, hide = 0, quit = 0, help = 0, clear = 0, delete = 0, reset = 0, copy = 0,
-	cancel = 0, resend = 0, reload = 0, refresh = 0, slots = 0, diag = 0,
+	cancel = 0, resend = 0, reload = 0, refresh = 0, slots = 0, diag = 0, check = 0,
 	context = { [""] = true, on = true, off = true }, ctx = { [""] = true, on = true, off = true },
 	mode = { [""] = true, pixel = true, reload = true },
 	signal = { [""] = true, on = true, off = true }, longchat = { [""] = true, on = true, off = true },
@@ -3976,6 +4013,11 @@ SlashCmdList["RUNBACK"] = function(msg)
 		AddHistory(c, "system", "Diagnostics:\n" .. table.concat(lines, "\n"))
 		Runback.Render()
 		Runback.Toggle(true)
+	elseif cmd == "check" then
+		local text = CheckBlock()
+		AddHistory(c, "system", "Launch check:\n" .. text)
+		Runback.Render()
+		Runback.ShowCopy(text)
 	elseif cmd == "cancel" then
 		if c.pendingId then
 			AddHistory(c, "system", "Gave up waiting for the reply")

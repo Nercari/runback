@@ -1446,3 +1446,61 @@ test('UnitHealth returns a plain number or a secret-like value', () => {
   assert.equal(vm.evaluate('pcall(function() return tostring(UnitHealth("player")) end)'), 'false');
   assert.equal(vm.evaluate('issecretvalue(999)'), 'false');
 });
+
+// Launch go/no-go (#141): /runback check prints rows 3 to 6 and 11 of
+// probe/CHECKLIST.md in one block, so the live run is one command and one Ctrl+C.
+function checkVM({ toc = '16001', loaded = true, secrets = false, combat = false } = {}) {
+  const vm = newVM();
+  vm.run(`STUB.loaded.Runback = ${loaded}
+    C_AddOns.GetAddOnMetadata = function(name, field)
+      if name == "Runback" and field == "Interface" then return "${toc}" end
+    end
+    function LoggingCombat() return true end
+    STUB.combat = ${combat}`);
+  if (secrets) {
+    vm.run('C_Secrets = { HasSecretRestrictions = function() return true end, '
+      + 'ShouldUnitHealthMaxBeSecret = function(unit) return unit == "player" end }');
+  }
+  login(vm);
+  return vm;
+}
+function runCheck(vm) {
+  vm.run('RunbackDB.outbox = nil; SlashCmdList["RUNBACK"]("check")');
+  return vm.evaluate('RunbackDB.chats[1].history[#RunbackDB.chats[1].history].text');
+}
+
+test('/runback check puts the go/no-go dump values in one copyable block', () => {
+  const vm = checkVM();
+  const text = runCheck(vm);
+  assert.match(text, /^Launch check:\n/);
+  assert.match(text, /build 1\.60\.1\.70532, interface 16001/);
+  assert.match(text, /addon loaded, toc interface 16001 \(current\)/);
+  assert.match(text, /sound PlaySoundFile function/);
+  assert.match(text, /talents GetNumTalentTabs nil, C_ClassTalents\.GetActiveConfigID function/);
+  assert.match(text, /mouse MouseIsOver nil, GetMacroIndexByName nil/);
+  assert.match(text, /secrets C_Secrets absent/);
+  assert.match(text, /combat log on/);
+  assert.match(text, /transport mode pixel/);
+  // The same block opens selected, so one Ctrl+C pastes it into the issue.
+  assert.equal(vm.evaluate('RunbackCopyBox:GetText()'), text.slice('Launch check:\n'.length));
+});
+
+test('check names an old or a newer TOC and an addon that is not loaded', () => {
+  assert.match(runCheck(checkVM({ toc: '15000' })), /toc interface 15000 \(OUT OF DATE: tick Load out of date addons\)/);
+  assert.match(runCheck(checkVM({ toc: '17000' })), /toc interface 17000 \(newer than the client\)/);
+  assert.match(runCheck(checkVM({ loaded: false })), /addon NOT loaded/);
+});
+
+test('check carries both C_Secrets answers and defers them during a fight', () => {
+  assert.match(runCheck(checkVM({ secrets: true })),
+    /secrets HasSecretRestrictions true, ShouldUnitHealthMaxBeSecret\(player\) true/);
+  assert.match(runCheck(checkVM({ secrets: true, combat: true })),
+    /secrets in combat; run this again after the fight/);
+});
+
+test('check reads only: it sends nothing and prints nothing to chat', () => {
+  const vm = checkVM();
+  runCheck(vm);
+  assert.equal(vm.evaluate('RunbackDB.outbox'), null);
+  assert.equal(vm.evaluate('(table.concat(STUB.prints, "\\n"):find("Launch check") ~= nil)'), 'false');
+});
