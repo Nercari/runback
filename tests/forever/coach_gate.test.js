@@ -238,7 +238,7 @@ test('no usable log: no lines, and no card', async () => {
 
 const MODEL_SAYS = 'Keep attacking: you lost 6 s.\n\nTL;DR: Keep attacking; you lost 6 s.';
 
-function make({ text = MODEL_SAYS, logDir = LOGS, reply = CTX } = {}) {
+function make({ text = MODEL_SAYS, logDir = LOGS, reply = CTX, cost } = {}) {
   const state = { forever: { bulk: {} }, context: { text: reply } };
   const finished = [], calls = [];
   const ctx = {
@@ -248,7 +248,7 @@ function make({ text = MODEL_SAYS, logDir = LOGS, reply = CTX } = {}) {
     log: () => {},
     saveState: () => {},
     finish: (job, status, body) => finished.push({ job, status, body }),
-    runAgentOnce: async o => { calls.push(o); return { status: 'done', text }; },
+    runAgentOnce: async o => { calls.push(o); return { status: 'done', text, cost }; },
   };
   return { ctx, state, finished, calls };
 }
@@ -270,6 +270,22 @@ test('a card request is answered from the fixture with the counted numbers', asy
   assert.equal(finished.length, 1);
   assert.equal(finished[0].body, '', 'no reply text: a card is not a chat reply');
   assert.ok(!finished[0].job.noSignal, 'a card flips the sig, so the addon reads it');
+  // The row tools/card-report.js reads (#143): counts, the sentence's source, cost.
+  assert.equal(state.forever.cards.length, 1);
+  assert.equal(state.forever.cards[0].check, 'idle');
+  assert.equal(state.forever.cards[0].source, 'model');
+  assert.equal(state.forever.cards[0].cost, null, 'an agent that reports no cost leaves it null');
+  assert.deepEqual(state.forever.cards[0].counts, {
+    duration_s: 33, deaths: 1, enemyCasts: 6, interrupts: 1,
+    hits: 7, idle_s: 6, burst_hits: 2, burst_s: 1,
+  });
+});
+
+test('the note records what it cost when the agent reports it', async () => {
+  const { ctx, state } = make({ cost: 0.0004 });
+  await cardMod.intercept(job(), ctx);
+  assert.equal(state.forever.cards[0].cost, 0.0004);
+  assert.equal(state.forever.cards[0].source, 'model');
 });
 
 test('a model sentence with a number the file did not count is dropped for the code sentence', async () => {
@@ -277,6 +293,7 @@ test('a model sentence with a number the file did not count is dropped for the c
   await cardMod.intercept(job(), ctx);
   assert.equal(state.forever.card.text, 'One change: keep attacking; the gaps cost you damage.');
   assert.doesNotMatch(state.forever.card.text, /9/, 'the invented number never reaches the card');
+  assert.equal(state.forever.cards[0].source, 'code', 'the code sentence kept the facts');
 });
 
 test('the model failing still gives a card, from code', async () => {
@@ -284,6 +301,8 @@ test('the model failing still gives a card, from code', async () => {
   ctx.runAgentOnce = async () => ({ status: 'error', text: 'agent not installed' });
   await cardMod.intercept(job(), ctx);
   assert.equal(state.forever.card.text, 'One change: keep attacking; the gaps cost you damage.');
+  assert.equal(state.forever.cards[0].source, 'code');
+  assert.equal(state.forever.cards[0].cost, null);
 });
 
 test('the combat log off gives no card and no error', async () => {
@@ -311,6 +330,9 @@ test('a fight with nothing to say gets no card', async () => {
   await cardMod.intercept(job({ ctx: quiet }), ctx);
   assert.equal(state.forever.card, undefined);
   assert.equal(calls.length, 0, 'no model run for a quiet fight');
+  assert.equal(state.forever.cards.length, 1, 'the quiet fight still counts as a fight');
+  assert.equal(state.forever.cards[0].check, null);
+  assert.equal(state.forever.cards[0].source, 'none');
 });
 
 test('the same fight is answered once', async () => {
@@ -337,4 +359,88 @@ test('the card flag and the card table', () => {
   assert.match(body, /card = \{ key = "a\/1", text = "One change: x\.", why = "Why: y\.", counts = "z" \}/);
   assert.doesNotMatch(cardP.luaTable('Runback_Inbox', [], {}), /card =/);
   assert.doesNotMatch(cardP.luaTable('Runback_Inbox', [], { card: { key: 'a', text: '' } }), /card =/, 'no text, no card');
+});
+
+// ---------------------------------------------------------------------------
+// The measurement for #143: the addon's button counts and the 20-fight table.
+// ---------------------------------------------------------------------------
+const R = require('../../tools/card-report');
+
+const row = (i, extra = {}) => ({
+  at: '2026-10-01T20:00:31.000Z',
+  key: `2026-10-01T20:00:${String(i).padStart(2, '0')}/2026-10-01T20:00:${String(i + 30).padStart(2, '0')}`,
+  counts: { duration_s: 30, deaths: 0, enemyCasts: 2, interrupts: 0, hits: 3, idle_s: 1, burst_hits: 1, burst_s: 0 },
+  check: 'interrupt',
+  source: 'model',
+  text: 'One change: interrupt the caster.',
+  cost: 0.0002,
+  ...extra,
+});
+
+test('the 20-fight table passes at 19 kept notes under a cent each', () => {
+  const rows = Array.from({ length: 20 }, (_, i) => row(i, i === 0 ? { source: 'code' } : {}));
+  const r = R.summarise(rows, { got: 3, why: 1, no: 1 });
+  const text = r.lines.join('\n');
+  assert.equal(r.failed, false);
+  assert.match(text, /Fights: 20 \(notes 20, quiet 0\)/);
+  assert.match(text, /Kept: 19 of 20 \(95%\) PASS/);
+  assert.match(text, /Cost: \$0\.00400 over 20 of 20 notes, \$0\.00020 a note, dearest \$0\.00020 PASS/);
+  assert.match(text, /Card counts: got 3, why 1, no 1/);
+  assert.match(text, /Uses: 3 of 5 PASS/);
+  assert.match(text, /\| 1 \| 2026-10-01T20:00:00 \| 30 \| 3 \| 2 \| 0 \| 0 \| 1 \| 1 \| interrupt \| code \| \$0\.00020 \|/);
+});
+
+test('the table fails when the kept facts drop below 90% or a note passes a cent', () => {
+  const missed = Array.from({ length: 20 }, (_, i) => row(i, i < 3 ? { source: 'code' } : {}));
+  const r = R.summarise(missed, { got: 2, why: 1, no: 2 });
+  const text = r.lines.join('\n');
+  assert.equal(r.failed, true);
+  assert.match(text, /Kept: 17 of 20 \(85%\) FAIL/);
+  assert.match(text, /Uses: 2 of 5 FAIL/);
+
+  const dear = Array.from({ length: 20 }, (_, i) => row(i, { cost: 0.02 }));
+  assert.match(R.summarise(dear, null).lines.join('\n'), /FAIL \(each under \$0\.01000\)/);
+});
+
+test('one note over a cent fails even when the mean is under it', () => {
+  const rows = Array.from({ length: 20 }, (_, i) => row(i, i === 0 ? { cost: 0.03 } : { cost: 0.0001 }));
+  const text = R.summarise(rows, null).lines.join('\n');
+  assert.match(text, /dearest \$0\.03000 FAIL/);
+});
+
+test('a note with no reported cost is pending, never a pass', () => {
+  const rows = Array.from({ length: 20 }, (_, i) => row(i, i === 0 ? { cost: null } : {}));
+  const text = R.summarise(rows, { got: 3, why: 1, no: 1 }).lines.join('\n');
+  assert.match(text, /Cost: \$0\.00380 over 19 of 20 notes/);
+  assert.match(text, /a note, dearest \$0\.00020 PENDING/);
+});
+
+test('the table waits for 20 fights and for the addon counts', () => {
+  const text = R.summarise([row(0)], null).lines.join('\n');
+  assert.match(text, /Fights: 1 \(notes 1, quiet 0\)/);
+  assert.match(text, /Kept: 1 of 1 \(100%\) PENDING/);
+  assert.match(text, /Card counts: not read/);
+});
+
+test('the addon counts come from the card table in SavedVariables', () => {
+  const lua = [
+    'RunbackForeverDB = {',
+    '\t["card"] = {',
+    '\t\t["counts"] = {',
+    '\t\t\t["got"] = 3,',
+    '\t\t\t["why"] = 1,',
+    '\t\t\t["no"] = 1,',
+    '\t\t},',
+    '\t\t["enabled"] = true,',
+    '\t},',
+    '}',
+  ].join('\n');
+  assert.deepEqual(R.savedCounts(lua), { got: 3, why: 1, no: 1 });
+  assert.equal(R.savedCounts('RunbackForeverDB = {}'), null, 'no card table');
+});
+
+test('two rows for one fight count once, the last one wins', () => {
+  const rows = R.rowsOf([row(0), row(1, { key: row(0).key, source: 'code' })]);
+  assert.equal(rows.length, 1);
+  assert.equal(rows[0].source, 'code');
 });

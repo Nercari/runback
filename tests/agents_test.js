@@ -293,6 +293,11 @@ test('Claude stream: tool calls and text become progress, the result carries the
   assert.equal(r.done, undefined);
   r = p.feed({ type: 'result', session_id: 'sess-1', is_error: false, result: 'Done.', permission_denials: [{ tool_name: 'Bash', tool_input: { command: 'cargo build' } }, { tool_name: 'WebSearch' }] });
   assert.deepEqual(r.done, { text: 'Done.', error: false });
+  // The coach card records what one note cost (#143); the cost stays off `done`.
+  const costed = p.feed({ type: 'result', result: 'Done.', total_cost_usd: 0.0012 });
+  assert.equal(costed.cost, 0.0012);
+  assert.deepEqual(costed.done, { text: 'Done.', error: false });
+  assert.equal(p.feed({ type: 'result', result: 'Done.', total_cost_usd: null }).cost, undefined, 'a null cost is no cost, not $0');
   assert.deepEqual(r.denied, ['Bash(cargo:*)', 'WebSearch']);
   assert.deepEqual(r.notes, ['Claude needs your OK to continue. Click Allow in the window.']);
   // A raw multi-line command never reaches the note the game chat prints.
