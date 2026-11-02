@@ -14,6 +14,7 @@
   "capture": {
     "enabled": true,
     "processName": "WowB",
+    "macProcessName": "World of Warcraft",
     "cellPx": 4,
     "cellsPerRow": 200,
     "maxRows": 48,

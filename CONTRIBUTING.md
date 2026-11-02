@@ -15,6 +15,8 @@ bridge/               the companion process (Node.js, no runtime dependencies)
   protocol.js           pure functions: strip records, slot files, folders, dedup
   agents.js             one entry per agent (Claude, Codex, Grok): command line, prompt delivery, stream parser
   capture.ps1           screen capture and strip decoder (PowerShell)
+  capture_x11.py        screen capture and strip decoder (Linux/X11)
+  capture_mac.py        screen capture and strip decoder (macOS)
   install-slots.js      creates the slot addons and signal files
   supervisor.js         restarts bridge.js on crash; the `runback` command
   config.example.json   template setup.js copies to config.json
@@ -36,7 +38,7 @@ npm install          # test tooling only: fengari (Lua VM) and luaparse
 npm test
 ```
 
-`npm test` runs the portable suite on every platform. The codec round-trip decodes through `capture.ps1` on Windows and through `capture_x11.py` (python3) elsewhere. CI runs the full command on `windows-latest` and `ubuntu-latest` (`.github/workflows/test.yml`).
+`npm test` runs the portable suite on every platform. The codec round-trip decodes through `capture.ps1` on Windows and through `capture_x11.py` (python3) elsewhere, and through `capture_mac.py` wherever python3 is installed. CI runs the full command on `windows-latest` and `ubuntu-latest` (`.github/workflows/test.yml`).
 
 To try changes in the game, run `node setup.js` (it re-copies the addon into `Interface\AddOns\Runback`) and `/reload`. Bridge changes take effect on the next `npm start`.
 
@@ -56,7 +58,7 @@ To try changes in the game, run `node setup.js` (it re-copies the addon into `In
 | `node --test tests/guide_channel_test.js` | The guide channel (backlog 67): `wowguide` blocks and guide files, validation (hostile input is not stored), `state.guides` and its limits, the versioned `guides` table in slot files, `WOW_AI_GUIDE_FILE` set on every run by the real bridge with a fake CLI, and one guide read back by the real `Guide.lua` and `Runback.lua`. |
 | `node --test tests/plain_reply_test.js` | The real bridge with a fake Claude CLI: the "working" list has at most three plain phrases, a quoted combat-log line becomes one `Evidence:` line, and no `[bridge]` or map-layer line reaches the reply. |
 | `node --test tests/tools/changelog.test.js` | `tools/changelog.js`: fragment parsing, the release build (entries, order, compare links), the release notes text, the CHANGELOG.md guard, and a real `npm version` run in a scratch repo. |
-| `node tests/codec_test.js` | `Codec.lua` in a Lua VM, rendered to PNG with noise and gamma, decoded by `capture.ps1` (Windows) or `capture_x11.py` (elsewhere). Writes scratch images to `tests/tmp/` (gitignored). |
+| `node tests/codec_test.js` | `Codec.lua` in a Lua VM, rendered to PNG with noise and gamma, decoded by `capture.ps1` (Windows) or `capture_x11.py` (elsewhere), and by `capture_mac.py` when python3 is installed. It also compiles `capture_mac.py`, which never runs off a Mac. Writes scratch images to `tests/tmp/` (gitignored). |
 | `npm run test:live` | Not part of `npm test`. Builds a sandbox under `tests/tmp/inject/` with a 5-slot pool and runs the bridge with `--inject` against a real agent CLI: Claude by default, `-- --agent codex` or `-- --agent grok` for the others. Needs that CLI installed and logged in. |
 
 Name a new test `tests/<area>/<name>.test.js` (or `tests/<name>_test.js` at the top level) and `npm test` runs it; do not add it to `package.json`. When you change behaviour, add or extend a test in the matching file. Pure logic belongs in `protocol.js` where `bridge_test.js` can reach it without spawning anything.

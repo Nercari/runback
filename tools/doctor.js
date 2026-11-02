@@ -51,6 +51,7 @@ function loginCheck(probe) {
 // hand back another window's pixels, so it fails here instead of passing on DISPLAY.
 function x11Check(env, platform) {
   if (platform === 'win32') return { name: 'x11', status: 'PASS', detail: 'Windows does not need X11 for capture' };
+  if (platform === 'darwin') return { name: 'x11', status: 'PASS', detail: 'macOS captures with screencapture, not X11' };
   const session = String(env.XDG_SESSION_TYPE || '').trim().toLowerCase();
   const display = String(env.DISPLAY || '').trim();
   if (String(env.WAYLAND_DISPLAY || '').trim() || session === 'wayland') {

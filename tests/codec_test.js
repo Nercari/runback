@@ -1,5 +1,6 @@
 // Round-trip test: the addon's real Codec.lua (run in a Lua VM) -> PNG -> capture.ps1 decoder.
-// capture.ps1 on Windows, capture_x11.py elsewhere. Simulates game rendering with noise and gamma.
+// capture.ps1 on Windows, capture_x11.py elsewhere, and capture_mac.py on every
+// platform that has python3. Simulates game rendering with noise and gamma.
 'use strict';
 const fengari = require('fengari');
 const { lua, lauxlib, lualib, to_luastring, to_jsstring } = fengari;
@@ -7,17 +8,34 @@ const fs = require('fs'), path = require('path'), zlib = require('zlib');
 const { execFileSync } = require('child_process');
 
 // Windows decodes with capture.ps1; elsewhere the Python decoder stands in, if python3 is there.
-if (process.platform !== 'win32') {
-  try { execFileSync('python3', ['--version'], { stdio: 'ignore' }); }
-  catch { console.log('SKIP Codec.lua round-trip: python3 is required off Windows.'); process.exit(0); }
+let PY = '';
+try { execFileSync('python3', ['--version'], { stdio: 'ignore' }); PY = 'python3'; } catch {}
+if (process.platform !== 'win32' && !PY) {
+  console.log('SKIP Codec.lua round-trip: python3 is required off Windows.');
+  process.exit(0);
 }
 
 const CODEC = path.join(__dirname, '..', 'addon', 'Runback', 'Codec.lua');
 const CAPTURE = path.join(__dirname, '..', 'bridge', 'capture.ps1');
 const CAPTURE_X11 = path.join(__dirname, '..', 'bridge', 'capture_x11.py');
+const CAPTURE_MAC = path.join(__dirname, '..', 'bridge', 'capture_mac.py');
 const TMP = path.join(__dirname, 'tmp');
 const CELL = 4, CELLS = 200, MAXROWS = 48;
 fs.mkdirSync(TMP, { recursive: true });
+
+// The macOS script is never run here (it needs a Mac), so compile it: a syntax
+// error in it would otherwise only show up on the player's machine.
+if (PY) {
+  try {
+    execFileSync(PY, ['-c', 'import sys; compile(open(sys.argv[1], encoding="utf-8").read(), sys.argv[1], "exec")', CAPTURE_MAC], { stdio: 'pipe' });
+    console.log('PASS  syntax bridge/capture_mac.py');
+  } catch (e) {
+    console.log('FAIL  syntax bridge/capture_mac.py\n' + String(e.stderr || e.message));
+    process.exit(1);
+  }
+} else {
+  console.log('SKIP  syntax bridge/capture_mac.py: python3 not found');
+}
 
 function encodeWithLua(id, payload) {
   const bytes = Buffer.from(payload, 'utf8');
@@ -83,6 +101,10 @@ function decode(file) {
   return JSON.parse(out.trim().split('\n').pop());
 }
 
+function decodeMac(file) {
+  return PY ? JSON.parse(execFileSync(PY, [CAPTURE_MAC, '--test-image', file], { encoding: 'utf8' }).trim().split('\n').pop()) : null;
+}
+
 const cases = [
   { id: 7, payload: 'sess1\x1Fchat1\x1F7\x1FC:\\Users\\me\\proj\x1F\x1Fname\x1Fhéllo wörld ✓ — "quotes" & \\backslash\\ end', jitter: 0, gamma: 1 },
   { id: 4242, payload: 'sess1\x1Fchat1\x1F4242\x1FC:\\x\x1Fn\x1F\x1F' + 'Refactor the player controller so jumping feels less floaty. '.repeat(40), jitter: 60, gamma: 0.6 },
@@ -96,9 +118,10 @@ for (const t of cases) {
   const file = path.join(TMP, `strip_${t.id}.png`);
   fs.writeFileSync(file, render(cells, t.jitter, t.gamma));
   const res = decode(file);
-  const ok = res.id === t.id && res.text === t.payload;
+  const mac = decodeMac(file);
+  const ok = res.id === t.id && res.text === t.payload && (!mac || (mac.id === t.id && mac.text === t.payload));
   if (ok) pass++;
-  console.log(`${ok ? 'PASS' : 'FAIL'}  id=${t.id}  bytes=${Buffer.byteLength(t.payload)}  cells=${cells.length}  rows=${Math.ceil(cells.length / CELLS)}  noise=±${t.jitter} gamma=${t.gamma}` + (ok ? '' : `\n   got ${JSON.stringify(res).slice(0, 200)}`));
+  console.log(`${ok ? 'PASS' : 'FAIL'}  id=${t.id}  bytes=${Buffer.byteLength(t.payload)}  cells=${cells.length}  rows=${Math.ceil(cells.length / CELLS)}  noise=±${t.jitter} gamma=${t.gamma}` + (ok ? '' : `\n   got ${JSON.stringify(res).slice(0, 200)}` + (mac ? `\n   mac ${JSON.stringify(mac).slice(0, 200)}` : '')));
 }
 console.log(pass === cases.length ? '>>> CODEC ROUND-TRIP PASS' : '>>> CODEC ROUND-TRIP FAIL');
 process.exit(pass === cases.length ? 0 : 1);

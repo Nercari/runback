@@ -15,7 +15,7 @@ Runback is a fork of [chelinho139/wow-ai](https://github.com/chelinho139/wow-ai)
 - A between-pull coach card after each fight: one sentence and its reason, with the numbers counted from the combat log by the bridge, shown out of combat only. `/ai card` prints its button counts; `/ai card off` turns it off.
 - Map layers drawn by the agent: numbered routes, quest stops and a navigator arrow.
 - Herb and ore spawns you can show on the world map (`/runback map herb`, `/runback map ore`), filtered by your gathering skill. This needs the optional `WoWAI_Nodes` data addon.
-- Runs on Windows, and on Linux with the game under Wine (X11).
+- Runs on Windows, on Linux with the game under Wine (X11), and on macOS (unverified in game: [docs/INSTALL-MACOS.md](docs/INSTALL-MACOS.md)).
 
 The addon uses documented addon APIs only. It does not inject code, read game memory or send input. The bridge reads a small strip of pixels from your screen and writes ordinary files.
 
@@ -29,7 +29,7 @@ None of this is built yet.
 ## Requirements
 
 - World of Warcraft: Forever, TOC 16001, windowed or borderless (exclusive fullscreen blocks screen capture).
-- Windows (NTFS), or Linux with the game under Wine on X11 plus python3.
+- Windows (NTFS), Linux with the game under Wine on X11, or macOS; python3 on Linux and macOS.
 - Node.js 22.2 or newer.
 - At least one agent CLI installed and logged in. Install notes are in [docs/AGENTS.md](docs/AGENTS.md).
 
@@ -50,10 +50,10 @@ Then:
 1. Fully quit and restart WoW. The client only discovers new addon files at launch. On the character-select AddOns screen, enable **Runback**. Leave the Runback slot entries enabled.
 2. If you used WoW AI before, `node setup.js` moves the old `WoWAI` folder out of `Interface\AddOns` into `Runback-backup-<date>` next to the game client, so the two addons do not run side by side.
 3. In this repo, start the bridge with `npm start`. On Windows, `bridge\start-window.cmd` opens its own window. Leave it running while you play. In game, `/runback` opens the window.
-4. On Linux, use the same steps. Once, while the colored strip is in the top-left of the game window, run `npm run probe`. It saves what the capture sees to `bridge/probe.png` and says whether it decoded the strip.
-5. `npm run doctor` any time. It only reads. It prints PASS or FAIL for Node.js 22.2 or newer, for a logged-in `claude`, `codex`, or `grok`, for an X11 session (a Wayland one fails, XWayland included), and for the client folder it found, named with the `## Interface` number from `Runback.toc`. Windows passes the X11 check. A FAIL line includes a one-line fix, and the process exits with an error if any check fails.
+4. On Linux, use the same steps. Once, while the colored strip is in the top-left of the game window, run `npm run probe`. It saves what the capture sees to `bridge/probe.png` and says whether it decoded the strip. On macOS the same check is `python3 bridge/capture_mac.py --probe bridge/probe.png`, after the two permissions in [docs/INSTALL-MACOS.md](docs/INSTALL-MACOS.md).
+5. `npm run doctor` any time. It only reads. It prints PASS or FAIL for Node.js 22.2 or newer, for a logged-in `claude`, `codex`, or `grok`, for an X11 session (a Wayland one fails, XWayland included), and for the client folder it found, named with the `## Interface` number from `Runback.toc`. Windows and macOS pass the X11 check. A FAIL line includes a one-line fix, and the process exits with an error if any check fails.
 
-Step-by-step with troubleshooting: [docs/INSTALL-WINDOWS.md](docs/INSTALL-WINDOWS.md) and [docs/INSTALL-LINUX.md](docs/INSTALL-LINUX.md).
+Step-by-step with troubleshooting: [docs/INSTALL-WINDOWS.md](docs/INSTALL-WINDOWS.md), [docs/INSTALL-LINUX.md](docs/INSTALL-LINUX.md) and [docs/INSTALL-MACOS.md](docs/INSTALL-MACOS.md).
 
 ## Usage
 

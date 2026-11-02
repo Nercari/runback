@@ -6,7 +6,8 @@ Two processes that can't talk to each other directly, and how they do anyway.
    WoW client (Lua sandbox)                        bridge.js (Node, same machine)
    ┌──────────────────────────┐                    ┌─────────────────────────────┐
    │ Runback addon              │  pixels on screen  │ capture.ps1 / capture_x11.py│
-   │  draws message strip ────┼───────────────────▶│  screen-captures the corner │
+   │  draws message strip ────┼───────────────────▶│ capture_mac.py              │
+   │                          │                    │  screen-captures the corner │
    │                          │                    │  decodes → {session,chat,id,│
    │                          │                    │            cwd,flags,name,  │
    │                          │                    │            text}            │
@@ -55,7 +56,7 @@ session \x1F chat \x1F id \x1F cwd \x1F flags \x1F name \x1F [context \x1F] text
 
 The strip stays up until the bridge acknowledges the message (see signals) or 40 s pass, then it is re-shown up to three times before the addon gives up on pixels and arms the reload fallback for that message.
 
-`capture.ps1` finds the game window by process name, captures the client area's top-left 800×192 px with GDI (`CopyFromScreen`, DPI-aware), samples the center pixel of each cell, and validates magic, length and checksum. It prints one JSON line per new message and rate-limited warnings when a frame is seen but rejected. `bridge.js` restarts it if it exits. Off Windows, `capture_x11.py` does the same through libX11 (ctypes, no packages): it finds the game's Wine window by its WM_CLASS, grabs the corner from the root window, and searches a few pixels around the origin for the magic so a misaligned window still decodes.
+`capture.ps1` finds the game window by process name, captures the client area's top-left 800×192 px with GDI (`CopyFromScreen`, DPI-aware), samples the center pixel of each cell, and validates magic, length and checksum. It prints one JSON line per new message and rate-limited warnings when a frame is seen but rejected. `bridge.js` restarts it if it exits. Off Windows, `capture_x11.py` does the same through libX11 (ctypes, no packages): it finds the game's Wine window by its WM_CLASS, grabs the corner from the root window, and searches a few pixels around the origin for the magic so a misaligned window still decodes. On macOS, `capture_mac.py` (from chelinho139/wow-ai, MIT) asks System Events for the game window's bounds, takes the top-left region with `screencapture`, and decodes it with the same rules; it has no dependencies beyond python3. It is unverified in game ([INSTALL-MACOS.md](INSTALL-MACOS.md)).
 
 Exclusive fullscreen blocks GDI capture; borderless/windowed works. HDR was not tested. On Linux, Wayland sessions block reading other windows, and a compositor that unredirects the game window can hand back a black or stale frame (`capture.keepComposited` asks it not to).
 
