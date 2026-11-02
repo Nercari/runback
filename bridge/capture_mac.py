@@ -27,6 +27,14 @@ import tempfile
 import time
 import zlib
 
+# JSON lines carry chat text, which is not cp1252. PVC: Windows consoles default
+# to a legacy code page, so a message with an accent or a check mark would kill
+# the process instead of printing.
+try:
+    sys.stdout.reconfigure(encoding="utf-8")
+except AttributeError:  # python < 3.7
+    pass
+
 p = argparse.ArgumentParser()
 p.add_argument("--cell", type=int, default=4)
 p.add_argument("--cells", type=int, default=200)
