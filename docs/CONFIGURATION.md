@@ -79,14 +79,15 @@ Keys under `capture`:
 
 | Key | Default | Meaning |
 |---|---|---|
-| `enabled` | `true` | Run `capture.ps1` (Windows) or `capture_x11.py` (Linux). With `false` only the reload path works (`/runback mode reload` in game). |
-| `processName` | `"WowB"` | The game executable without `.exe`. `setup.js` sets it from the `Wow*.exe` it finds in the client folder. |
+| `enabled` | `true` | Run `capture.ps1` (Windows), `capture_x11.py` (Linux) or `capture_mac.py` (macOS). With `false` only the reload path works (`/runback mode reload` in game). |
+| `processName` | `"WowB"` | Windows and Wine: the game executable without `.exe`. `setup.js` sets it from the `Wow*.exe` it finds in the client folder. |
+| `macProcessName` | `"World of Warcraft"` | macOS: the process name `capture_mac.py` looks for, matched as a substring. |
 | `cellPx` | `4` | Pixel size of one strip cell. Must match `CELL` in `addon/Runback/Codec.lua`. |
 | `cellsPerRow` | `200` | Cells per strip row. Must match the addon. |
 | `maxRows` | `48` | Maximum strip rows captured. Must match the addon. |
 | `intervalMs` | `250` | Capture period. Lower is more responsive and costs a little more CPU. |
-| `python` | `"python3"` | Linux: interpreter for `capture_x11.py`. |
-| `windowName` | `""` | Linux: find the game window by title substring instead of by WM_CLASS (`<processName>.exe`). |
+| `python` | `"python3"` | Linux and macOS: interpreter for `capture_x11.py` / `capture_mac.py`. |
+| `windowName` | `""` | Linux and macOS: find the game window by title substring instead of by process name. |
 | `keepComposited` | `false` | Linux: set `_NET_WM_BYPASS_COMPOSITOR=2` on the game window so the compositor keeps drawing it. Try it if `npm run probe` sees a black or stale strip in borderless fullscreen. |
 
 The capture region is `cellsPerRow × cellPx` by `maxRows × cellPx` pixels (800 × 192 by default) at the top-left of the game's client area.

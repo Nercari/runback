@@ -31,7 +31,9 @@ for (let i = 2; i < process.argv.length; i++) {
 
 function isClient(dir) {
   try {
-    return fs.existsSync(path.join(dir, 'Interface')) && fs.readdirSync(dir).some(f => /^Wow.*\.exe$/i.test(f));
+    // macOS ships the client as an .app, with no Wow*.exe (issue 145).
+    return fs.existsSync(path.join(dir, 'Interface')) &&
+      fs.readdirSync(dir).some(f => /^Wow.*\.exe$/i.test(f) || /^World of Warcraft\.app$/i.test(f));
   } catch { return false; }
 }
 

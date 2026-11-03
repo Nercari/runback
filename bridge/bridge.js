@@ -1044,12 +1044,21 @@ function pollSavedVariables() {
   if (job) submit(job);
 }
 
-// Windows: capture.ps1 (GDI). Elsewhere: capture_x11.py (the game runs under Wine on X11).
+// Windows: capture.ps1 (GDI). macOS: capture_mac.py (screencapture). Elsewhere:
+// capture_x11.py (the game runs under Wine on X11).
 function captureCommand() {
   if (process.platform === 'win32') {
     return ['powershell.exe', ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', path.join(HERE, 'capture.ps1'),
       '-Cell', String(cap.cellPx), '-Cells', String(cap.cellsPerRow), '-MaxRows', String(cap.maxRows),
       '-IntervalMs', String(cap.intervalMs), '-ProcessName', cap.processName]];
+  }
+  if (process.platform === 'darwin') {
+    // processName is the Windows/Wine exe name, so macOS has its own default.
+    const macArgs = [path.join(HERE, 'capture_mac.py'),
+      '--cell', String(cap.cellPx), '--cells', String(cap.cellsPerRow), '--max-rows', String(cap.maxRows),
+      '--interval-ms', String(cap.intervalMs), '--process-name', cap.macProcessName || 'World of Warcraft'];
+    if (cap.windowName) macArgs.push('--window-name', cap.windowName);
+    return [cap.python || 'python3', macArgs];
   }
   const args = [path.join(HERE, 'capture_x11.py'),
     '--cell', String(cap.cellPx), '--cells', String(cap.cellsPerRow), '--max-rows', String(cap.maxRows),

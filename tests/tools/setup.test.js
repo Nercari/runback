@@ -162,8 +162,17 @@ test('setup finds a temp game folder named _forever_', (t) => {
   assert.equal(findClient('', [betaRoot]), beta);
 });
 
-test('a Forever folder on another drive beats retail in the first root', (t) => {
-  const retailRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'runback-client-'));
+test('setup accepts a macOS client folder, which has an .app and no Wow.exe (issue 145)', (t) => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'runback-client-'));
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  const dir = path.join(root, '_forever_');
+  write(dir, path.join('Interface', 'AddOns', 'Runback', 'Runback.toc'), '## Interface: 16001\n');
+  fs.mkdirSync(path.join(dir, 'World of Warcraft.app'));
+  assert.equal(findClient(dir), dir);
+  assert.equal(findClient('', [root]), dir);
+});
+
+test('a Forever folder on another drive beats retail in the first root', (t) => {  const retailRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'runback-client-'));
   t.after(() => fs.rmSync(retailRoot, { recursive: true, force: true }));
   const gamesRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'runback-client-'));
   t.after(() => fs.rmSync(gamesRoot, { recursive: true, force: true }));

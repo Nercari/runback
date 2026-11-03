@@ -413,6 +413,16 @@ test('a prompt starting with / is a command line the bridge will not forward to 
   assert.ok(q.indexOf('P.isSlashLine(job.text)') > -1 && q.indexOf('P.isSlashLine(job.text)') < q.indexOf('runJob(job)'), 'the check runs before any agent starts');
 });
 
+test('macOS capture starts capture_mac.py before the X11 fallback (issue 145)', () => {
+  const src = fs.readFileSync(path.join(__dirname, '..', 'bridge', 'bridge.js'), 'utf8');
+  const body = src.slice(src.indexOf('function captureCommand'), src.indexOf('function startCapture'));
+  const mac = body.indexOf("process.platform === 'darwin'");
+  assert.ok(mac > -1, 'the macOS branch exists');
+  assert.ok(mac < body.indexOf('capture_x11.py'), 'macOS is chosen before the X11 fallback');
+  assert.ok(body.includes("'capture_mac.py'") && body.includes('cap.macProcessName'), 'the macOS command and its own process name');
+  assert.ok(body.includes("'capture.ps1'") && body.includes("'capture_x11.py'"), 'Windows and X11 capture are still there');
+});
+
 test('plainProgress turns every kind of raw progress line into one of a fixed set of phrases', () => {
   const raw = [
     '$ cd "C:/Users/x/wow-mentor" && node "C:/repo/tools/slice-fight.js" --start 1',

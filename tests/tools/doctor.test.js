@@ -105,6 +105,16 @@ test('all good passes with no warning', () => {
     'PASS client: /wow/_forever_ (Interface 16001)',
     '',
   ].join('\n'));
+
+  const mac = run(env({ platform: 'darwin', env: {} }));
+  assert.equal(mac.code, 0);
+  assert.equal(mac.text, [
+    'PASS node: Node.js 22.2.0',
+    'PASS login: an agent CLI is logged in',
+    'PASS x11: macOS captures with screencapture, not X11',
+    'PASS client: /wow/_forever_ (Interface 16001)',
+    '',
+  ].join('\n'));
 });
 
 test('doctor names the client folder and the TOC number it found', () => {
