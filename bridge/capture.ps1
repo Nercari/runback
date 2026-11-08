@@ -10,6 +10,7 @@ param(
   [int]$MaxRows = 48,
   [int]$IntervalMs = 250,
   [string]$ProcessName = "WowB",
+  [string]$ClientFolder = "",
   [string]$TestImage = ""
 )
 
@@ -99,9 +100,13 @@ $w = $Cells * $Cell
 $h = $MaxRows * $Cell
 while ($true) {
   if (-not $proc -or $proc.HasExited) {
-    $proc = Get-Process $ProcessName -ErrorAction SilentlyContinue | Where-Object { $_.MainWindowHandle -ne 0 } | Select-Object -First 1
+    # The release client and retail both run Wow.exe: skip a game running from
+    # another client folder (ported from upstream 489ecae).
+    $proc = Get-Process $ProcessName -ErrorAction SilentlyContinue | Where-Object {
+      $_.MainWindowHandle -ne 0 -and (-not $ClientFolder -or -not $_.Path -or (Split-Path -Leaf (Split-Path -Parent $_.Path)) -eq $ClientFolder)
+    } | Select-Object -First 1
     if (-not $proc) {
-      Emit @{ info = "waiting for $ProcessName window" }
+      Emit @{ info = "waiting for $ProcessName window$(if ($ClientFolder) { " in $ClientFolder" })" }
       Start-Sleep -Seconds 3
       continue
     }

@@ -423,6 +423,21 @@ test('macOS capture starts capture_mac.py before the X11 fallback (issue 145)', 
   assert.ok(body.includes("'capture.ps1'") && body.includes("'capture_x11.py'"), 'Windows and X11 capture are still there');
 });
 
+test('Windows capture only attaches to the game in the configured client folder', () => {
+  // The release client (_forever_) and retail (_retail_) both run Wow.exe.
+  const src = fs.readFileSync(path.join(__dirname, '..', 'bridge', 'bridge.js'), 'utf8');
+  const body = src.slice(src.indexOf('function captureCommand'), src.indexOf('function startCapture'));
+  assert.ok(body.includes("'-ClientFolder', path.basename(cfg.forever.clientDir"), 'the bridge passes the client folder name');
+  if (process.platform !== 'win32') return;
+  // No such process: capture.ps1 takes the parameter and says which folder it waits for.
+  const r = require('child_process').spawnSync('powershell.exe', ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File',
+    path.join(__dirname, '..', 'bridge', 'capture.ps1'), '-ProcessName', 'RunbackNoSuchGame', '-ClientFolder', '_forever_'],
+  { encoding: 'utf8', timeout: 20000 });
+  const first = String(r.stdout || '').split(/\r?\n/).find(l => l.trim());
+  assert.ok(first, 'capture.ps1 printed a line: ' + String(r.stderr || '').slice(0, 300));
+  assert.equal(JSON.parse(first).info, 'waiting for RunbackNoSuchGame window in _forever_');
+});
+
 test('plainProgress turns every kind of raw progress line into one of a fixed set of phrases', () => {
   const raw = [
     '$ cd "C:/Users/x/wow-mentor" && node "C:/repo/tools/slice-fight.js" --start 1',

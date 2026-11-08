@@ -80,7 +80,7 @@ Keys under `capture`:
 | Key | Default | Meaning |
 |---|---|---|
 | `enabled` | `true` | Run `capture.ps1` (Windows), `capture_x11.py` (Linux) or `capture_mac.py` (macOS). With `false` only the reload path works (`/runback mode reload` in game). |
-| `processName` | `"WowB"` | Windows and Wine: the game executable without `.exe`. `setup.js` sets it from the `Wow*.exe` it finds in the client folder. |
+| `processName` | `"WowB"` | Windows and Wine: the game executable without `.exe`. `setup.js` sets it from the `Wow*.exe` it finds in the client folder. On Windows the capture only attaches to a game started from the configured client folder, so retail (also `Wow.exe`) running next to Forever is skipped. |
 | `macProcessName` | `"World of Warcraft"` | macOS: the process name `capture_mac.py` looks for, matched as a substring. |
 | `cellPx` | `4` | Pixel size of one strip cell. Must match `CELL` in `addon/Runback/Codec.lua`. |
 | `cellsPerRow` | `200` | Cells per strip row. Must match the addon. |
