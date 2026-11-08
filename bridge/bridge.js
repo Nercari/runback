@@ -1050,7 +1050,8 @@ function captureCommand() {
   if (process.platform === 'win32') {
     return ['powershell.exe', ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', path.join(HERE, 'capture.ps1'),
       '-Cell', String(cap.cellPx), '-Cells', String(cap.cellsPerRow), '-MaxRows', String(cap.maxRows),
-      '-IntervalMs', String(cap.intervalMs), '-ProcessName', cap.processName]];
+      '-IntervalMs', String(cap.intervalMs), '-ProcessName', cap.processName,
+      '-ClientFolder', path.basename(cfg.forever.clientDir || '')]];
   }
   if (process.platform === 'darwin') {
     // processName is the Windows/Wine exe name, so macOS has its own default.
