@@ -796,6 +796,24 @@ function luaTable(globalName, records, opts = {}) {
   const quickRows = Object.entries(quick).filter(([, m]) => validModel(m))
     .map(([id, m]) => `${luaKey(id)} = ${luaStr(m)}`);
   lines.push(`\tquick = { ${quickRows.join(', ')} },`);
+  const roleNames = (opts.roleNames && typeof opts.roleNames === 'object') ? opts.roleNames : {};
+  const roleNameRows = Object.entries(roleNames).filter(([k, v]) => validModel(k) && typeof v === 'string' && v)
+    .map(([k, v]) => `${luaKey(k)} = ${luaStr(v.slice(0, 40))}`);
+  lines.push(`\troleNames = { ${roleNameRows.join(', ')} },`);
+  const roles = (opts.roles && typeof opts.roles === 'object') ? opts.roles : {};
+  const roleAgentRows = Object.entries(roles).filter(([, byRole]) => byRole && typeof byRole === 'object')
+    .map(([agent, byRole]) => `${luaKey(agent)} = { ${Object.entries(byRole).filter(([r, m]) => validModel(r) && (m === '' || validModel(m)))
+      .map(([r, m]) => `${luaKey(r)} = ${m === '' ? '""' : luaStr(m)}`).join(', ')} }`);
+  lines.push(`\troles = { ${roleAgentRows.join(', ')} },`);
+  const cannotRun = (opts.cannotRun && typeof opts.cannotRun === 'object') ? opts.cannotRun : {};
+  const blockRows = Object.entries(cannotRun).filter(([id, why]) => validModel(id) && typeof why === 'string' && why)
+    .map(([id, why]) => `${luaKey(id)} = ${luaStr(why.slice(0, 240))}`);
+  lines.push(`\tcannotRun = { ${blockRows.join(', ')} },`);
+  const roleBlocked = (opts.roleBlocked && typeof opts.roleBlocked === 'object') ? opts.roleBlocked : {};
+  const roleBlockRows = Object.entries(roleBlocked).filter(([, byRole]) => byRole && typeof byRole === 'object')
+    .map(([agent, byRole]) => `${luaKey(agent)} = { ${Object.entries(byRole).filter(([r, why]) => validModel(r) && typeof why === 'string' && why)
+      .map(([r, why]) => `${luaKey(r)} = ${luaStr(why.slice(0, 240))}`).join(', ')} }`);
+  lines.push(`\troleBlocked = { ${roleBlockRows.join(', ')} },`);
   lines.push('\treplies = {');
   for (const r of (Array.isArray(records) ? records : [])) {
     lines.push('\t\t{');

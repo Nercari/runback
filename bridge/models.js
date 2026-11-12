@@ -45,6 +45,23 @@ const CATALOG = {
   hermes: [],
 };
 
+// Five picker roles the bridge publishes (addon unit 4 shows them; unit 3 only
+// builds the table and ships it on the slot file). agents.<id>.roles overrides
+// a row; empty model means this agent does not offer that role on its list.
+const ROLE_IDS = ['chat', 'quick', 'coach', 'deep', 'translate'];
+const ROLE_LABELS = {
+  chat: 'Chat',
+  quick: 'Quick answer',
+  coach: 'Coach note',
+  deep: 'Deep review',
+  translate: 'Translate',
+};
+const TOOL_FREE_AGENTS = new Set(['claude', 'grok']);
+const path = require('path');
+
+// Built-in deep-review row: a capable default on each agent that names one.
+const DEEP = { claude: 'opus', codex: 'gpt-6-sol', grok: 'grok-build' };
+
 // The cheap model a coach note (a fight review) runs on by default, one per pull,
 // so its cost rounds to nothing. Only Claude's docs name one (haiku, the small fast
 // model); the other lists here name no cheaper model the bridge can rely on, so
@@ -100,12 +117,111 @@ function quickModel(acfg, id) {
   return quick && list.some(e => e.id === quick) ? quick : '';
 }
 
+function chatModel(acfg, id) {
+  const list = entries(acfg, id);
+  const cfgRoles = acfg && acfg.roles && typeof acfg.roles === 'object' ? acfg.roles : {};
+  const own = typeof cfgRoles.chat === 'string' ? cfgRoles.chat : '';
+  if (own && list.some(e => e.id === own)) return own;
+  const picked = fromConfig(acfg && acfg.model);
+  if (picked && list.some(e => e.id === picked.id)) return picked.id;
+  return list[0] ? list[0].id : '';
+}
+
+function deepModel(acfg, id) {
+  const list = entries(acfg, id);
+  const cfgRoles = acfg && acfg.roles && typeof acfg.roles === 'object' ? acfg.roles : {};
+  const own = typeof cfgRoles.deep === 'string' ? cfgRoles.deep : '';
+  if (own && list.some(e => e.id === own)) return own;
+  const built = DEEP[id] || '';
+  if (built && list.some(e => e.id === built)) return built;
+  const capable = list.find(e => e.efforts && e.efforts.length);
+  if (capable) return capable.id;
+  return list[0] ? list[0].id : '';
+}
+
+function translateModel(acfg, id) {
+  if (!TOOL_FREE_AGENTS.has(id)) return '';
+  const cfgRoles = acfg && acfg.roles && typeof acfg.roles === 'object' ? acfg.roles : {};
+  const own = typeof cfgRoles.translate === 'string' ? cfgRoles.translate : '';
+  const list = entries(acfg, id);
+  if (own && list.some(e => e.id === own)) return own;
+  return chatModel(acfg, id);
+}
+
+function roleOverride(acfg, role) {
+  const cfgRoles = acfg && acfg.roles && typeof acfg.roles === 'object' ? acfg.roles : {};
+  return typeof cfgRoles[role] === 'string' ? cfgRoles[role] : '';
+}
+
+function roleRows(acfg, id) {
+  const list = entries(acfg, id);
+  const onList = m => m && list.some(e => e.id === m);
+  const row = (role, model, blocked) => ({
+    model: model || '',
+    label: ROLE_LABELS[role] || role,
+    blocked: blocked || '',
+  });
+  const chat = roleOverride(acfg, 'chat') || chatModel(acfg, id);
+  const quick = roleOverride(acfg, 'quick') || quickModel(acfg, id);
+  const coach = roleOverride(acfg, 'coach') || coachModel(acfg, id);
+  const deep = roleOverride(acfg, 'deep') || deepModel(acfg, id);
+  let translate = roleOverride(acfg, 'translate') || translateModel(acfg, id);
+  let translateBlock = '';
+  if (!TOOL_FREE_AGENTS.has(id)) {
+    translate = '';
+    translateBlock = `${id} cannot run the translator: its tools cannot all be turned off.`;
+  }
+  return {
+    chat: row('chat', onList(chat) ? chat : '', chat && !onList(chat) ? 'Model not on this agent list.' : ''),
+    quick: row('quick', onList(quick) ? quick : '', quick && !onList(quick) ? 'Model not on this agent list.' : ''),
+    coach: row('coach', onList(coach) ? coach : '', coach && !onList(coach) ? 'Model not on this agent list.' : ''),
+    deep: row('deep', onList(deep) ? deep : '', deep && !onList(deep) ? 'Model not on this agent list.' : ''),
+    translate: row('translate', onList(translate) ? translate : '', translateBlock),
+  };
+}
+
+function roleMap(acfg, id) {
+  const rows = roleRows(acfg, id);
+  const out = {};
+  for (const r of ROLE_IDS) out[r] = rows[r].model || '';
+  return out;
+}
+
+function roleBlocks(acfg, id) {
+  const rows = roleRows(acfg, id);
+  const out = {};
+  for (const r of ROLE_IDS) {
+    const b = rows[r].blocked;
+    if (b) out[r] = b;
+  }
+  return out;
+}
+
+function agentCannotRun(id) {
+  try {
+    const MentorGuard = require('./forever/modules/05-mentor-guard');
+    const root = path.join(__dirname, '..', 'mentor');
+    return MentorGuard.refusal(id, root, root);
+  } catch {
+    return '';
+  }
+}
+
 module.exports = {
   CATALOG,
   CHEAP,
   QUICK,
+  ROLE_IDS,
+  ROLE_LABELS,
   entries,
   coachModel,
   quickModel,
+  chatModel,
+  deepModel,
+  translateModel,
+  roleRows,
+  roleMap,
+  roleBlocks,
+  agentCannotRun,
   validEffort,
 };
