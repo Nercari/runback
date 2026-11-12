@@ -6,12 +6,17 @@
 'use strict';
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const fs = require('node:fs');
-const path = require('node:path');
-const { lua, lauxlib, lualib, to_luastring, to_jsstring } = require('fengari');
+const { createAddonVM, onlyFiles } = require('../toc_load');
 
-const addon = path.join(__dirname, '..', '..', 'addon', 'Runback');
-const read = file => fs.readFileSync(path.join(addon, file), 'utf8');
+const MAP_STUB_EXTRA = `
+function Methods.CreateLine(self, name, layer) local l = NewObjectPublic("Line", name, self); table.insert(self.textures, l); return l end
+function Methods.SetRotation(self, r) self.rotation = r end
+function Methods.SetVertexColor(self, r, g, b, a) self.vcolor = { r, g, b, a } end
+function Methods.SetScale(self, s) self.scale = s end
+function Methods.SetAllPoints(self, rel) if rel then self.width, self.height = rel.width, rel.height end end
+function Methods.GetFrameLevel(self) return self.level or 1 end
+function Methods.SetFrameLevel(self, l) self.level = l end
+`;
 
 // Loch Modan (1432) is x .5-.6, y .4-.5 of Eastern Kingdoms (1415), 10000 x 15000
 // yards, so the zone is 1000 yards wide and 1500 tall.
@@ -35,35 +40,15 @@ function WorldMapFrame:OnMapChanged() end
 `;
 
 function vm(saved, inbox) {
-  const L = lauxlib.luaL_newstate(); lualib.luaL_openlibs(L);
-  const run = code => {
-    const loaded = lauxlib.luaL_loadstring(L, to_luastring(code));
-    assert.equal(loaded, lua.LUA_OK, loaded === lua.LUA_OK ? '' : to_jsstring(lua.lua_tostring(L, -1)));
-    if (lua.lua_pcall(L, 0, 0, 0) !== lua.LUA_OK) throw new Error(to_jsstring(lua.lua_tostring(L, -1)));
-  };
-  const get = expr => {
-    run(`RESULT = tostring(${expr})`); lua.lua_getglobal(L, to_luastring('RESULT'));
-    const value = to_jsstring(lua.lua_tolstring(L, -1)); lua.lua_pop(L, 1); return value;
-  };
-  let stub = fs.readFileSync(path.join(__dirname, '..', 'wow_stub.lua'), 'utf8');
-  stub += `
-function Methods.CreateLine(self, name, layer) local l = NewObjectPublic("Line", name, self); table.insert(self.textures, l); return l end
-function Methods.SetRotation(self, r) self.rotation = r end
-function Methods.SetVertexColor(self, r, g, b, a) self.vcolor = { r, g, b, a } end
-function Methods.SetScale(self, s) self.scale = s end
-function Methods.SetAllPoints(self, rel) if rel then self.width, self.height = rel.width, rel.height end end
-function Methods.GetFrameLevel(self) return self.level or 1 end
-function Methods.SetFrameLevel(self, l) self.level = l end
-`;
-  stub = stub.replace('local function NewObject(', 'function NewObjectPublic(').replace(/NewObject\(/g, 'NewObjectPublic(');
-  run(stub);
-  run('unpack = table.unpack');
-  run(MAP_STUB);
-  if (saved) run(saved);
-  for (const file of ['Codec.lua', 'Inbox.lua', 'Runback.lua', 'Map.lua', 'Guide.lua', 'Forever.lua', 'Forever_Lockout.lua', 'Forever_Guide.lua']) run(read(file));
-  if (inbox) run(`Runback_Inbox = ${inbox}`);
-  run('STUB.FireEvent("ADDON_LOADED", "Runback"); STUB.FireEvent("PLAYER_LOGIN"); STUB.RunTimers()');
-  return { run, get };
+  return createAddonVM({
+    strictLoad: true,
+    only: onlyFiles(['Codec.lua', 'Inbox.lua', 'Runback.lua', 'Map.lua', 'Guide.lua', 'Forever.lua', 'Forever_Lockout.lua', 'Forever_Guide.lua']),
+    stubPatch: s => s.replace('local function NewObject(', 'function NewObjectPublic(').replace(/NewObject\(/g, 'NewObjectPublic('),
+    stubExtra: MAP_STUB_EXTRA,
+    beforeLoad: `unpack = table.unpack\n${MAP_STUB}`,
+    saved,
+    afterLoad: `${inbox ? `Runback_Inbox = ${inbox}\n` : ''}STUB.FireEvent("ADDON_LOADED", "Runback"); STUB.FireEvent("PLAYER_LOGIN"); STUB.RunTimers()`,
+  });
 }
 
 // Shown world-map pins as "x,y,number,title".

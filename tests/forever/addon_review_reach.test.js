@@ -3,33 +3,22 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
-const { lua, lauxlib, lualib, to_luastring, to_jsstring } = require('fengari');
+const { createAddonVM, onlyFiles } = require('../toc_load');
 
-const addon = path.join(__dirname, '..', '..', 'addon', 'Runback');
-const read = file => fs.readFileSync(path.join(addon, file), 'utf8');
 function vm() {
-  const L = lauxlib.luaL_newstate(); lualib.luaL_openlibs(L);
-  const run = code => {
-    const loaded = lauxlib.luaL_loadstring(L, to_luastring(code));
-    assert.equal(loaded, lua.LUA_OK, loaded === lua.LUA_OK ? '' : to_jsstring(lua.lua_tostring(L, -1)));
-    if (lua.lua_pcall(L, 0, 0, 0) !== lua.LUA_OK) throw new Error(to_jsstring(lua.lua_tostring(L, -1)));
-  };
-  const get = expr => {
-    run(`RESULT = tostring(${expr})`); lua.lua_getglobal(L, to_luastring('RESULT'));
-    const value = to_jsstring(lua.lua_tolstring(L, -1)); lua.lua_pop(L, 1); return value;
-  };
-  run(fs.readFileSync(path.join(__dirname, '..', 'wow_stub.lua'), 'utf8'));
-  run('unpack = table.unpack');
-  for (const file of ['Codec.lua', 'Inbox.lua', 'Runback.lua', 'Forever.lua', 'Forever_Lockout.lua', 'Forever_Context.lua', 'Forever_Commands.lua']) run(read(file));
-  run('STUB.FireEvent("ADDON_LOADED", "Runback"); STUB.FireEvent("PLAYER_LOGIN"); STUB.RunTimers()');
-  run('Runback.IsConnected = function() return true end');
-  run(`function CLICK(label)
-    for _, f in ipairs(STUB.frames) do
-      if f.kind == "Button" and f.text == label then f.scripts.OnClick(f); return true end
-    end
-    error("no button labelled " .. label)
-  end`);
-  return { run, get };
+  return createAddonVM({
+    strictLoad: true,
+    only: onlyFiles(['Codec.lua', 'Inbox.lua', 'Runback.lua', 'Forever.lua', 'Forever_Lockout.lua', 'Forever_Context.lua', 'Forever_Commands.lua']),
+    beforeLoad: 'unpack = table.unpack',
+    afterLoad: `STUB.FireEvent("ADDON_LOADED", "Runback"); STUB.FireEvent("PLAYER_LOGIN"); STUB.RunTimers()
+Runback.IsConnected = function() return true end
+function CLICK(label)
+  for _, f in ipairs(STUB.frames) do
+    if f.kind == "Button" and f.text == label then f.scripts.OnClick(f); return true end
+  end
+  error("no button labelled " .. label)
+end`,
+  });
 }
 const outbox = v => ({
   cmd: v.get('RunbackDB.outbox and RunbackDB.outbox.cmd'),

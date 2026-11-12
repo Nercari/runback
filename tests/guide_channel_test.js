@@ -9,6 +9,7 @@ const { spawnSync } = require('child_process');
 const { lua, lauxlib, lualib, to_luastring, to_jsstring } = require('fengari');
 const P = require('../bridge/protocol');
 const G = require('../bridge/guide');
+const { createAddonVM, onlyFiles } = require('./toc_load');
 
 const ADDON = path.join(__dirname, '..', 'addon', 'Runback');
 const fixture = name => fs.readFileSync(path.join(__dirname, 'fixtures', 'guides', name + '.json'), 'utf8');
@@ -150,9 +151,10 @@ test('one guide round-trips: bridge Lua -> slot data -> Guide.lua -> saved varia
 });
 
 test('slot data carrying guides reaches the guide store through the real Runback.lua', () => {
-  const vm = luaVM();
-  vm.run(fs.readFileSync(path.join(__dirname, 'wow_stub.lua'), 'utf8'));
-  for (const f of ['Codec.lua', 'Inbox.lua', 'Runback.lua', 'Guide.lua']) vm.run(fs.readFileSync(path.join(ADDON, f), 'utf8'));
+  const vm = createAddonVM({
+    strictLoad: true,
+    only: onlyFiles(['Codec.lua', 'Inbox.lua', 'Runback.lua', 'Guide.lua']),
+  });
   const store = G.newGuides('ep0ch');
   G.applyGuides(store, [FULL]);
   vm.run(`STUB.FireEvent("ADDON_LOADED", "Runback"); ${P.luaTable('Runback_Inbox', [], { now: 1, guides: store })}; STUB.FireEvent("PLAYER_LOGIN")`);

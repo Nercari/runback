@@ -4,45 +4,33 @@
 // channel off and every reply check costs one of the 200 slot addons.
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const fs = require('node:fs');
-const path = require('node:path');
-const { lua, lauxlib, lualib, to_luastring, to_jsstring } = require('fengari');
+const { createAddonVM, SLOT_BUDGET_LOAD } = require('../toc_load');
 
-const addon = path.join(__dirname, '..', '..', 'addon', 'Runback');
+const BR_STUB = `BR = { pub = STUB.now, loads = 0 }
+STUB.onLoadAddOn = function()
+  BR.loads = BR.loads + 1
+  local c = nil
+  for _, chat in ipairs(RunbackDB.chats or {}) do c = chat; break end
+  local replies = {}
+  if c.pendingId and BR.sent then
+    local done = STUB.now >= BR.sent + BR.ready
+    if done then BR.pub = BR.sent + BR.ready
+    elseif STUB.now >= BR.sent + 3 then BR.pub = BR.sent + 3 + math.floor((STUB.now - BR.sent - 3) / 30) * 30 end
+    replies = { { chat = c.id, id = c.pendingId, status = done and "done" or "working", text = done and "answer" or "reading" } }
+  end
+  Runback_SlotData = { now = STUB.epoch + math.floor(BR.pub), cwd = "", agent = "claude", agents = { "claude" }, replies = replies }
+end`;
+
 function vm({ soundWorks }) {
-  const L = lauxlib.luaL_newstate(); lualib.luaL_openlibs(L);
-  const run = code => {
-    const loaded = lauxlib.luaL_loadstring(L, to_luastring(code));
-    assert.equal(loaded, lua.LUA_OK, loaded === lua.LUA_OK ? '' : to_jsstring(lua.lua_tostring(L, -1)));
-    if (lua.lua_pcall(L, 0, 0, 0) !== lua.LUA_OK) throw new Error(to_jsstring(lua.lua_tostring(L, -1)));
-  };
-  const get = expr => {
-    run(`RESULT = tostring(${expr})`); lua.lua_getglobal(L, to_luastring('RESULT'));
-    const value = to_jsstring(lua.lua_tolstring(L, -1)); lua.lua_pop(L, 1); return value;
-  };
-  run(fs.readFileSync(path.join(__dirname, '..', 'wow_stub.lua'), 'utf8'));
-  // Forever: every file, even an empty one, reports as playable. A working
-  // client: only the control file and nothing the bridge has not raised.
-  run(soundWorks
-    ? 'STUB.sounds["Interface\\\\AddOns\\\\Runback\\\\ctl\\\\valid.wav"] = true'
-    : 'function PlaySoundFile() return true, 1 end');
-  for (const file of ['Codec.lua', 'Inbox.lua', 'Forever.lua', 'Runback.lua']) run(fs.readFileSync(path.join(addon, file), 'utf8'));
-  // A fake bridge. Its slot data carries the time it last published (what the
-  // real bridge writes as `now`): at the hello, when it picks up a message, every
-  // 30 s of progress, and when the reply is done.
-  run(`BR = { pub = STUB.now, loads = 0 }
-  STUB.onLoadAddOn = function()
-    BR.loads = BR.loads + 1
-    local c = RunbackDB.chats[1]
-    local replies = {}
-    if c.pendingId and BR.sent then
-      local done = STUB.now >= BR.sent + BR.ready
-      if done then BR.pub = BR.sent + BR.ready
-      elseif STUB.now >= BR.sent + 3 then BR.pub = BR.sent + 3 + math.floor((STUB.now - BR.sent - 3) / 30) * 30 end
-      replies = { { chat = c.id, id = c.pendingId, status = done and "done" or "working", text = done and "answer" or "reading" } }
-    end
-    Runback_SlotData = { now = STUB.epoch + math.floor(BR.pub), cwd = "", agent = "claude", agents = { "claude" }, replies = replies }
-  end`);
+  const v = createAddonVM({
+    strictLoad: true,
+    files: SLOT_BUDGET_LOAD,
+    beforeLoad: soundWorks
+      ? 'STUB.sounds["Interface\\\\AddOns\\\\Runback\\\\ctl\\\\valid.wav"] = true'
+      : 'function PlaySoundFile() return true, 1 end',
+    afterLoad: BR_STUB,
+  });
+  const { run, get } = v;
   const advance = seconds => run(`for _ = 1, ${Math.round(seconds / 2)} do STUB.now = STUB.now + 2; STUB.Tick(); STUB.RunTimers() end`);
   // Send a message the bridge answers `ready` seconds later; wait for the answer.
   const ask = (text, ready) => {

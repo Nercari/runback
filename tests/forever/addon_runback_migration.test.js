@@ -3,38 +3,19 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
-const { lua, lauxlib, lualib, to_luastring, to_jsstring } = require('fengari');
+const { createAddonVM, MIGRATION_LOAD } = require('../toc_load');
 
 const addon = path.join(__dirname, '..', '..', 'addon', 'Runback');
 const read = file => fs.readFileSync(path.join(addon, file), 'utf8');
 
 function vm() {
-  const L = lauxlib.luaL_newstate();
-  lualib.luaL_openlibs(L);
-  const run = (code, arg) => {
-    const loaded = lauxlib.luaL_loadstring(L, to_luastring(code));
-    assert.equal(loaded, lua.LUA_OK, loaded === lua.LUA_OK ? '' : to_jsstring(lua.lua_tostring(L, -1)));
-    let nargs = 0;
-    if (arg !== undefined) {
-      lua.lua_pushstring(L, to_luastring(arg));
-      nargs = 1;
-    }
-    const status = lua.lua_pcall(L, nargs, 0, 0);
-    if (status !== lua.LUA_OK) throw new Error(to_jsstring(lua.lua_tostring(L, -1)));
-  };
-  const get = expr => {
-    run(`RESULT = tostring(${expr})`); lua.lua_getglobal(L, to_luastring('RESULT'));
-    const value = to_jsstring(lua.lua_tolstring(L, -1)); lua.lua_pop(L, 1); return value;
-  };
-  const truthy = expr => {
-    run(`RESULT = (${expr}) and 1 or 0`); lua.lua_getglobal(L, to_luastring('RESULT'));
-    const value = lua.lua_tointeger(L, -1); lua.lua_pop(L, 1); return value === 1;
-  };
-  run(fs.readFileSync(path.join(__dirname, '..', 'wow_stub.lua'), 'utf8'));
-  run('unpack = table.unpack');
-  for (const file of ['Codec.lua', 'Inbox.lua', 'Forever.lua']) run(read(file));
-  run(read('Runback.lua'), 'Runback');
-  return { run, get, truthy, load: () => run('STUB.FireEvent("ADDON_LOADED", "Runback")') };
+  const v = createAddonVM({
+    strictLoad: true,
+    files: MIGRATION_LOAD,
+    chunkName: 'Runback',
+    beforeLoad: 'unpack = table.unpack',
+  });
+  return { ...v, load: () => v.run('STUB.FireEvent("ADDON_LOADED", "Runback")') };
 }
 
 const PAIRS = [
@@ -145,43 +126,28 @@ test('PLAYER_LOGIN rechecks /rb and says once when another addon owns it', () =>
 });
 
 test('slash /rb is not registered when hash_SlashCmdList already owns /rb', () => {
-  const L = lauxlib.luaL_newstate();
-  lualib.luaL_openlibs(L);
-  const run = (code, arg) => {
-    const loaded = lauxlib.luaL_loadstring(L, to_luastring(code));
-    assert.equal(loaded, lua.LUA_OK);
-    let nargs = 0;
-    if (arg !== undefined) { lua.lua_pushstring(L, to_luastring(arg)); nargs = 1; }
-    assert.equal(lua.lua_pcall(L, nargs, 0, 0), lua.LUA_OK);
-  };
-  const get = expr => {
-    run(`RESULT = tostring(${expr})`);
-    lua.lua_getglobal(L, to_luastring('RESULT'));
-    const value = to_jsstring(lua.lua_tolstring(L, -1));
-    lua.lua_pop(L, 1);
-    return value;
-  };
-  run(fs.readFileSync(path.join(__dirname, '..', 'wow_stub.lua'), 'utf8'));
-  run('unpack = table.unpack');
-  run('hash_SlashCmdList["/rb"] = "OTHER"');
-  for (const file of ['Codec.lua', 'Inbox.lua', 'Forever.lua']) run(read(file));
-  run(read('Runback.lua'), 'Runback');
-  assert.equal(get('SLASH_RUNBACK7'), 'nil');
-  run('STUB.prints = {}');
-  run('STUB.FireEvent("PLAYER_LOGIN")');
-  run('STUB.FireEvent("PLAYER_LOGIN")');
-  run('RESULT = 0; for _, line in ipairs(STUB.prints) do if string.find(line, "/runback still works", 1, true) then RESULT = RESULT + 1 end end');
-  assert.equal(get('RESULT'), '1');
+  const v = createAddonVM({
+    strictLoad: true,
+    files: MIGRATION_LOAD,
+    chunkName: 'Runback',
+    beforeLoad: 'unpack = table.unpack\nhash_SlashCmdList["/rb"] = "OTHER"',
+  });
+  assert.equal(v.get('SLASH_RUNBACK7'), 'nil');
+  v.run('STUB.prints = {}');
+  v.run('STUB.FireEvent("PLAYER_LOGIN")');
+  v.run('STUB.FireEvent("PLAYER_LOGIN")');
+  v.run('RESULT = 0; for _, line in ipairs(STUB.prints) do if string.find(line, "/runback still works", 1, true) then RESULT = RESULT + 1 end end');
+  assert.equal(v.get('RESULT'), '1');
 });
 
 test('Runback.toc declares Runback and legacy SavedVariables', () => {
   const toc = read('Runback.toc');
-  for (const name of [
+  [
     'RunbackDB', 'RunbackMapDB', 'RunbackGuideDB', 'RunbackForeverDB', 'Runback_Bulk',
     'WoWAIDB', 'WoWAIMapDB', 'WoWAIGuideDB', 'WoWAIForeverDB', 'WoWAI_Bulk',
-  ]) {
+  ].forEach(name => {
     assert.match(toc, new RegExp(`\\b${name}\\b`), name);
-  }
+  });
 });
 
 test('non-table legacy saved data is skipped', () => {

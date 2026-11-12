@@ -3,12 +3,10 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('fs');
 const path = require('path');
-const fengari = require('fengari');
 const luaparse = require('luaparse');
-const { lua, lauxlib, lualib, to_luastring, to_jsstring } = fengari;
+const { createAddonVM } = require('../toc_load');
 
 const ADDON = path.join(__dirname, '..', '..', 'addon', 'Runback');
-const STUB_PATH = path.join(__dirname, '..', 'wow_stub.lua');
 
 const FEATURES_STUB = `
 STUB.screenshots = 0
@@ -41,43 +39,12 @@ C_VoiceChat = {
 `;
 
 function newVM(extra) {
-  const L = lauxlib.luaL_newstate();
-  lualib.luaL_openlibs(L);
-  const run = (code, arg) => {
-    if (lauxlib.luaL_loadstring(L, to_luastring(code)) !== lua.LUA_OK) {
-      throw new Error('Lua load: ' + to_jsstring(lua.lua_tostring(L, -1)));
-    }
-    let nargs = 0;
-    if (arg !== undefined) {
-      lua.lua_pushstring(L, to_luastring(arg));
-      nargs = 1;
-    }
-    if (lua.lua_pcall(L, nargs, 0, 0) !== lua.LUA_OK) {
-      throw new Error('Lua error: ' + to_jsstring(lua.lua_tostring(L, -1)));
-    }
-  };
-  const evaluate = (expr) => {
-    run(`local v = (${expr}); if v == nil then RESULT = nil else RESULT = tostring(v) end`);
-    lua.lua_getglobal(L, to_luastring('RESULT'));
-    const isNil = lua.lua_isnil(L, -1);
-    const s = isNil ? null : to_jsstring(lua.lua_tolstring(L, -1));
-    lua.lua_pop(L, 1);
-    return s;
-  };
-  const num = (expr) => Number(evaluate(expr));
-
-  run(fs.readFileSync(STUB_PATH, 'utf8'));
-  run(FEATURES_STUB);
-  if (extra) run(extra);
-  for (const f of [
-    'Codec.lua', 'Inbox.lua', 'Runback.lua', 'Forever.lua',
-    'Forever_Lockout.lua', 'Forever_Context.lua', 'Forever_Switch.lua', 'Forever_Commands.lua',
-    'Forever_Speech.lua', 'Forever_Macro.lua', 'Forever_Bulk.lua', 'Forever_DeathShot.lua',
-    'Forever_Translate.lua', 'Forever_Jobs.lua', 'Forever_Banner.lua',
-  ]) {
-    run(fs.readFileSync(path.join(ADDON, f), 'utf8'), 'Runback');
-  }
-  return { run, evaluate, num };
+  return createAddonVM({
+    strictLoad: true,
+    until: 'Forever_Banner.lua',
+    chunkName: 'Runback',
+    beforeLoad: extra ? `${FEATURES_STUB}\n${extra}` : FEATURES_STUB,
+  });
 }
 
 function login(vm) {
