@@ -18,6 +18,8 @@ const os = require('os');
 const path = require('path');
 const { describeToolUse, ruleFor, rulesFor, baseName, validModel, validEffort } = require('./protocol');
 const M = require('./models');
+const MentorGuard = require('./forever/modules/05-mentor-guard');
+const REPO = path.join(__dirname, '..');
 
 const PROGRESS_CHARS = 140;
 
@@ -765,6 +767,15 @@ function nativeNextTo(script, agent) {
 }
 
 // { file, args, found, note }: what to spawn for an agent, and whether it is there.
+function agentCannotRun(id, mentorDir) {
+  const root = mentorDir || path.join(REPO, 'mentor');
+  try {
+    return MentorGuard.refusal(id, root, root);
+  } catch {
+    return '';
+  }
+}
+
 function resolveCommand(id, cfg = {}) {
   const A = AGENTS[id];
   if (!A) return { file: id, args: [], found: false, note: `unknown agent "${id}"` };
@@ -814,6 +825,12 @@ module.exports = {
   coachModel: M.coachModel,
   quickModel: M.quickModel,
   modelEntries: M.entries,
+  roleIds: () => M.ROLE_IDS.slice(),
+  roleLabels: () => ({ ...M.ROLE_LABELS }),
+  roleMap: M.roleMap,
+  roleBlocks: M.roleBlocks,
+  roleRows: M.roleRows,
+  agentCannotRun,
   effortProblem,
   grokRules,
   snippet,

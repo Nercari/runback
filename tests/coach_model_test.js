@@ -16,7 +16,7 @@ test('coachModel: the cheap model, the configured one, and the normal model', ()
   assert.equal(A.coachModel({ models: ['opus', 'sonnet'] }, 'claude'), '', 'the player left the cheap model out');
   assert.equal(A.coachModel({ model: 'sonnet' }, 'claude'), 'haiku', 'the normal model does not turn it off');
   // No list here names a cheaper model than the normal one, so reviews keep it.
-  for (const id of ['codex', 'grok', 'agy', 'hermes']) assert.equal(A.coachModel({}, id), '', `${id} has no cheap model`);
+  for (const id of ['codex', 'grok', 'agy', 'hermes', 'opencode']) assert.equal(A.coachModel({}, id), '', `${id} has no cheap model`);
   assert.equal(A.coachModel({ models: ['gpt-5.5'] }, 'codex'), '');
 });
 

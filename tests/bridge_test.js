@@ -185,6 +185,14 @@ test('splitSummary takes the last TL;DR block for the game chat and keeps the wh
   const quick = P.luaTable('Runback_SlotData', [], { quick: { claude: 'haiku', codex: 'gpt-5.5' } });
   assert.ok(quick.includes('quick = { claude = "haiku", codex = "gpt-5.5" },'));
   assert.ok(P.luaTable('Runback_SlotData', [], { quick: {} }).includes('quick = {  },'), 'empty quick must clear a stale addon cache');
+  const roleLua = P.luaTable('Runback_SlotData', [], {
+    roleNames: { chat: 'Chat', coach: 'Coach note' },
+    roles: { claude: { chat: 'opus', coach: 'haiku' } },
+    cannotRun: { hermes: 'nope' },
+  });
+  assert.ok(roleLua.includes('roleNames = { chat = "Chat", coach = "Coach note" }'));
+  assert.ok(roleLua.includes('roles = { claude = { chat = "opus", coach = "haiku" } }'));
+  assert.ok(roleLua.includes('cannotRun = { hermes = "nope" }'));
   // With levels (backlog 44): per agent and model, bad names and levels dropped.
   const lv = P.luaTable('Runback_SlotData', [], {
     efforts: { claude: { opus: ['low', 'high', 'Bad!'], 'gpt-5.1': ['medium'], 'bad model;': ['low'] }, 'bad id': { x: ['low'] } },

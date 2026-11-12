@@ -369,8 +369,11 @@ function takeGuides(job, text) {
 function slotFile(globalName, records, urgent = true) {
   const map = Date.now() < mapShareUntil && (urgent || mapLuaSize() <= MAP_PROGRESS_MAX) ? state.map : null;
   const guides = Date.now() < guideShareUntil && (urgent || guideLuaSize() <= MAP_PROGRESS_MAX) ? state.guides : null;
-  const { agents, models, efforts, defaults, quick } = pools();
-  return P.luaTable(globalName, records, { cwd: DEFAULT_CWD, restore: pendingRestore, agent: DEFAULT_AGENT, agents, models, efforts, defaults, quick, map, guides, card: state.forever.card });
+  const { agents, models, efforts, defaults, quick, roleNames, roles, cannotRun, roleBlocked } = pools();
+  return P.luaTable(globalName, records, {
+    cwd: DEFAULT_CWD, restore: pendingRestore, agent: DEFAULT_AGENT, agents, models, efforts, defaults, quick,
+    roleNames, roles, cannotRun, roleBlocked, map, guides, card: state.forever.card,
+  });
 }
 
 // What the in-game picker offers: the agents installed on this PC (all of them
@@ -386,6 +389,11 @@ function pools() {
   const efforts = {};
   const defaults = {};
   const quick = {};
+  const roles = {};
+  const roleBlocked = {};
+  const cannotRun = {};
+  const roleNames = A.roleLabels();
+  const mentorDir = cfg.forever && cfg.forever.mentorDir;
   for (const id of agents) {
     const acfg = A.agentConfig(cfg, id);
     models[id] = A.modelChoices(acfg, id);
@@ -394,8 +402,13 @@ function pools() {
     if (Object.keys(levels.defaults).length) defaults[id] = levels.defaults;
     const q = A.quickModel(acfg, id);
     if (q) quick[id] = q;
+    roles[id] = A.roleMap(acfg, id);
+    const blocks = A.roleBlocks(acfg, id);
+    if (Object.keys(blocks).length) roleBlocked[id] = blocks;
+    const why = A.agentCannotRun(id, mentorDir);
+    if (why) cannotRun[id] = why;
   }
-  poolsCache = { at: Date.now(), agents, models, efforts, defaults, quick };
+  poolsCache = { at: Date.now(), agents, models, efforts, defaults, quick, roleNames, roles, cannotRun, roleBlocked };
   return poolsCache;
 }
 
