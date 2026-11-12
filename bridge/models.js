@@ -176,7 +176,11 @@ function roleRows(acfg, id) {
     quick: row('quick', onList(quick) ? quick : '', quick && !onList(quick) ? 'Model not on this agent list.' : ''),
     coach: row('coach', onList(coach) ? coach : '', coach && !onList(coach) ? 'Model not on this agent list.' : ''),
     deep: row('deep', onList(deep) ? deep : '', deep && !onList(deep) ? 'Model not on this agent list.' : ''),
-    translate: row('translate', onList(translate) ? translate : '', translateBlock),
+    translate: row(
+      'translate',
+      onList(translate) ? translate : '',
+      translateBlock || (translate && !onList(translate) ? 'Model not on this agent list.' : ''),
+    ),
   };
 }
 

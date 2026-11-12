@@ -34,6 +34,26 @@ test('agents.<id>.roles overrides a row when the model is on the list', () => {
   assert.equal(rows.coach.model, 'sonnet');
 });
 
+test('roleRows: off-list translate override reports the same block as other roles', () => {
+  const t = M.roleRows({ roles: { translate: 'nope' } }, 'claude').translate;
+  assert.equal(t.model, '');
+  assert.equal(t.blocked, 'Model not on this agent list.');
+});
+
+test('luaTable cannotRun reasons are not cut mid-word at the slot limit', () => {
+  const why = A.agentCannotRun('hermes');
+  const lua = P.luaTable('Runback_Inbox', [], { cannotRun: { hermes: why } });
+  const m = lua.match(/cannotRun = \{ hermes = "([^"]*)"/);
+  assert.ok(m, 'cannotRun row present');
+  assert.ok(m[1].length <= 240);
+  assert.ok(!m[1].endsWith(' fo'), 'Hermes reason must not end on a split word');
+  assert.ok(m[1].endsWith('another'), 'Hermes reason ends on a whole word');
+  const whyOc = A.agentCannotRun('opencode');
+  const luaOc = P.luaTable('Runback_Inbox', [], { cannotRun: { opencode: whyOc } });
+  const mOc = luaOc.match(/cannotRun = \{ opencode = "([^"]*)"/);
+  assert.ok(mOc[1].endsWith('another'), 'OpenCode reason ends on a whole word');
+});
+
 test('agentCannotRun carries the mentor refusal for Hermes and OpenCode', () => {
   assert.ok(A.agentCannotRun('hermes'));
   assert.ok(A.agentCannotRun('opencode'));
