@@ -781,7 +781,7 @@ function luaTable(globalName, records, opts = {}) {
   const quick = (opts.quick && typeof opts.quick === 'object') ? opts.quick : {};
   const quickRows = Object.entries(quick).filter(([, m]) => validModel(m))
     .map(([id, m]) => `${luaKey(id)} = ${luaStr(m)}`);
-  if (quickRows.length) lines.push(`\tquick = { ${quickRows.join(', ')} },`);
+  lines.push(`\tquick = { ${quickRows.join(', ')} },`);
   lines.push('\treplies = {');
   for (const r of (Array.isArray(records) ? records : [])) {
     lines.push('\t\t{');

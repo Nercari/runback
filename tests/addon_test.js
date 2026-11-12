@@ -585,6 +585,25 @@ test('the addon still loads an inbox that carries effort levels and defaults (ba
   assert.equal(vm.evaluate('Runback.FastModelOffer(RunbackDB.chats[1]) ~= nil'), 'true', 'quick tier still read');
 });
 
+test('an empty quick table in the next slot clears a stale fast-model offer', () => {
+  const P = require('../bridge/protocol');
+  const vm = newVM();
+  login(vm);
+  vm.run('STUB.RunTimers()');
+  const slot = (quick) => P.luaTable('Runback_SlotData', [], {
+    agent: 'claude', agents: ['claude'], models: { claude: ['opus', 'sonnet', 'haiku'] }, quick,
+  }).split('\n').filter(l => !l.startsWith('--')).join('\n')
+    .replace(/^Runback_SlotData = /, '').replace(/now = \d+,/, 'now = time(),');
+  nextSlot(vm, slot({ claude: 'haiku' }));
+  vm.run('STUB.now = STUB.now + 6; STUB.Tick()');
+  vm.run('Runback.SetPool(RunbackDB.chats[1], "claude", "opus")');
+  assert.equal(vm.evaluate('Runback.FastModelOffer(RunbackDB.chats[1]) ~= nil'), 'true');
+  nextSlot(vm, slot({}));
+  vm.run('Runback.Send("ping")');
+  vm.run('STUB.now = STUB.now + 6; STUB.Tick()');
+  assert.equal(vm.evaluate('Runback.FastModelOffer(RunbackDB.chats[1])'), null, 'stale quick tier is cleared');
+});
+
 test('each slash command in a reply gets a copy button that opens the copy box with only that line', () => {
   const vm = newVM();
   login(vm);
