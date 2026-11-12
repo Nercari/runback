@@ -386,10 +386,17 @@ test('stalled runs (backlog 52): 3 quiet minutes or 5 minutes in total, and a no
   // The video case: 13 m 46 s of work with no answer was never flagged; now it is from minute 5.
   assert.notEqual(P.stallReason(t0, t0 + 13 * min, t0 + 13 * min + 46_000), '');
 
-  const text = P.noReplyText('Antigravity', ['Read LOCAL.md', 'Edit notebook.md'], 12);
+  const text = P.noReplyText('Antigravity', ['Read LOCAL.md', 'Edit notebook.md'], 12, 'Claude');
   assert.match(text, /^Antigravity finished without a reply\. It did 12 actions, the last 2 shown:/);
   assert.match(text, /- Read LOCAL\.md\n- Edit notebook\.md\n/);
-  assert.match(text, /Ask Claude instead/);
+  assert.match(text, /Ask Claude instead to send the same question to Claude/);
+
+  assert.equal(P.stallAlternateAgent('claude', ['claude', 'codex']), 'codex');
+  assert.equal(P.stallAlternateAgent('claude', ['agy', 'claude', 'codex']), 'agy');
+  assert.equal(P.stallAlternateAgent('claude', ['claude']), '');
+  const codexStall = P.noReplyText('Claude', ['Read a'], 1, 'Codex');
+  assert.match(codexStall, /Ask Codex instead to send the same question to Codex/);
+  assert.doesNotMatch(codexStall, /Ask Claude instead/);
   assert.match(P.noReplyText('Codex', ['Run tests'], 1), /It did 1 action:/);
   assert.match(P.noReplyText('Codex', [], 0), /finished without doing anything and without a reply/);
 

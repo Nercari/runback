@@ -727,7 +727,7 @@ function luaKey(id) {
 
 // Stalled runs (backlog 52). A run that has shown no new action for STALL_QUIET_MS,
 // or has lasted STALL_TOTAL_MS, is marked "quiet" or "long" in its working record so
-// the game can offer Stop and "Ask Claude instead". A run that ends with no reply
+// the game can offer Stop and "Ask <other agent> instead". A run that ends with no reply
 // carries "noreply". Worst wait with no way out: STALL_TOTAL_MS (was 13 m 46 s).
 const STALL_QUIET_MS = 3 * 60 * 1000;
 const STALL_TOTAL_MS = 5 * 60 * 1000;
@@ -738,15 +738,29 @@ function stallReason(startedAt, lastActionAt, now) {
   return '';
 }
 
+// First other agent in the bridge list (same order as the in-game picker).
+function stallAlternateAgent(current, agents) {
+  const cur = String(current || '').trim().toLowerCase();
+  const list = Array.isArray(agents) ? agents : [];
+  for (const id of list) {
+    const s = String(id || '').trim().toLowerCase();
+    if (s && s !== cur) return s;
+  }
+  return '';
+}
+
 // The reply for a run that ended with no text: what it did, from its action lines.
-function noReplyText(agentName, actions, total) {
+function noReplyText(agentName, actions, total, alternateName) {
   const list = actions == null ? [] : actions;
   const n = Number(total) || list.length;
   if (!n) return `${agentName} finished without doing anything and without a reply.`;
   const shown = list.length < n ? `, the last ${list.length} shown` : '';
+  const alt = String(alternateName || '').trim();
+  const hint = alt
+    ? `\nIt may have changed files even so. Click Ask ${alt} instead to send the same question to ${alt}, or ask again.`
+    : '\nIt may have changed files even so, or ask again.';
   return `${agentName} finished without a reply. It did ${n} ${n === 1 ? 'action' : 'actions'}${shown}:\n` +
-    list.map(a => `- ${a}`).join('\n') +
-    '\nIt may have changed files even so. Click Ask Claude instead to send the same question to Claude, or ask again.';
+    list.map(a => `- ${a}`).join('\n') + hint;
 }
 
 // The slot file / Inbox.lua body: the latest record of every chat, the bridge's
@@ -1050,6 +1064,7 @@ module.exports = {
   STALL_QUIET_MS,
   STALL_TOTAL_MS,
   stallReason,
+  stallAlternateAgent,
   noReplyText,
   cleanText,
   MAP_LIMITS,
