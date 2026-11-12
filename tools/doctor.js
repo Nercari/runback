@@ -332,12 +332,8 @@ function linuxBridgeRunning(bridgeDir = path.join(__dirname, '..', 'bridge'), al
 function stopLinuxSupervisor(bridgeDir = path.join(__dirname, '..', 'bridge'), killer = spawnSync, alive = pidAlive) {
   const pid = readSupervisorPid(bridgeDir, alive);
   if (!pid) return;
-  if (process.platform === 'linux') {
-    killer('kill', ['-TERM', `-${pid}`], { encoding: 'utf8' });
-    if (alive(pid)) killer('kill', ['-TERM', String(pid)], { encoding: 'utf8' });
-  } else {
-    killer('kill', ['-TERM', String(pid)], { encoding: 'utf8' });
-  }
+  killer('kill', ['-TERM', `-${pid}`], { encoding: 'utf8' });
+  if (alive(pid)) killer('kill', ['-TERM', String(pid)], { encoding: 'utf8' });
   clearSupervisorPidFile(bridgeDir);
 }
 
