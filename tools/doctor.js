@@ -303,38 +303,76 @@ function writeSupervisorPidFile(bridgeDir, pid) {
   fs.writeFileSync(supervisorPidFile(bridgeDir), `${pid}\n`);
 }
 
-function readSupervisorPid(bridgeDir = path.join(__dirname, '..', 'bridge'), alive = pidAlive) {
-  let text = '';
-  try { text = fs.readFileSync(supervisorPidFile(bridgeDir), 'utf8'); } catch {
+function readRawSupervisorPid(bridgeDir = path.join(__dirname, '..', 'bridge')) {
+  try {
+    const pid = Number(String(fs.readFileSync(supervisorPidFile(bridgeDir), 'utf8')).trim());
+    return pid || 0;
+  } catch {
     return 0;
   }
-  const pid = Number(String(text).trim());
-  if (!pid) {
+}
+
+function readProcCmdline(pid) {
+  try {
+    return fs.readFileSync(path.join('/proc', String(pid), 'cmdline'), 'utf8').replace(/\0/g, ' ');
+  } catch {
+    return '';
+  }
+}
+
+function supervisorMatchesCheckout(pid, bridgeDir, alive = pidAlive, readers = null) {
+  if (!pid || !alive(pid)) return false;
+  const bridgeReal = path.resolve(bridgeDir);
+  const cmd = readers && readers.cmdline ? readers.cmdline(pid) : readProcCmdline(pid);
+  if (!/supervisor\.js/.test(cmd)) return false;
+  const supPath = path.join(bridgeReal, 'supervisor.js');
+  if (cmd.includes(supPath)) return true;
+  const cwd = readers && readers.cwd ? readers.cwd(pid) : readProcCwd(pid);
+  return cwd !== '' && path.resolve(cwd) === bridgeReal;
+}
+
+function waitForSupervisorStop(pid, bridgeDir, alive = pidAlive, sleeper = spawnSync) {
+  if (!pid) return;
+  const deadline = Date.now() + 10000;
+  while (alive(pid) && Date.now() < deadline) {
+    sleeper('sleep', ['0.05'], { encoding: 'utf8' });
+  }
+  if (!alive(pid) && readRawSupervisorPid(bridgeDir) === pid) clearSupervisorPidFile(bridgeDir);
+}
+
+function defaultSupervisorIdentity(pid, bridgeDir, alive = pidAlive) {
+  return supervisorMatchesCheckout(pid, bridgeDir, alive);
+}
+
+function readSupervisorPid(bridgeDir = path.join(__dirname, '..', 'bridge'), alive = pidAlive, identity = defaultSupervisorIdentity) {
+  const pid = readRawSupervisorPid(bridgeDir);
+  if (!pid) return 0;
+  if (!alive(pid)) {
     clearSupervisorPidFile(bridgeDir);
     return 0;
   }
-  if (!alive(pid)) {
+  if (!identity(pid, bridgeDir, alive)) {
     clearSupervisorPidFile(bridgeDir);
     return 0;
   }
   return pid;
 }
 
-function listSupervisorPids(bridgeDir = path.join(__dirname, '..', 'bridge'), alive = pidAlive) {
-  const pid = readSupervisorPid(bridgeDir, alive);
+function listSupervisorPids(bridgeDir = path.join(__dirname, '..', 'bridge'), alive = pidAlive, identity = defaultSupervisorIdentity) {
+  const pid = readSupervisorPid(bridgeDir, alive, identity);
   return pid ? [pid] : [];
 }
 
-function linuxBridgeRunning(bridgeDir = path.join(__dirname, '..', 'bridge'), alive = pidAlive) {
-  return listSupervisorPids(bridgeDir, alive).length > 0;
+function linuxBridgeRunning(bridgeDir = path.join(__dirname, '..', 'bridge'), alive = pidAlive, identity = defaultSupervisorIdentity) {
+  return listSupervisorPids(bridgeDir, alive, identity).length > 0;
 }
 
-function stopLinuxSupervisor(bridgeDir = path.join(__dirname, '..', 'bridge'), killer = spawnSync, alive = pidAlive) {
-  const pid = readSupervisorPid(bridgeDir, alive);
+function stopLinuxSupervisor(bridgeDir = path.join(__dirname, '..', 'bridge'), killer = spawnSync, alive = pidAlive, identity = defaultSupervisorIdentity) {
+  const pid = readSupervisorPid(bridgeDir, alive, identity);
   if (!pid) return;
   killer('kill', ['-TERM', `-${pid}`], { encoding: 'utf8' });
   if (alive(pid)) killer('kill', ['-TERM', String(pid)], { encoding: 'utf8' });
-  clearSupervisorPidFile(bridgeDir);
+  waitForSupervisorStop(pid, bridgeDir, alive, killer);
 }
 
 // Legacy export for older call sites that matched pgrep patterns.
@@ -418,11 +456,15 @@ module.exports = {
   supervisorPidFile,
   writeSupervisorPidFile,
   readSupervisorPid,
+  readRawSupervisorPid,
   pidAlive,
   clearSupervisorPidFile,
   listSupervisorPids,
   repoRootFromBridge,
   readProcCwd,
+  readProcCmdline,
+  supervisorMatchesCheckout,
+  waitForSupervisorStop,
   realPythonProbe,
 };
 

@@ -18,7 +18,10 @@ function writePidFile() {
 }
 
 function clearPidFile() {
-  try { fs.unlinkSync(PID_FILE); } catch {}
+  try {
+    const text = fs.readFileSync(PID_FILE, 'utf8').trim();
+    if (Number(text) === process.pid) fs.unlinkSync(PID_FILE);
+  } catch {}
 }
 
 writePidFile();
@@ -28,7 +31,7 @@ function start() {
   child.on('exit', (code) => {
     child = null;
     if (stopping) return;
-    if (code === 2 || code === 0) process.exit(code); // config problem or --help/--once: don't loop
+    if (code === 2 || code === 0) { clearPidFile(); process.exit(code); } // config problem or --help/--once: don't loop
     console.log(`\nbridge exited (${code}); restarting in 3 s`);
     setTimeout(start, 3000);
   });

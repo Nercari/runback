@@ -20,11 +20,16 @@ const {
   writeSupervisorPidFile,
   readSupervisorPid,
   repoRootFromBridge,
+  supervisorMatchesCheckout,
 } = require('../../tools/doctor');
 const { go, setupArgsFor } = require('../../tools/go');
 const { stopBridge } = require('../../tools/stop-bridge');
 
 const ROOT = path.join(__dirname, '..', '..');
+
+function trustSupervisor() {
+  return () => true;
+}
 
 const loggedIn = () => LOGIN_PROBES.map(() => ({ status: 0, stdout: 'logged in\n', stderr: '' }));
 const loggedOut = () => LOGIN_PROBES.map((entry) => {
@@ -172,9 +177,10 @@ test('linuxBridgeRunning trusts only this checkout supervisor.pid record', (t) =
   });
   writeSupervisorPidFile(bridgeDir, 4242);
   const alive4242 = (pid) => pid === 4242;
-  assert.equal(linuxBridgeRunning(bridgeDir, alive4242), true);
-  assert.deepEqual(listSupervisorPids(bridgeDir, alive4242), [4242]);
-  assert.equal(linuxBridgeRunning(bridgeDir, () => false), false);
+  const identity = trustSupervisor();
+  assert.equal(linuxBridgeRunning(bridgeDir, alive4242, identity), true);
+  assert.deepEqual(listSupervisorPids(bridgeDir, alive4242, identity), [4242]);
+  assert.equal(linuxBridgeRunning(bridgeDir, () => false, identity), false);
   assert.equal(fs.existsSync(pidFile), false);
 });
 
@@ -187,15 +193,18 @@ test('supervisor pid file works when go starts with cwd bridge (not repo root)',
     else fs.writeFileSync(pidFile, had);
   });
   writeSupervisorPidFile(bridgeDir, 5150);
-  assert.equal(readSupervisorPid(bridgeDir, (pid) => pid === 5150), 5150);
+  assert.equal(readSupervisorPid(bridgeDir, (pid) => pid === 5150, trustSupervisor()), 5150);
   assert.equal(repoRootFromBridge(bridgeDir), path.join(ROOT));
 });
 
-test('bridge.js stops capture and running agents on SIGTERM', () => {
+test('bridge.js stops capture and running agents on SIGTERM without persisting KILLED', () => {
   const src = fs.readFileSync(path.join(ROOT, 'bridge', 'bridge.js'), 'utf8');
   assert.match(src, /process\.on\('SIGTERM'/);
   assert.match(src, /stopCapture\(\)/);
   assert.match(src, /stopRunning\(\)/);
+  const shutdown = /function shutdownBridge\(\) \{[\s\S]*?\n\}/.exec(src);
+  assert.ok(shutdown);
+  assert.doesNotMatch(shutdown[0], /KILLED/);
 });
 
 test('stopLinuxSupervisor sends SIGTERM to the process group then clears the pid file', (t) => {
@@ -214,9 +223,67 @@ test('stopLinuxSupervisor sends SIGTERM to the process group then clears the pid
     if (args[0] === '-TERM' && args[1] === '-77') alive = false;
     return { status: 0, stdout: '', error: null };
   };
-  stopLinuxSupervisor(bridgeDir, fakeKill, () => alive);
+  stopLinuxSupervisor(bridgeDir, fakeKill, () => alive, trustSupervisor());
   assert.deepEqual(killed, [['-TERM', '-77']]);
   assert.equal(fs.existsSync(pidFile), false);
+});
+
+test('readSupervisorPid drops a reused pid that is not this checkout supervisor', (t) => {
+  const bridgeDir = path.join(ROOT, 'bridge');
+  const pidFile = supervisorPidFile(bridgeDir);
+  const had = fs.existsSync(pidFile) ? fs.readFileSync(pidFile, 'utf8') : null;
+  t.after(() => {
+    if (had === null) try { fs.unlinkSync(pidFile); } catch {}
+    else fs.writeFileSync(pidFile, had);
+  });
+  writeSupervisorPidFile(bridgeDir, 4242);
+  const alien = (pid, dir) => supervisorMatchesCheckout(pid, dir, () => true, {
+    cmdline: () => 'sleep 999',
+    cwd: () => '/tmp',
+  });
+  assert.equal(readSupervisorPid(bridgeDir, () => true, alien), 0);
+  assert.equal(fs.existsSync(pidFile), false);
+});
+
+test('stopLinuxSupervisor waits for the process to exit before clearing the pid file', (t) => {
+  const bridgeDir = path.join(ROOT, 'bridge');
+  const pidFile = supervisorPidFile(bridgeDir);
+  const had = fs.existsSync(pidFile) ? fs.readFileSync(pidFile, 'utf8') : null;
+  t.after(() => {
+    if (had === null) try { fs.unlinkSync(pidFile); } catch {}
+    else fs.writeFileSync(pidFile, had);
+  });
+  writeSupervisorPidFile(bridgeDir, 88);
+  let aliveTicks = 0;
+  const alive = () => aliveTicks++ < 2;
+  const fakeKill = (cmd, args) => {
+    if (cmd === 'sleep') return { status: 0, stdout: '', error: null };
+    if (args[0] === '-TERM') return { status: 0, stdout: '', error: null };
+    return { status: 0, stdout: '', error: null };
+  };
+  stopLinuxSupervisor(bridgeDir, fakeKill, alive, trustSupervisor());
+  assert.ok(aliveTicks >= 2);
+  assert.equal(fs.existsSync(pidFile), false);
+});
+
+test('go waits for stopSupervisor before start when restarting after an update', () => {
+  const order = [];
+  const r = go({
+    platform: 'linux',
+    root: ROOT,
+    argv: [],
+    updater: () => ({ changed: true, files: ['bridge/bridge.js'], note: 'updated' }),
+    runner: (script) => {
+      if (script.endsWith('setup.js')) return { ok: true, out: '', code: 0 };
+      if (script.endsWith('doctor.js')) return { ok: true, out: 'PASS\n', code: 0 };
+      return { ok: true, out: '', code: 0 };
+    },
+    bridgeRunning: () => true,
+    stopSupervisor: () => { order.push('stop'); },
+    start: () => { order.push('start'); },
+  });
+  assert.equal(r.ok, true);
+  assert.deepEqual(order, ['stop', 'start']);
 });
 
 test('missing combat log files on disk fails with a one-line fix', () => {

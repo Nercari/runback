@@ -1169,7 +1169,6 @@ Forever.init({ cfg, log, HERE, REPO, SAVED_VARS, state, saveState, atomicWrite, 
 function shutdownBridge() {
   stopCapture();
   stopRunning();
-  try { fs.writeFileSync(path.join(HERE, 'KILLED'), ''); } catch {}
 }
 
 process.on('SIGINT', () => { shutdownBridge(); process.exit(0); });
