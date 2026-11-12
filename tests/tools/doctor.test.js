@@ -190,6 +190,15 @@ test('supervisorMatchesCheckout accepts npm start (repo root cwd, relative super
   assert.equal(supervisorMatchesCheckout(9001, bridgeDir, () => true, readers), true);
 });
 
+test('supervisorMatchesCheckout accepts npm start with either path separator', () => {
+  const bridgeDir = path.join(ROOT, 'bridge');
+  const repoRoot = repoRootFromBridge(bridgeDir);
+  for (const cmdline of ['node bridge/supervisor.js', 'node bridge\\supervisor.js']) {
+    const readers = { cmdline: () => cmdline, cwd: () => repoRoot };
+    assert.equal(supervisorMatchesCheckout(9001, bridgeDir, () => true, readers), true, cmdline);
+  }
+});
+
 test('readSupervisorPid keeps npm-start supervisor identity without clearing pid file', (t) => {
   const bridgeDir = tempBridgeDir(t);
   const repoRoot = repoRootFromBridge(bridgeDir);

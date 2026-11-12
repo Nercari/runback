@@ -332,7 +332,9 @@ function supervisorMatchesCheckout(pid, bridgeDir, alive = pidAlive, readers = n
   const cwdResolved = cwd !== '' ? path.resolve(cwd) : '';
   if (cwdResolved === bridgeReal) return true;
   const relSup = path.join('bridge', 'supervisor.js');
-  if (cwdResolved === repoRoot && (cmd.includes(relSup) || cmd.includes(supPath))) return true;
+  // npm start runs `node bridge/supervisor.js` on every OS, so accept both separators.
+  const relSupAlt = relSup.includes('\\') ? relSup.replace(/\\/g, '/') : relSup.replace(/\//g, '\\');
+  if (cwdResolved === repoRoot && (cmd.includes(relSup) || cmd.includes(relSupAlt) || cmd.includes(supPath))) return true;
   return false;
 }
 
