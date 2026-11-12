@@ -51,7 +51,7 @@ function go({ root = ROOT, argv = [], platform = process.platform, updater = upd
     return { ok: false, code: 1, lines };
   }
 
-  const doc = runner(path.join(root, 'tools', 'doctor.js'));
+  const doc = runner(path.join(root, 'tools', 'doctor.js'), ['--pre-start']);
   if (doc.out.trim()) lines.push(doc.out.trimEnd());
   if (doc.code !== 0) {
     lines.push('');

@@ -5,7 +5,18 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
-const { run, findClientInfo, tocNumber, LOGIN_PROBES, checkCount, combatLogOnDisk } = require('../../tools/doctor');
+const {
+  run,
+  findClientInfo,
+  tocNumber,
+  LOGIN_PROBES,
+  checkCount,
+  combatLogOnDisk,
+  linuxBridgeRunning,
+  supervisorPgrepPatterns,
+} = require('../../tools/doctor');
+
+const ROOT = path.join(__dirname, '..', '..');
 
 const loggedIn = () => LOGIN_PROBES.map(() => ({ status: 0, stdout: 'logged in\n', stderr: '' }));
 const loggedOut = () => LOGIN_PROBES.map(() => ({ status: 0, stdout: '', stderr: 'Not logged in\n' }));
@@ -79,6 +90,23 @@ test('a stopped bridge on Linux fails with a one-line fix', () => {
   const out = run(env({ bridgeRunning: () => false }));
   assert.equal(out.code, 1);
   assert.match(out.text, /^FAIL bridge:/m);
+});
+
+test('pre-start doctor passes a stopped bridge so npm run go can start it', () => {
+  const out = run(env({ bridgeRunning: () => false, preStart: true }));
+  assert.equal(out.code, 0);
+  assert.match(out.text, /^PASS bridge: supervisor not running yet/m);
+});
+
+test('linuxBridgeRunning matches npm start relative supervisor path', () => {
+  const bridgeDir = path.join(ROOT, 'bridge');
+  assert.ok(supervisorPgrepPatterns(bridgeDir).includes('bridge/supervisor.js'));
+  const fakePgrep = (_cmd, args) => {
+    const pattern = args[1];
+    if (pattern === 'bridge/supervisor.js') return { status: 0, stdout: '999\n', error: null };
+    return { status: 1, stdout: '', error: null };
+  };
+  assert.equal(linuxBridgeRunning(bridgeDir, fakePgrep), true);
 });
 
 test('missing combat log files on disk fails with a one-line fix', () => {

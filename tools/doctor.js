@@ -142,12 +142,15 @@ function slotsCheck(client) {
   };
 }
 
-function bridgeCheck(platform, bridgeRunning) {
+function bridgeCheck(platform, bridgeRunning, preStart) {
   if (platform !== 'linux') {
     return { name: 'bridge', status: 'PASS', detail: 'bridge process check is for Linux sessions' };
   }
   if (bridgeRunning()) {
     return { name: 'bridge', status: 'PASS', detail: 'supervisor is running' };
+  }
+  if (preStart) {
+    return { name: 'bridge', status: 'PASS', detail: 'supervisor not running yet; npm run go will start it' };
   }
   return {
     name: 'bridge',
@@ -189,7 +192,7 @@ function buildChecks(opts) {
     x11Check(opts.env || {}, opts.platform),
     clientCheck(opts.client),
     slotsCheck(opts.client),
-    bridgeCheck(opts.platform, opts.bridgeRunning),
+    bridgeCheck(opts.platform, opts.bridgeRunning, opts.preStart),
     combatlogCheck(opts.client, opts.combatLogState),
   ];
 }
@@ -245,10 +248,17 @@ function combatLogOnDisk(client) {
   return 'unknown';
 }
 
-function linuxBridgeRunning(bridgeDir = path.join(__dirname, '..', 'bridge')) {
+function supervisorPgrepPatterns(bridgeDir = path.join(__dirname, '..', 'bridge')) {
   const sup = path.join(bridgeDir, 'supervisor.js');
-  const r = spawnSync('pgrep', ['-f', sup], { encoding: 'utf8' });
-  return !r.error && r.status === 0 && r.stdout.trim().length > 0;
+  return [sup, path.join('bridge', 'supervisor.js')];
+}
+
+function linuxBridgeRunning(bridgeDir = path.join(__dirname, '..', 'bridge'), pgrep = spawnSync) {
+  for (const pattern of supervisorPgrepPatterns(bridgeDir)) {
+    const r = pgrep('pgrep', ['-f', pattern], { encoding: 'utf8' });
+    if (!r.error && r.status === 0 && r.stdout.trim().length > 0) return true;
+  }
+  return false;
 }
 
 function tocNumber(clientDir) {
@@ -279,7 +289,8 @@ function findClientInfo(configFile = path.join(__dirname, '..', 'bridge', 'confi
   return { dir, interface: tocNumber(dir) };
 }
 
-function main() {
+function main(argv = process.argv.slice(2)) {
+  const preStart = argv.includes('--pre-start');
   const out = run({
     nodeVersion: process.versions.node,
     platform: process.platform,
@@ -289,6 +300,7 @@ function main() {
     bridgeRunning: () => linuxBridgeRunning(),
     combatLogState: combatLogOnDisk,
     client: findClientInfo(),
+    preStart,
   });
   process.stdout.write(out.text);
   process.exit(out.code);
@@ -304,6 +316,7 @@ module.exports = {
   buildChecks,
   combatLogOnDisk,
   linuxBridgeRunning,
+  supervisorPgrepPatterns,
   realPythonProbe,
 };
 
