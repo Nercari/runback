@@ -8,10 +8,10 @@ const { spawnSync } = require('node:child_process');
 const LOGIN_PROBES = [
   ['claude', ['auth', 'status']],
   ['codex', ['login', 'status']],
-  ['grok', ['auth', 'status']],
-  ['agy', ['auth', 'status']],
-  ['hermes', ['auth', 'status']],
-  ['opencode', ['auth', 'status']],
+  ['grok', ['-p', '0', '--print-timeout', '2s', '--output-format', 'text'], 'grok-headless'],
+  ['agy', ['-p', '0', '--print-timeout', '2s', '--output-format', 'text'], 'agy-headless'],
+  ['hermes', ['auth', 'list'], 'hermes-list'],
+  ['opencode', ['auth', 'list'], 'opencode-list'],
 ];
 
 const CHECK_ORDER = ['node', 'python3', 'login', 'x11', 'client', 'slots', 'bridge', 'combatlog'];
@@ -49,16 +49,42 @@ function pythonCheck(platform, pythonProbe) {
   };
 }
 
-function isLoggedIn(result) {
-  if (!result || result.error || result.status !== 0) return false;
-  const text = `${result.stdout || ''}\n${result.stderr || ''}`;
-  if (/not logged in|login required|please log in|not authenticated|"loggedIn"\s*:\s*false/i.test(text)) return false;
+function loginProbeText(result) {
+  return `${result.stdout || ''}\n${result.stderr || ''}`;
+}
+
+function hermesListLoggedIn(text) {
+  return [...text.matchAll(/\((\d+)\s+credentials?\)/gi)].some((m) => Number(m[1]) > 0);
+}
+
+function isLoggedIn(entry, result) {
+  if (!result || result.error) return false;
+  const kind = Array.isArray(entry) ? (entry[2] || 'default') : 'default';
+  const text = loginProbeText(result);
+
+  if (kind === 'hermes-list') {
+    if (result.status !== 0) return false;
+    return hermesListLoggedIn(text);
+  }
+  if (kind === 'opencode-list') {
+    if (result.status !== 0) return false;
+    if (/no authenticated integrations/i.test(text)) return false;
+    if (text.trim() === '[]') return false;
+    return true;
+  }
+  if (kind === 'agy-headless' || kind === 'grok-headless') {
+    if (/authentication required|not signed in|not logged in/i.test(text)) return false;
+    if (result.status === 0) return true;
+    return false;
+  }
+  if (result.status !== 0) return false;
+  if (/not logged in|login required|please log in|not authenticated|not signed in|"loggedIn"\s*:\s*false/i.test(text)) return false;
   return true;
 }
 
 function loginCheck(probe) {
   const results = probe();
-  const logged = LOGIN_PROBES.filter((_, i) => isLoggedIn(results[i])).map(([id]) => id);
+  const logged = LOGIN_PROBES.filter((entry, i) => isLoggedIn(entry, results[i])).map(([id]) => id);
   if (logged.length) {
     return {
       name: 'login',
@@ -331,6 +357,8 @@ module.exports = {
   CHECK_ORDER,
   checkCount,
   buildChecks,
+  isLoggedIn,
+  hermesListLoggedIn,
   combatLogOnDisk,
   linuxBridgeRunning,
   stopLinuxSupervisor,

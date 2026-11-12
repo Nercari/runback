@@ -19,7 +19,7 @@ The addon is the same; only the bridge's screen capture differs. On Linux the br
 
 Without `--wow`, `setup.js` (inside `npm run go`) looks in `$WINEPREFIX`, `~/.wine` and `~/Games/battlenet`. Pass `node setup.js --wow "<client folder>"` when it cannot find yours.
 
-`npm run doctor` any time. It only reads. It prints PASS or FAIL for Node.js, python3, agent login, X11, the client folder, installed slots, the bridge supervisor, and combat-log files. A FAIL line includes a one-line fix.
+`npm run doctor` any time. It only reads. It prints PASS or FAIL for Node.js, python3, agent login, X11, the client folder, installed slots, the bridge supervisor, and combat-log files. A FAIL line includes a one-line fix. The login check uses each CLI's own read-only command (`claude auth status`, `codex login status`, a short headless prompt for `agy` and `grok`, `hermes auth list`, `opencode auth list`); it judges yes or no from exit codes and safe output shapes only, never tokens or account names.
 
 ## No X11 session yet
 

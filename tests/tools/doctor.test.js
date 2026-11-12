@@ -10,6 +10,7 @@ const {
   findClientInfo,
   tocNumber,
   LOGIN_PROBES,
+  isLoggedIn,
   checkCount,
   combatLogOnDisk,
   linuxBridgeRunning,
@@ -19,7 +20,15 @@ const {
 const ROOT = path.join(__dirname, '..', '..');
 
 const loggedIn = () => LOGIN_PROBES.map(() => ({ status: 0, stdout: 'logged in\n', stderr: '' }));
-const loggedOut = () => LOGIN_PROBES.map(() => ({ status: 0, stdout: '', stderr: 'Not logged in\n' }));
+const loggedOut = () => LOGIN_PROBES.map((entry) => {
+  const kind = entry[2] || 'default';
+  if (kind === 'hermes-list') return { status: 0, stdout: '', stderr: '' };
+  if (kind === 'opencode-list') return { status: 0, stdout: 'No authenticated integrations\n', stderr: '' };
+  if (kind === 'agy-headless' || kind === 'grok-headless') {
+    return { status: 0, stdout: '', stderr: 'authentication required\n' };
+  }
+  return { status: 0, stdout: '', stderr: 'Not logged in\n' };
+});
 const pythonOk = () => ({ ok: true, version: 'Python 3.12.3' });
 const pythonMissing = () => ({ ok: false, version: '' });
 
@@ -44,6 +53,54 @@ function tail(lines) {
 test('doctor exposes eight checks and six agent login probes', () => {
   assert.equal(checkCount(), 8);
   assert.equal(LOGIN_PROBES.length, 6);
+});
+
+function probeResults(overrides) {
+  return LOGIN_PROBES.map((entry) => {
+    const [id] = entry;
+    if (Object.hasOwn(overrides, id)) return overrides[id];
+    return { status: 2, stdout: '', stderr: 'unknown subcommand\n' };
+  });
+}
+
+test('hermes-only login passes via auth list credential counts', () => {
+  const out = run(env({
+    probe: () => probeResults({
+      hermes: { status: 0, stdout: 'nous (1 credentials):\n', stderr: '' },
+    }),
+  }));
+  assert.equal(out.code, 0);
+  assert.match(out.text, /^PASS login:.*hermes/m);
+});
+
+test('opencode-only login passes via auth list', () => {
+  const out = run(env({
+    probe: () => probeResults({
+      opencode: { status: 0, stdout: 'opencode\n', stderr: '' },
+    }),
+  }));
+  assert.equal(out.code, 0);
+  assert.match(out.text, /^PASS login:.*opencode/m);
+});
+
+test('agy-only login passes via headless probe without authentication required', () => {
+  const out = run(env({
+    probe: () => probeResults({
+      agy: { status: 0, stdout: 'ok\n', stderr: '' },
+    }),
+  }));
+  assert.equal(out.code, 0);
+  assert.match(out.text, /^PASS login:.*agy/m);
+});
+
+test('invalid auth subcommands do not count as logged in', () => {
+  const hermesStatus = LOGIN_PROBES.find(([id]) => id === 'hermes');
+  assert.equal(isLoggedIn(['hermes', ['auth', 'status']], { status: 2, stdout: '', stderr: 'usage\n' }), false);
+  assert.equal(isLoggedIn(hermesStatus, { status: 0, stdout: 'nous (1 credentials):\n', stderr: '' }), true);
+  const opencode = LOGIN_PROBES.find(([id]) => id === 'opencode');
+  assert.equal(isLoggedIn(opencode, { status: 0, stdout: 'No authenticated integrations\n', stderr: '' }), false);
+  const agy = LOGIN_PROBES.find(([id]) => id === 'agy');
+  assert.equal(isLoggedIn(agy, { status: 1, stdout: '', stderr: 'authentication required\n' }), false);
 });
 
 test('old Node fails with a one-line fix', () => {
