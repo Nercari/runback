@@ -1166,6 +1166,14 @@ Forever.init({ cfg, log, HERE, REPO, SAVED_VARS, state, saveState, atomicWrite, 
     const last = [...messages].reverse().find(m => m.role === 'assistant');
     return last ? (P.splitSummary(last.text).summary || last.text || '') : '';
   } });
+function shutdownBridge() {
+  stopCapture();
+  stopRunning();
+  try { fs.writeFileSync(path.join(HERE, 'KILLED'), ''); } catch {}
+}
+
+process.on('SIGINT', () => { shutdownBridge(); process.exit(0); });
+process.on('SIGTERM', () => { shutdownBridge(); process.exit(0); });
 process.on('exit', () => Forever.stop());
 if (inject !== null) {
   submit({ id: state.lastId + 1, session: '', chat: '', text: inject, cwd: '', newSession: false, via: 'inject', cmd: injectCmd || '', agent: injectAgent || '', model: injectModel || '', effort: injectEffort || '' });

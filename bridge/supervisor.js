@@ -5,10 +5,23 @@
 // current folder pass straight through to bridge.js, so `cd proj && runback`
 // makes proj the default folder for chats.
 const { spawn } = require('child_process');
+const fs = require('fs');
 const path = require('path');
+
+const PID_FILE = path.join(__dirname, 'supervisor.pid');
 
 let child = null;
 let stopping = false;
+
+function writePidFile() {
+  try { fs.writeFileSync(PID_FILE, String(process.pid)); } catch {}
+}
+
+function clearPidFile() {
+  try { fs.unlinkSync(PID_FILE); } catch {}
+}
+
+writePidFile();
 
 function start() {
   child = spawn(process.execPath, [path.join(__dirname, 'bridge.js'), ...process.argv.slice(2)], { stdio: 'inherit' });
@@ -21,9 +34,18 @@ function start() {
   });
 }
 
+function killBridge() {
+  if (!child) return;
+  if (process.platform === 'linux') {
+    try { process.kill(-child.pid, 'SIGTERM'); return; } catch {}
+  }
+  try { child.kill('SIGTERM'); } catch {}
+}
+
 function stop() {
   stopping = true;
-  if (child) child.kill();
+  killBridge();
+  clearPidFile();
   process.exit(0);
 }
 

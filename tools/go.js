@@ -7,7 +7,9 @@
 const path = require('node:path');
 const { spawn, spawnSync } = require('node:child_process');
 const { update } = require('./launch');
-const { linuxBridgeRunning, findClientInfo, stopLinuxSupervisor, bridgeCodeChanged } = require('./doctor');
+const {
+  linuxBridgeRunning, findClientInfo, stopLinuxSupervisor, bridgeCodeChanged, writeSupervisorPidFile,
+} = require('./doctor');
 
 const ROOT = path.join(__dirname, '..');
 const BRIDGE = path.join(ROOT, 'bridge');
@@ -31,6 +33,7 @@ function startSupervisor(bridgeDir = BRIDGE) {
     detached: true,
     stdio: 'ignore',
   });
+  if (child.pid) writeSupervisorPidFile(bridgeDir, child.pid);
   child.unref();
   return child;
 }

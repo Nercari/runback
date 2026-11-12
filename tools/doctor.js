@@ -276,13 +276,75 @@ function combatLogOnDisk(client) {
   return 'unknown';
 }
 
-function supervisorPgrepPatterns(bridgeDir = path.join(__dirname, '..', 'bridge')) {
-  const sup = path.join(bridgeDir, 'supervisor.js');
-  return [sup, path.join('bridge', 'supervisor.js')];
+function supervisorPidFile(bridgeDir = path.join(__dirname, '..', 'bridge')) {
+  return path.join(bridgeDir, 'supervisor.pid');
 }
 
 function repoRootFromBridge(bridgeDir) {
   return path.resolve(path.join(bridgeDir, '..'));
+}
+
+function pidAlive(pid, killer = process.kill) {
+  if (!pid) return false;
+  try {
+    killer(pid, 0);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function clearSupervisorPidFile(bridgeDir = path.join(__dirname, '..', 'bridge')) {
+  try { fs.unlinkSync(supervisorPidFile(bridgeDir)); } catch {}
+}
+
+function writeSupervisorPidFile(bridgeDir, pid) {
+  if (!pid) return;
+  fs.writeFileSync(supervisorPidFile(bridgeDir), `${pid}\n`);
+}
+
+function readSupervisorPid(bridgeDir = path.join(__dirname, '..', 'bridge'), alive = pidAlive) {
+  let text = '';
+  try { text = fs.readFileSync(supervisorPidFile(bridgeDir), 'utf8'); } catch {
+    return 0;
+  }
+  const pid = Number(String(text).trim());
+  if (!pid) {
+    clearSupervisorPidFile(bridgeDir);
+    return 0;
+  }
+  if (!alive(pid)) {
+    clearSupervisorPidFile(bridgeDir);
+    return 0;
+  }
+  return pid;
+}
+
+function listSupervisorPids(bridgeDir = path.join(__dirname, '..', 'bridge'), alive = pidAlive) {
+  const pid = readSupervisorPid(bridgeDir, alive);
+  return pid ? [pid] : [];
+}
+
+function linuxBridgeRunning(bridgeDir = path.join(__dirname, '..', 'bridge'), alive = pidAlive) {
+  return listSupervisorPids(bridgeDir, alive).length > 0;
+}
+
+function stopLinuxSupervisor(bridgeDir = path.join(__dirname, '..', 'bridge'), killer = spawnSync, alive = pidAlive) {
+  const pid = readSupervisorPid(bridgeDir, alive);
+  if (!pid) return;
+  if (process.platform === 'linux') {
+    killer('kill', ['-TERM', `-${pid}`], { encoding: 'utf8' });
+    if (alive(pid)) killer('kill', ['-TERM', String(pid)], { encoding: 'utf8' });
+  } else {
+    killer('kill', ['-TERM', String(pid)], { encoding: 'utf8' });
+  }
+  clearSupervisorPidFile(bridgeDir);
+}
+
+// Legacy export for older call sites that matched pgrep patterns.
+function supervisorPgrepPatterns(bridgeDir = path.join(__dirname, '..', 'bridge')) {
+  const sup = path.join(bridgeDir, 'supervisor.js');
+  return [sup, path.join('bridge', 'supervisor.js')];
 }
 
 function readProcCwd(pid) {
@@ -290,31 +352,6 @@ function readProcCwd(pid) {
     return fs.realpathSync(path.join('/proc', String(pid), 'cwd'));
   } catch {
     return '';
-  }
-}
-
-function listSupervisorPids(bridgeDir = path.join(__dirname, '..', 'bridge'), pgrep = spawnSync, cwdForPid = readProcCwd) {
-  const repoRoot = repoRootFromBridge(bridgeDir);
-  const pids = new Set();
-  for (const pattern of supervisorPgrepPatterns(bridgeDir)) {
-    const r = pgrep('pgrep', ['-f', pattern], { encoding: 'utf8' });
-    if (r.error || r.status !== 0 || !r.stdout.trim()) continue;
-    for (const line of r.stdout.trim().split(/\n/)) {
-      const pid = Number(line.trim());
-      if (!pid) continue;
-      if (path.resolve(cwdForPid(pid)) === repoRoot) pids.add(pid);
-    }
-  }
-  return [...pids];
-}
-
-function linuxBridgeRunning(bridgeDir = path.join(__dirname, '..', 'bridge'), pgrep = spawnSync, cwdForPid = readProcCwd) {
-  return listSupervisorPids(bridgeDir, pgrep, cwdForPid).length > 0;
-}
-
-function stopLinuxSupervisor(bridgeDir = path.join(__dirname, '..', 'bridge'), killer = spawnSync, pgrep = spawnSync, cwdForPid = readProcCwd) {
-  for (const pid of listSupervisorPids(bridgeDir, pgrep, cwdForPid)) {
-    killer('kill', [String(pid)], { encoding: 'utf8' });
   }
 }
 
@@ -382,6 +419,11 @@ module.exports = {
   stopLinuxSupervisor,
   bridgeCodeChanged,
   supervisorPgrepPatterns,
+  supervisorPidFile,
+  writeSupervisorPidFile,
+  readSupervisorPid,
+  pidAlive,
+  clearSupervisorPidFile,
   listSupervisorPids,
   repoRootFromBridge,
   readProcCwd,
