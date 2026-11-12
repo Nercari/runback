@@ -34,6 +34,7 @@ Keys under `agents.claude`, `agents.codex`, `agents.grok`, `agents.agy`, `agents
 | `deniedTools` | `[]` | Rules the agent may never use, same syntax. Claude: `--disallowedTools`; Grok: `--deny`, which wins over everything, `bypassPermissions` included; ignored by Codex. |
 | `model` | `""` | Passed to the CLI (`--model` / `-m`) when non-empty. Empty uses the CLI's default. |
 | `coachModel` | `""` | The model a coach note (a fight review, `/ai review`, and the between-pull card) runs on, whatever model the chat picked. Empty uses the agent's cheap model: `haiku` for Claude, which is the only agent whose list names one. Give a model this agent offers to change it; one it does not offer is ignored, so the cheap model still applies. An agent with no cheap model, or a `models` list that leaves it out, runs reviews on its normal model, with no error. |
+| `quickModel` | `""` | The model the starter card's quick answer tier uses for short questions in this chat. Empty uses the agent's built-in quick tier: the same cheap default as fight reviews for Claude (`haiku` today). Give a model this agent offers to change it; one it does not offer is ignored, so the built-in quick tier still applies. An agent with no built-in quick tier, or a `models` list that leaves it out, offers no quick tier for that agent. |
 | `models` | Built in (`bridge/models.js`): Claude `fable, opus, sonnet, haiku`; Codex its eight listed models (`gpt-6-astra` … `gpt-5.5`); Grok `grok-build`; agy, Hermes and OpenCode none | The models the in-game **AI** picker offers for this agent, as the CLI names them (`"gpt-5-codex"`, `"openrouter/x-ai/grok-4"`). Setting it replaces the built-in list. An item is a name, or `{ "id": "gpt-6-sol", "efforts": ["low", "high"], "defaultEffort": "low" }` to record the reasoning levels the CLI accepts for it (levels are lowercase letters, up to 16). A chat that picks one runs with it instead of `model`; a model not on this list is refused. Names are letters, digits and `. _ : / @ [ ] -`, up to 64 characters. |
 | `path` | `""` | Full path to the executable. Empty means: look in the installer's folder, then (for Codex) `CODEX_BIN`, then `PATH`, then npm's launcher. A `.js` path is run with the bridge's Node. |
 | `extraArgs` | `[]` | More command-line arguments, added verbatim (before Codex's `resume` subcommand). |
@@ -48,6 +49,13 @@ One coach note per pull has to cost about nothing, so a fight review and the bet
 - Change it per agent: `"coachModel": "sonnet"` under `agents.claude`. Give a model that agent offers.
 - Turn the cheap default off: give `coachModel` the model you want reviews on, or remove `haiku` from `models` and reviews keep the agent's normal model.
 - The chat's own model pick does not apply to a review, and the review takes the coach model's own reasoning level.
+
+### The quick answer tier
+
+Short questions on the starter card can switch the chat to the quick answer tier so a one-line answer costs about nothing. Claude uses the same cheap default as fight reviews (`haiku`, set in `bridge/models.js`); other agents offer a quick tier only when their built-in row or your `quickModel` names one on their model list.
+
+- Change it per agent: `"quickModel": "sonnet"` under `agents.claude`. Give a model that agent offers.
+- Turn the built-in quick tier off: remove the cheap model from `models`, and the starter card stops offering a quick tier for that agent. A `quickModel` value the agent does not offer is ignored and the built-in quick tier still applies.
 
 ## Permissions
 
