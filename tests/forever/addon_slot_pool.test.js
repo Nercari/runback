@@ -2,30 +2,18 @@
 // Backlog 77: a reply must not be stranded when the slot pool runs out.
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const fs = require('node:fs');
-const path = require('node:path');
-const { lua, lauxlib, lualib, to_luastring, to_jsstring } = require('fengari');
+const { createAddonVM, onlyFiles } = require('../toc_load');
 
-const addon = path.join(__dirname, '..', '..', 'addon', 'Runback');
 function vm() {
-  const L = lauxlib.luaL_newstate(); lualib.luaL_openlibs(L);
-  const run = code => {
-    const loaded = lauxlib.luaL_loadstring(L, to_luastring(code));
-    assert.equal(loaded, lua.LUA_OK, loaded === lua.LUA_OK ? '' : to_jsstring(lua.lua_tostring(L, -1)));
-    if (lua.lua_pcall(L, 0, 0, 0) !== lua.LUA_OK) throw new Error(to_jsstring(lua.lua_tostring(L, -1)));
-  };
-  const get = expr => {
-    run(`RESULT = tostring(${expr})`); lua.lua_getglobal(L, to_luastring('RESULT'));
-    const value = to_jsstring(lua.lua_tolstring(L, -1)); lua.lua_pop(L, 1); return value;
-  };
-  run(fs.readFileSync(path.join(__dirname, '..', 'wow_stub.lua'), 'utf8'));
-  for (const file of ['Codec.lua', 'Inbox.lua', 'Forever.lua', 'Runback.lua']) run(fs.readFileSync(path.join(addon, file), 'utf8'));
-  run(`function BUTTON(label)
+  return createAddonVM({
+    strictLoad: true,
+    only: onlyFiles(['Codec.lua', 'Inbox.lua', 'Runback.lua', 'Forever.lua']),
+    afterLoad: `function BUTTON(label)
     for _, f in ipairs(STUB.frames) do
       if f.kind == "Button" and f.text == label and f.shown then return f end
     end
-  end`);
-  return { run, get };
+  end`,
+  });
 }
 
 const slot = replies => `STUB.onLoadAddOn = function() Runback_SlotData = { now = time(), cwd = "", agent = "agy", agents = { "claude", "agy" }, replies = { ${replies || ''} } } end`;

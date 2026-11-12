@@ -4,11 +4,7 @@
 'use strict';
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const fs = require('fs');
-const path = require('path');
-const { lua, lauxlib, lualib, to_luastring, to_jsstring } = require('fengari');
-
-const ADDON = path.join(__dirname, '..', 'addon', 'Runback');
+const { createAddonVM, onlyFiles } = require('./toc_load');
 
 // Map-specific client stubs: Loch Modan (1432) sits at x .5-.6, y .4-.5 of
 // Eastern Kingdoms (1415), which is 10000 x 15000 yards.
@@ -34,26 +30,7 @@ local T = getmetatable(canvas).__index
 MINING, HERBALISM = "Mining", "Herbalism"
 `;
 
-function newVM(saved = '') {
-  const L = lauxlib.luaL_newstate();
-  lualib.luaL_openlibs(L);
-  const run = (code, arg) => {
-    if (lauxlib.luaL_loadstring(L, to_luastring(code)) !== lua.LUA_OK) throw new Error('Lua load: ' + to_jsstring(lua.lua_tostring(L, -1)));
-    let nargs = 0;
-    if (arg !== undefined) { lua.lua_pushstring(L, to_luastring(arg)); nargs = 1; }
-    if (lua.lua_pcall(L, nargs, 0, 0) !== lua.LUA_OK) throw new Error('Lua error: ' + to_jsstring(lua.lua_tostring(L, -1)));
-  };
-  const evaluate = (expr) => {
-    run(`local v = (${expr}); if v == nil then RESULT = nil else RESULT = tostring(v) end`);
-    lua.lua_getglobal(L, to_luastring('RESULT'));
-    const s = lua.lua_isnil(L, -1) ? null : to_jsstring(lua.lua_tolstring(L, -1));
-    lua.lua_pop(L, 1);
-    return s;
-  };
-  const num = (expr) => Number(evaluate(expr));
-  let stub = fs.readFileSync(path.join(__dirname, 'wow_stub.lua'), 'utf8');
-  // Lines are frames too (Frame:CreateLine), and textures can rotate.
-  stub += `
+const MAP_STUB_EXTRA = `
 function Methods.CreateLine(self, name, layer) local l = NewObjectPublic("Line", name, self); table.insert(self.textures, l); return l end
 function Methods.SetRotation(self, r) self.rotation = r end
 function Methods.SetVertexColor(self, r, g, b, a) self.vcolor = { r, g, b, a } end
@@ -62,13 +39,18 @@ function Methods.SetAllPoints(self, rel) if rel then self.width, self.height = r
 function Methods.GetFrameLevel(self) return self.level or 1 end
 function Methods.SetFrameLevel(self, l) self.level = l end
 `;
-  stub = stub.replace('local function NewObject(', 'function NewObjectPublic(').replace(/NewObject\(/g, 'NewObjectPublic(');
-  run(stub);
-  run(MAP_STUB);
-  run(saved); // saved variables a previous session left (a reload)
-  for (const f of ['Codec.lua', 'Inbox.lua', 'Runback.lua', 'Map.lua']) run(fs.readFileSync(path.join(ADDON, f), 'utf8'), 'Runback');
-  run('STUB.FireEvent("ADDON_LOADED", "Runback"); STUB.FireEvent("PLAYER_LOGIN")');
-  return { run, evaluate, num };
+
+function newVM(saved = '') {
+  return createAddonVM({
+    strictLoad: true,
+    only: onlyFiles(['Codec.lua', 'Inbox.lua', 'Runback.lua', 'Map.lua']),
+    chunkName: 'Runback',
+    stubPatch: s => s.replace('local function NewObject(', 'function NewObjectPublic(').replace(/NewObject\(/g, 'NewObjectPublic('),
+    stubExtra: MAP_STUB_EXTRA,
+    beforeLoad: MAP_STUB,
+    saved,
+    afterLoad: 'STUB.FireEvent("ADDON_LOADED", "Runback"); STUB.FireEvent("PLAYER_LOGIN")',
+  });
 }
 
 // Shown pins on the world map overlay: "x,y,label" (label = the numbered text).

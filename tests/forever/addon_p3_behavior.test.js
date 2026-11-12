@@ -1,44 +1,22 @@
 'use strict';
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const fs = require('node:fs');
-const path = require('node:path');
-const fengari = require('fengari');
-const { lua, lauxlib, lualib, to_luastring, to_jsstring } = fengari;
+const { createAddonVM, orderedOnly } = require('../toc_load');
 
-const addon = path.join(__dirname, '..', '..', 'addon', 'Runback');
-const read = file => fs.readFileSync(path.join(addon, file), 'utf8');
+const FOREVER_STACK = orderedOnly('Codec.lua', 'Inbox.lua', 'Forever.lua', 'Forever_Lockout.lua', 'Forever_Context.lua', 'Forever_Switch.lua', 'Forever_Commands.lua', 'Runback.lua');
+const RUNBACK_ONLY = orderedOnly('Codec.lua', 'Inbox.lua', 'Runback.lua');
 
 function vm(withForever = true) {
-  const L = lauxlib.luaL_newstate();
-  lualib.luaL_openlibs(L);
-  const run = code => {
-    assert.equal(lauxlib.luaL_loadstring(L, to_luastring(code)), lua.LUA_OK);
-    const status = lua.lua_pcall(L, 0, 0, 0);
-    if (status !== lua.LUA_OK) {
-      const message = lua.lua_tostring(L, -1);
-      throw new Error(message ? to_jsstring(message) : 'Lua runtime error ' + status);
-    }
-  };
+  const v = createAddonVM({
+    strictLoad: true,
+    files: withForever ? FOREVER_STACK : RUNBACK_ONLY,
+    beforeLoad: 'unpack = table.unpack; STUB.gear = {}; GetInventoryItemLink = function(_, slot) return STUB.gear[slot] end',
+  });
+  const { run } = v;
   const get = expr => {
     run(`local value = (${expr}); RESULT = value == nil and '' or tostring(value)`);
-    lua.lua_getglobal(L, to_luastring('RESULT'));
-    const result = to_jsstring(lua.lua_tolstring(L, -1));
-    lua.lua_pop(L, 1);
-    return result;
+    return v.get('RESULT');
   };
-  run(fs.readFileSync(path.join(__dirname, '..', 'wow_stub.lua'), 'utf8'));
-  run('unpack = table.unpack; STUB.gear = {}; GetInventoryItemLink = function(_, slot) return STUB.gear[slot] end');
-  run(read('Codec.lua'));
-  run(read('Inbox.lua'));
-  if (withForever) {
-    run(read('Forever.lua'));
-    run(read('Forever_Lockout.lua'));
-    run(read('Forever_Context.lua'));
-    run(read('Forever_Switch.lua'));
-    run(read('Forever_Commands.lua'));
-  }
-  run(read('Runback.lua'));
   return { run, get };
 }
 
