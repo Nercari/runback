@@ -62,9 +62,22 @@ function tail(lines) {
   return lines.join('\n') + '\n';
 }
 
+function tempBridgeDir(t) {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'runback-bridge-'));
+  const bridgeDir = path.join(root, 'bridge');
+  fs.mkdirSync(bridgeDir, { recursive: true });
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  return bridgeDir;
+}
+
 test('doctor exposes eight checks and six agent login probes', () => {
   assert.equal(checkCount(), 8);
   assert.equal(LOGIN_PROBES.length, 6);
+});
+
+test('agy login probe attaches prompt with -p=0', () => {
+  const agy = LOGIN_PROBES.find(([id]) => id === 'agy');
+  assert.deepEqual(agy[1].slice(0, 1), ['-p=0']);
 });
 
 function probeResults(overrides) {
@@ -167,14 +180,31 @@ test('pre-start doctor passes a stopped bridge so npm run go can start it', () =
   assert.match(out.text, /^PASS bridge: supervisor not running yet/m);
 });
 
-test('linuxBridgeRunning trusts only this checkout supervisor.pid record', (t) => {
+test('supervisorMatchesCheckout accepts npm start (repo root cwd, relative supervisor path)', () => {
   const bridgeDir = path.join(ROOT, 'bridge');
-  const pidFile = supervisorPidFile(bridgeDir);
-  const had = fs.existsSync(pidFile) ? fs.readFileSync(pidFile, 'utf8') : null;
-  t.after(() => {
-    if (had === null) try { fs.unlinkSync(pidFile); } catch {}
-    else fs.writeFileSync(pidFile, had);
+  const repoRoot = repoRootFromBridge(bridgeDir);
+  const readers = {
+    cmdline: () => `${process.execPath} bridge/supervisor.js`,
+    cwd: () => repoRoot,
+  };
+  assert.equal(supervisorMatchesCheckout(9001, bridgeDir, () => true, readers), true);
+});
+
+test('readSupervisorPid keeps npm-start supervisor identity without clearing pid file', (t) => {
+  const bridgeDir = tempBridgeDir(t);
+  const repoRoot = repoRootFromBridge(bridgeDir);
+  writeSupervisorPidFile(bridgeDir, 9001);
+  const npmStart = (pid, dir) => supervisorMatchesCheckout(pid, dir, () => true, {
+    cmdline: () => 'node bridge/supervisor.js',
+    cwd: () => repoRoot,
   });
+  assert.equal(readSupervisorPid(bridgeDir, (pid) => pid === 9001, npmStart), 9001);
+  assert.equal(fs.existsSync(supervisorPidFile(bridgeDir)), true);
+});
+
+test('linuxBridgeRunning trusts only this checkout supervisor.pid record', (t) => {
+  const bridgeDir = tempBridgeDir(t);
+  const pidFile = supervisorPidFile(bridgeDir);
   writeSupervisorPidFile(bridgeDir, 4242);
   const alive4242 = (pid) => pid === 4242;
   const identity = trustSupervisor();
@@ -185,16 +215,13 @@ test('linuxBridgeRunning trusts only this checkout supervisor.pid record', (t) =
 });
 
 test('supervisor pid file works when go starts with cwd bridge (not repo root)', (t) => {
-  const bridgeDir = path.join(ROOT, 'bridge');
-  const pidFile = supervisorPidFile(bridgeDir);
-  const had = fs.existsSync(pidFile) ? fs.readFileSync(pidFile, 'utf8') : null;
-  t.after(() => {
-    if (had === null) try { fs.unlinkSync(pidFile); } catch {}
-    else fs.writeFileSync(pidFile, had);
-  });
+  const bridgeDir = tempBridgeDir(t);
   writeSupervisorPidFile(bridgeDir, 5150);
-  assert.equal(readSupervisorPid(bridgeDir, (pid) => pid === 5150, trustSupervisor()), 5150);
-  assert.equal(repoRootFromBridge(bridgeDir), path.join(ROOT));
+  const fromBridgeCwd = (pid, dir) => supervisorMatchesCheckout(pid, dir, () => true, {
+    cmdline: () => 'node supervisor.js',
+    cwd: () => bridgeDir,
+  });
+  assert.equal(readSupervisorPid(bridgeDir, (pid) => pid === 5150, fromBridgeCwd), 5150);
 });
 
 test('bridge.js stops capture and running agents on SIGTERM without persisting KILLED', () => {
@@ -208,13 +235,8 @@ test('bridge.js stops capture and running agents on SIGTERM without persisting K
 });
 
 test('stopLinuxSupervisor sends SIGTERM to the process group then clears the pid file', (t) => {
-  const bridgeDir = path.join(ROOT, 'bridge');
+  const bridgeDir = tempBridgeDir(t);
   const pidFile = supervisorPidFile(bridgeDir);
-  const had = fs.existsSync(pidFile) ? fs.readFileSync(pidFile, 'utf8') : null;
-  t.after(() => {
-    if (had === null) try { fs.unlinkSync(pidFile); } catch {}
-    else fs.writeFileSync(pidFile, had);
-  });
   writeSupervisorPidFile(bridgeDir, 77);
   const killed = [];
   let alive = true;
@@ -229,13 +251,8 @@ test('stopLinuxSupervisor sends SIGTERM to the process group then clears the pid
 });
 
 test('readSupervisorPid drops a reused pid that is not this checkout supervisor', (t) => {
-  const bridgeDir = path.join(ROOT, 'bridge');
+  const bridgeDir = tempBridgeDir(t);
   const pidFile = supervisorPidFile(bridgeDir);
-  const had = fs.existsSync(pidFile) ? fs.readFileSync(pidFile, 'utf8') : null;
-  t.after(() => {
-    if (had === null) try { fs.unlinkSync(pidFile); } catch {}
-    else fs.writeFileSync(pidFile, had);
-  });
   writeSupervisorPidFile(bridgeDir, 4242);
   const alien = (pid, dir) => supervisorMatchesCheckout(pid, dir, () => true, {
     cmdline: () => 'sleep 999',
@@ -246,13 +263,8 @@ test('readSupervisorPid drops a reused pid that is not this checkout supervisor'
 });
 
 test('stopLinuxSupervisor waits for the process to exit before clearing the pid file', (t) => {
-  const bridgeDir = path.join(ROOT, 'bridge');
+  const bridgeDir = tempBridgeDir(t);
   const pidFile = supervisorPidFile(bridgeDir);
-  const had = fs.existsSync(pidFile) ? fs.readFileSync(pidFile, 'utf8') : null;
-  t.after(() => {
-    if (had === null) try { fs.unlinkSync(pidFile); } catch {}
-    else fs.writeFileSync(pidFile, had);
-  });
   writeSupervisorPidFile(bridgeDir, 88);
   let aliveTicks = 0;
   const alive = () => aliveTicks++ < 2;
@@ -322,21 +334,18 @@ test('doctor --pre-start exits 0 for combatlog when Logs dir exists but no WoWCo
   fs.writeFileSync(path.join(client, 'Interface', 'AddOns', 'Runback', 'Runback.toc'), '## Interface: 17000\n');
   fs.mkdirSync(path.join(client, 'Interface', 'AddOns', 'Runback_S001'), { recursive: true });
   fs.writeFileSync(path.join(client, 'Interface', 'AddOns', 'Runback_S001', 'Runback_S001.toc'), '## Interface: 17000\n');
-  const cfg = path.join(ROOT, 'bridge', 'config.json');
-  const backup = fs.existsSync(cfg) ? fs.readFileSync(cfg, 'utf8') : null;
-  t.after(() => {
-    if (backup === null) try { fs.unlinkSync(cfg); } catch {}
-    else fs.writeFileSync(cfg, backup);
-  });
-  fs.writeFileSync(cfg, JSON.stringify({ addonDir: path.join(client, 'Interface', 'AddOns') }));
-  const { spawnSync } = require('node:child_process');
-  const r = spawnSync(process.execPath, [path.join(ROOT, 'tools', 'doctor.js'), '--pre-start'], {
-    cwd: ROOT,
-    env: { ...process.env, DISPLAY: ':0', XDG_SESSION_TYPE: 'x11' },
-    encoding: 'utf8',
-  });
-  assert.match(r.stdout, /^PASS combatlog:/m);
-  assert.doesNotMatch(r.stdout, /^FAIL combatlog:/m);
+  const bridge = path.join(root, 'bridge');
+  fs.mkdirSync(bridge, { recursive: true });
+  fs.writeFileSync(path.join(bridge, 'config.json'), JSON.stringify({ addonDir: path.join(client, 'Interface', 'AddOns') }));
+  const info = findClientInfo(path.join(bridge, 'config.json'));
+  const out = run(env({
+    preStart: true,
+    combatLogState: combatLogOnDisk,
+    client: { ...info, slots: true },
+  }));
+  assert.equal(out.code, 0);
+  assert.match(out.text, /^PASS combatlog:/m);
+  assert.doesNotMatch(out.text, /^FAIL combatlog:/m);
 });
 
 test('all good passes with no warning', () => {

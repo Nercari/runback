@@ -9,7 +9,7 @@ const LOGIN_PROBES = [
   ['claude', ['auth', 'status']],
   ['codex', ['login', 'status']],
   ['grok', ['-p', '0', '--print-timeout', '2s', '--output-format', 'text'], 'grok-headless'],
-  ['agy', ['-p', '0', '--print-timeout', '2s', '--output-format', 'text'], 'agy-headless'],
+  ['agy', ['-p=0', '--print-timeout', '2s', '--output-format', 'text'], 'agy-headless'],
   ['hermes', ['auth', 'list'], 'hermes-list'],
   ['opencode', ['auth', 'list'], 'opencode-list'],
 ];
@@ -323,12 +323,17 @@ function readProcCmdline(pid) {
 function supervisorMatchesCheckout(pid, bridgeDir, alive = pidAlive, readers = null) {
   if (!pid || !alive(pid)) return false;
   const bridgeReal = path.resolve(bridgeDir);
+  const repoRoot = path.resolve(repoRootFromBridge(bridgeDir));
   const cmd = readers && readers.cmdline ? readers.cmdline(pid) : readProcCmdline(pid);
   if (!/supervisor\.js/.test(cmd)) return false;
   const supPath = path.join(bridgeReal, 'supervisor.js');
   if (cmd.includes(supPath)) return true;
   const cwd = readers && readers.cwd ? readers.cwd(pid) : readProcCwd(pid);
-  return cwd !== '' && path.resolve(cwd) === bridgeReal;
+  const cwdResolved = cwd !== '' ? path.resolve(cwd) : '';
+  if (cwdResolved === bridgeReal) return true;
+  const relSup = path.join('bridge', 'supervisor.js');
+  if (cwdResolved === repoRoot && (cmd.includes(relSup) || cmd.includes(supPath))) return true;
+  return false;
 }
 
 function waitForSupervisorStop(pid, bridgeDir, alive = pidAlive, sleeper = spawnSync) {
@@ -373,12 +378,6 @@ function stopLinuxSupervisor(bridgeDir = path.join(__dirname, '..', 'bridge'), k
   killer('kill', ['-TERM', `-${pid}`], { encoding: 'utf8' });
   if (alive(pid)) killer('kill', ['-TERM', String(pid)], { encoding: 'utf8' });
   waitForSupervisorStop(pid, bridgeDir, alive, killer);
-}
-
-// Legacy export for older call sites that matched pgrep patterns.
-function supervisorPgrepPatterns(bridgeDir = path.join(__dirname, '..', 'bridge')) {
-  const sup = path.join(bridgeDir, 'supervisor.js');
-  return [sup, path.join('bridge', 'supervisor.js')];
 }
 
 function readProcCwd(pid) {
@@ -452,7 +451,6 @@ module.exports = {
   linuxBridgeRunning,
   stopLinuxSupervisor,
   bridgeCodeChanged,
-  supervisorPgrepPatterns,
   supervisorPidFile,
   writeSupervisorPidFile,
   readSupervisorPid,
