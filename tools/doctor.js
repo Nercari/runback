@@ -161,10 +161,17 @@ function bridgeCheck(platform, bridgeRunning, preStart) {
 }
 
 // Combat logging is read-only from the host: a log file means the player turned it on.
-function combatlogCheck(client, combatLogState) {
+function combatlogCheck(client, combatLogState, preStart) {
   const state = typeof combatLogState === 'function' ? combatLogState(client) : combatLogState;
   if (state === 'on') return { name: 'combatlog', status: 'PASS', detail: 'a WoW combat log file is present' };
   if (state === 'off') {
+    if (preStart) {
+      return {
+        name: 'combatlog',
+        status: 'PASS',
+        detail: 'enable combat logging in game before reviews (INSTALL-LINUX.md step 5)',
+      };
+    }
     return {
       name: 'combatlog',
       status: 'FAIL',
@@ -193,7 +200,7 @@ function buildChecks(opts) {
     clientCheck(opts.client),
     slotsCheck(opts.client),
     bridgeCheck(opts.platform, opts.bridgeRunning, opts.preStart),
-    combatlogCheck(opts.client, opts.combatLogState),
+    combatlogCheck(opts.client, opts.combatLogState, opts.preStart),
   ];
 }
 
@@ -261,6 +268,16 @@ function linuxBridgeRunning(bridgeDir = path.join(__dirname, '..', 'bridge'), pg
   return false;
 }
 
+function stopLinuxSupervisor(bridgeDir = path.join(__dirname, '..', 'bridge'), pkill = spawnSync) {
+  for (const pattern of supervisorPgrepPatterns(bridgeDir)) {
+    pkill('pkill', ['-f', pattern], { encoding: 'utf8' });
+  }
+}
+
+function bridgeCodeChanged(files = []) {
+  return files.some((f) => f.startsWith('bridge/') || f.startsWith('mentor/') || f === 'package.json');
+}
+
 function tocNumber(clientDir) {
   try {
     const text = fs.readFileSync(path.join(clientDir, 'Interface', 'AddOns', 'Runback', 'Runback.toc'), 'utf8');
@@ -316,6 +333,8 @@ module.exports = {
   buildChecks,
   combatLogOnDisk,
   linuxBridgeRunning,
+  stopLinuxSupervisor,
+  bridgeCodeChanged,
   supervisorPgrepPatterns,
   realPythonProbe,
 };

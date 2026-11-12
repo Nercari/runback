@@ -2,8 +2,10 @@
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const os = require('node:os');
 const path = require('node:path');
-const { go } = require('../../tools/go');
+const { go, setupArgsFor } = require('../../tools/go');
 
 const ROOT = path.join(__dirname, '..', '..');
 
@@ -76,6 +78,71 @@ test('go stops when doctor fails', () => {
   });
   assert.equal(r.ok, false);
   assert.match(r.lines.join('\n'), /Doctor reported failures/);
+});
+
+test('setupArgsFor passes the configured client folder to setup', (t) => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'runback-go-'));
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  const client = path.join(root, 'World of Warcraft', '_forever_');
+  const addons = path.join(client, 'Interface', 'AddOns');
+  fs.mkdirSync(addons, { recursive: true });
+  const bridge = path.join(root, 'bridge');
+  fs.mkdirSync(bridge, { recursive: true });
+  fs.writeFileSync(path.join(bridge, 'config.json'), JSON.stringify({ addonDir: addons }));
+  assert.deepEqual(setupArgsFor(root), ['--wow', client]);
+});
+
+test('go forwards configured client path to setup', (t) => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'runback-go-setup-'));
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  const client = path.join(root, 'World of Warcraft', '_forever_');
+  const addons = path.join(client, 'Interface', 'AddOns');
+  fs.mkdirSync(addons, { recursive: true });
+  const bridge = path.join(root, 'bridge');
+  fs.mkdirSync(bridge, { recursive: true });
+  fs.writeFileSync(path.join(bridge, 'config.json'), JSON.stringify({ addonDir: addons }));
+  let setupArgs;
+  const r = go({
+    platform: 'linux',
+    root,
+    argv: ['--no-update'],
+    updater: () => ({ changed: false, files: [], note: 'skipped' }),
+    runner: (script, args = []) => {
+      if (script.endsWith('setup.js')) {
+        setupArgs = args;
+        return { ok: true, out: '', code: 0 };
+      }
+      if (script.endsWith('doctor.js')) return { ok: true, out: 'PASS\n', code: 0 };
+      return { ok: true, out: '', code: 0 };
+    },
+    bridgeRunning: () => false,
+    start: () => {},
+  });
+  assert.equal(r.ok, true);
+  assert.deepEqual(setupArgs, ['--wow', client]);
+});
+
+test('go restarts the bridge when an update changed bridge code', () => {
+  let stopped = false;
+  let started = false;
+  const r = go({
+    platform: 'linux',
+    root: ROOT,
+    argv: [],
+    updater: () => ({ changed: true, files: ['bridge/bridge.js'], note: 'updated' }),
+    runner: (script) => {
+      if (script.endsWith('setup.js')) return { ok: true, out: '', code: 0 };
+      if (script.endsWith('doctor.js')) return { ok: true, out: 'PASS\n', code: 0 };
+      return { ok: true, out: '', code: 0 };
+    },
+    bridgeRunning: () => true,
+    stopSupervisor: () => { stopped = true; },
+    start: () => { started = true; },
+  });
+  assert.equal(r.ok, true);
+  assert.equal(stopped, true);
+  assert.equal(started, true);
+  assert.match(r.lines.join('\n'), /restarted supervisor after a bridge update/);
 });
 
 test('go skips starting the bridge when it is already running', () => {

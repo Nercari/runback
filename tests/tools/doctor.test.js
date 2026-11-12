@@ -115,6 +115,13 @@ test('missing combat log files on disk fails with a one-line fix', () => {
   assert.match(out.text, /^FAIL combatlog:/m);
 });
 
+test('pre-start doctor passes missing combat logs when Logs exists but no file yet', () => {
+  const out = run(env({ combatLogState: () => 'off', preStart: true }));
+  assert.equal(out.code, 0);
+  assert.match(out.text, /^PASS combatlog:/m);
+  assert.doesNotMatch(out.text, /^FAIL combatlog:/m);
+});
+
 test('all good passes with no warning', () => {
   const out = run(env({
     probe: () => [

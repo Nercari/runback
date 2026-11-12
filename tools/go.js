@@ -7,7 +7,7 @@
 const path = require('node:path');
 const { spawn, spawnSync } = require('node:child_process');
 const { update } = require('./launch');
-const { linuxBridgeRunning } = require('./doctor');
+const { linuxBridgeRunning, findClientInfo, stopLinuxSupervisor, bridgeCodeChanged } = require('./doctor');
 
 const ROOT = path.join(__dirname, '..');
 const BRIDGE = path.join(ROOT, 'bridge');
@@ -35,8 +35,14 @@ function startSupervisor(bridgeDir = BRIDGE) {
   return child;
 }
 
+function setupArgsFor(root) {
+  const client = findClientInfo(path.join(root, 'bridge', 'config.json'));
+  if (client && client.dir) return ['--wow', client.dir];
+  return [];
+}
+
 function go({ root = ROOT, argv = [], platform = process.platform, updater = update, runner = runNode,
-  bridgeRunning = linuxBridgeRunning, start = startSupervisor } = {}) {
+  bridgeRunning = linuxBridgeRunning, start = startSupervisor, stopSupervisor = stopLinuxSupervisor } = {}) {
   if (platform !== 'linux') {
     return { ok: false, code: 1, lines: ['npm run go is for Linux; on Windows use Runback.cmd'] };
   }
@@ -45,7 +51,7 @@ function go({ root = ROOT, argv = [], platform = process.platform, updater = upd
   const up = skipUpdate ? { changed: false, note: 'skipped (--no-update)' } : updater(root);
   lines.push(`update : ${up.note}`);
 
-  const setup = runner(path.join(root, 'setup.js'));
+  const setup = runner(path.join(root, 'setup.js'), setupArgsFor(root));
   if (!setup.ok) {
     lines.push(setup.out.trim() || 'setup failed');
     return { ok: false, code: 1, lines };
@@ -59,9 +65,15 @@ function go({ root = ROOT, argv = [], platform = process.platform, updater = upd
     return { ok: false, code: doc.code || 1, lines };
   }
 
-  if (bridgeRunning()) lines.push('bridge : already running');
-  else {
-    start();
+  const bridgeDir = path.join(root, 'bridge');
+  if (bridgeRunning()) {
+    if (bridgeCodeChanged(up.files || [])) {
+      stopSupervisor(bridgeDir);
+      start(bridgeDir);
+      lines.push('bridge : restarted supervisor after a bridge update');
+    } else lines.push('bridge : already running');
+  } else {
+    start(bridgeDir);
     lines.push('bridge : started supervisor (npm start); stop it from that terminal with Ctrl+C');
   }
   return { ok: true, code: 0, lines };
@@ -75,4 +87,4 @@ function main(argv) {
 
 if (require.main === module) main(process.argv.slice(2));
 
-module.exports = { go, runNode, startSupervisor };
+module.exports = { go, runNode, startSupervisor, setupArgsFor };
