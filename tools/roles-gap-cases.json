@@ -1,0 +1,17 @@
+{
+  "roleCount": 5,
+  "roles": ["chat", "quick", "coach", "deep", "translate"],
+  "roleNames": {
+    "chat": "Chat",
+    "quick": "Quick answer",
+    "coach": "Coach note",
+    "deep": "Deep review",
+    "translate": "Translate"
+  },
+  "agents": ["claude", "codex", "grok", "agy", "hermes", "opencode"],
+  "cannotRunAgents": {
+    "hermes": "mentor",
+    "opencode": "mentor"
+  },
+  "translateToolFree": ["claude", "grok"]
+}
