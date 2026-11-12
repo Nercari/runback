@@ -74,7 +74,7 @@ function go({ root = ROOT, argv = [], platform = process.platform, updater = upd
     } else lines.push('bridge : already running');
   } else {
     start(bridgeDir);
-    lines.push('bridge : started supervisor (npm start); stop it from that terminal with Ctrl+C');
+    lines.push('bridge : started supervisor in the background; stop it with npm run stop');
   }
   return { ok: true, code: 0, lines };
 }

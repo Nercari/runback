@@ -29,6 +29,7 @@
     "setup": "node setup.js",
     "doctor": "node tools/doctor.js",
     "go": "node tools/go.js",
+    "stop": "node tools/stop-bridge.js",
     "start": "node bridge/supervisor.js",
     "slots": "node bridge/install-slots.js",
     "test": "node tests/run_all.js",

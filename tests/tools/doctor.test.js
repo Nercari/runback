@@ -14,7 +14,10 @@ const {
   checkCount,
   combatLogOnDisk,
   linuxBridgeRunning,
+  stopLinuxSupervisor,
+  listSupervisorPids,
   supervisorPgrepPatterns,
+  repoRootFromBridge,
 } = require('../../tools/doctor');
 
 const ROOT = path.join(__dirname, '..', '..');
@@ -155,15 +158,36 @@ test('pre-start doctor passes a stopped bridge so npm run go can start it', () =
   assert.match(out.text, /^PASS bridge: supervisor not running yet/m);
 });
 
-test('linuxBridgeRunning matches npm start relative supervisor path', () => {
+test('linuxBridgeRunning matches npm start relative supervisor path for this checkout only', () => {
   const bridgeDir = path.join(ROOT, 'bridge');
+  const repoRoot = repoRootFromBridge(bridgeDir);
   assert.ok(supervisorPgrepPatterns(bridgeDir).includes('bridge/supervisor.js'));
   const fakePgrep = (_cmd, args) => {
     const pattern = args[1];
     if (pattern === 'bridge/supervisor.js') return { status: 0, stdout: '999\n', error: null };
     return { status: 1, stdout: '', error: null };
   };
-  assert.equal(linuxBridgeRunning(bridgeDir, fakePgrep), true);
+  const cwdHere = (pid) => (pid === 999 ? repoRoot : '/other/runback');
+  assert.equal(linuxBridgeRunning(bridgeDir, fakePgrep, cwdHere), true);
+  assert.equal(linuxBridgeRunning(bridgeDir, fakePgrep, () => '/other/runback'), false);
+});
+
+test('stopLinuxSupervisor kills only this checkout supervisor', () => {
+  const bridgeDir = path.join(ROOT, 'bridge');
+  const repoRoot = repoRootFromBridge(bridgeDir);
+  const killed = [];
+  const fakePgrep = (_cmd, args) => {
+    if (args[1] === 'bridge/supervisor.js') return { status: 0, stdout: '42\n99\n', error: null };
+    return { status: 1, stdout: '', error: null };
+  };
+  const cwdHere = (pid) => (pid === 42 ? repoRoot : '/other/runback');
+  const fakeKill = (_cmd, args) => {
+    killed.push(Number(args[0]));
+    return { status: 0, stdout: '', error: null };
+  };
+  stopLinuxSupervisor(bridgeDir, fakeKill, fakePgrep, cwdHere);
+  assert.deepEqual(killed, [42]);
+  assert.deepEqual(listSupervisorPids(bridgeDir, fakePgrep, cwdHere), [42]);
 });
 
 test('missing combat log files on disk fails with a one-line fix', () => {
@@ -174,6 +198,20 @@ test('missing combat log files on disk fails with a one-line fix', () => {
 
 test('pre-start doctor passes missing combat logs when Logs exists but no file yet', () => {
   const out = run(env({ combatLogState: () => 'off', preStart: true }));
+  assert.equal(out.code, 0);
+  assert.match(out.text, /^PASS combatlog:/m);
+  assert.doesNotMatch(out.text, /^FAIL combatlog:/m);
+});
+
+test('pre-start doctor passes when Logs exists empty and combatLogOnDisk reports off', (t) => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'runback-prestart-log-'));
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  fs.mkdirSync(path.join(root, 'Logs'));
+  const out = run(env({
+    preStart: true,
+    combatLogState: combatLogOnDisk,
+    client: { dir: root, interface: '17000', slots: true },
+  }));
   assert.equal(out.code, 0);
   assert.match(out.text, /^PASS combatlog:/m);
   assert.doesNotMatch(out.text, /^FAIL combatlog:/m);

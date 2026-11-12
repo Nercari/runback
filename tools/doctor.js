@@ -190,14 +190,13 @@ function bridgeCheck(platform, bridgeRunning, preStart) {
 function combatlogCheck(client, combatLogState, preStart) {
   const state = typeof combatLogState === 'function' ? combatLogState(client) : combatLogState;
   if (state === 'on') return { name: 'combatlog', status: 'PASS', detail: 'a WoW combat log file is present' };
+  const advisory = {
+    name: 'combatlog',
+    status: 'PASS',
+    detail: 'enable combat logging in game before reviews (INSTALL-LINUX.md step 5)',
+  };
+  if (preStart) return advisory;
   if (state === 'off') {
-    if (preStart) {
-      return {
-        name: 'combatlog',
-        status: 'PASS',
-        detail: 'enable combat logging in game before reviews (INSTALL-LINUX.md step 5)',
-      };
-    }
     return {
       name: 'combatlog',
       status: 'FAIL',
@@ -205,11 +204,7 @@ function combatlogCheck(client, combatLogState, preStart) {
       fix: 'Turn on combat logging in game (INSTALL-LINUX.md step 5), fight once, then run doctor again.',
     };
   }
-  return {
-    name: 'combatlog',
-    status: 'PASS',
-    detail: 'enable combat logging in game before reviews (INSTALL-LINUX.md step 5)',
-  };
+  return advisory;
 }
 
 function formatCheck(check) {
@@ -286,17 +281,40 @@ function supervisorPgrepPatterns(bridgeDir = path.join(__dirname, '..', 'bridge'
   return [sup, path.join('bridge', 'supervisor.js')];
 }
 
-function linuxBridgeRunning(bridgeDir = path.join(__dirname, '..', 'bridge'), pgrep = spawnSync) {
-  for (const pattern of supervisorPgrepPatterns(bridgeDir)) {
-    const r = pgrep('pgrep', ['-f', pattern], { encoding: 'utf8' });
-    if (!r.error && r.status === 0 && r.stdout.trim().length > 0) return true;
-  }
-  return false;
+function repoRootFromBridge(bridgeDir) {
+  return path.resolve(path.join(bridgeDir, '..'));
 }
 
-function stopLinuxSupervisor(bridgeDir = path.join(__dirname, '..', 'bridge'), pkill = spawnSync) {
+function readProcCwd(pid) {
+  try {
+    return fs.realpathSync(path.join('/proc', String(pid), 'cwd'));
+  } catch {
+    return '';
+  }
+}
+
+function listSupervisorPids(bridgeDir = path.join(__dirname, '..', 'bridge'), pgrep = spawnSync, cwdForPid = readProcCwd) {
+  const repoRoot = repoRootFromBridge(bridgeDir);
+  const pids = new Set();
   for (const pattern of supervisorPgrepPatterns(bridgeDir)) {
-    pkill('pkill', ['-f', pattern], { encoding: 'utf8' });
+    const r = pgrep('pgrep', ['-f', pattern], { encoding: 'utf8' });
+    if (r.error || r.status !== 0 || !r.stdout.trim()) continue;
+    for (const line of r.stdout.trim().split(/\n/)) {
+      const pid = Number(line.trim());
+      if (!pid) continue;
+      if (path.resolve(cwdForPid(pid)) === repoRoot) pids.add(pid);
+    }
+  }
+  return [...pids];
+}
+
+function linuxBridgeRunning(bridgeDir = path.join(__dirname, '..', 'bridge'), pgrep = spawnSync, cwdForPid = readProcCwd) {
+  return listSupervisorPids(bridgeDir, pgrep, cwdForPid).length > 0;
+}
+
+function stopLinuxSupervisor(bridgeDir = path.join(__dirname, '..', 'bridge'), killer = spawnSync, pgrep = spawnSync, cwdForPid = readProcCwd) {
+  for (const pid of listSupervisorPids(bridgeDir, pgrep, cwdForPid)) {
+    killer('kill', [String(pid)], { encoding: 'utf8' });
   }
 }
 
@@ -364,6 +382,9 @@ module.exports = {
   stopLinuxSupervisor,
   bridgeCodeChanged,
   supervisorPgrepPatterns,
+  listSupervisorPids,
+  repoRootFromBridge,
+  readProcCwd,
   realPythonProbe,
 };
 

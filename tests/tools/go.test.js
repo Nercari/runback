@@ -145,6 +145,24 @@ test('go restarts the bridge when an update changed bridge code', () => {
   assert.match(r.lines.join('\n'), /restarted supervisor after a bridge update/);
 });
 
+test('go prints npm run stop after starting a detached supervisor', () => {
+  const r = go({
+    platform: 'linux',
+    root: ROOT,
+    argv: ['--no-update'],
+    updater: () => ({ note: 'ok' }),
+    runner: (script) => {
+      if (script.endsWith('setup.js')) return { ok: true, out: '', code: 0 };
+      if (script.endsWith('doctor.js')) return { ok: true, out: 'PASS\n', code: 0 };
+      return { ok: true, out: '', code: 0 };
+    },
+    bridgeRunning: () => false,
+    start: () => {},
+  });
+  assert.equal(r.ok, true);
+  assert.match(r.lines.join('\n'), /npm run stop/);
+});
+
 test('go skips starting the bridge when it is already running', () => {
   let started = false;
   const r = go({

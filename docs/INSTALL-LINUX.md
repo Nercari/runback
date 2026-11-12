@@ -12,7 +12,7 @@ The addon is the same; only the bridge's screen capture differs. On Linux the br
 
 1. `git clone https://github.com/Nercari/runback && cd runback` (or `git pull` in an existing clone).
 2. **Log in once** per agent CLI you plan to use: `claude`, `codex`, `grok login`, `agy`, `hermes setup`, or `opencode auth login` — see [AGENTS.md](AGENTS.md).
-3. `npm run go` — updates the checkout, runs setup, runs doctor, and starts the bridge supervisor.
+3. `npm run go` — updates the checkout, runs setup, runs doctor, and starts the bridge supervisor in the background. Stop it with `npm run stop`.
 4. Fully quit and restart WoW; enable **Runback** on the AddOns screen (leave the slot addons enabled).
 5. Turn on **combat logging** in game (Settings → Network → Advanced → Combat Log, or click `[turn on combat log]` when Runback prints it at login).
 6. While the colored strip is in the top-left corner, run `npm run probe` once; it saves `bridge/probe.png` and says whether capture decoded the strip.
