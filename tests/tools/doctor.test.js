@@ -5,6 +5,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
+const { spawnSync } = require('node:child_process');
 const {
   run,
   findClientInfo,
@@ -21,6 +22,7 @@ const {
   readSupervisorPid,
   repoRootFromBridge,
   supervisorMatchesCheckout,
+  scanSupervisorPids,
 } = require('../../tools/doctor');
 const { go, setupArgsFor } = require('../../tools/go');
 const { stopBridge } = require('../../tools/stop-bridge');
@@ -209,6 +211,39 @@ test('readSupervisorPid keeps npm-start supervisor identity without clearing pid
   });
   assert.equal(readSupervisorPid(bridgeDir, (pid) => pid === 9001, npmStart), 9001);
   assert.equal(fs.existsSync(supervisorPidFile(bridgeDir)), true);
+});
+
+test('a second supervisor and a --help run keep a live owner pid record', (t) => {
+  const bridgeDir = tempBridgeDir(t);
+  fs.copyFileSync(path.join(ROOT, 'bridge', 'supervisor.js'), path.join(bridgeDir, 'supervisor.js'));
+  fs.writeFileSync(path.join(bridgeDir, 'bridge.js'), 'process.exit(0);\n');
+  const pidFile = supervisorPidFile(bridgeDir);
+  fs.writeFileSync(pidFile, String(process.pid));
+  const runSupervisor = (args) => spawnSync(process.execPath, [path.join(bridgeDir, 'supervisor.js'), ...args], { encoding: 'utf8' });
+  assert.equal(runSupervisor([]).status, 0);
+  assert.equal(fs.readFileSync(pidFile, 'utf8').trim(), String(process.pid));
+  assert.equal(runSupervisor(['--help']).status, 0);
+  assert.equal(fs.readFileSync(pidFile, 'utf8').trim(), String(process.pid));
+});
+
+test('readSupervisorPid finds a supervisor started without a pid file', (t) => {
+  const bridgeDir = tempBridgeDir(t);
+  assert.equal(fs.existsSync(supervisorPidFile(bridgeDir)), false);
+  const found = () => [6161];
+  assert.equal(readSupervisorPid(bridgeDir, (pid) => pid === 6161, trustSupervisor(), found), 6161);
+});
+
+test('scanSupervisorPids finds this checkout supervisor by process scan', (t) => {
+  const procRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'runback-proc-'));
+  t.after(() => fs.rmSync(procRoot, { recursive: true, force: true }));
+  for (const name of ['1', '9001', '9002', 'self']) fs.writeFileSync(path.join(procRoot, name), '');
+  const bridgeDir = path.join(ROOT, 'bridge');
+  const repoRoot = repoRootFromBridge(bridgeDir);
+  const readers = {
+    cmdline: (pid) => (pid === 9002 ? 'node bridge/supervisor.js' : 'node other.js'),
+    cwd: () => repoRoot,
+  };
+  assert.deepEqual(scanSupervisorPids(bridgeDir, () => true, readers, procRoot), [9002]);
 });
 
 test('linuxBridgeRunning trusts only this checkout supervisor.pid record', (t) => {

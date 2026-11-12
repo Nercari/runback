@@ -13,7 +13,17 @@ const PID_FILE = path.join(__dirname, 'supervisor.pid');
 let child = null;
 let stopping = false;
 
+function pidAlive(pid) {
+  try { process.kill(pid, 0); return true; } catch (err) { return err.code === 'EPERM'; }
+}
+
 function writePidFile() {
+  // --help and --once are not a supervisor; a live supervisor keeps its record.
+  if (process.argv.slice(2).some((a) => a === '--help' || a === '-h' || a === '--once')) return;
+  try {
+    const owner = Number(fs.readFileSync(PID_FILE, 'utf8').trim());
+    if (owner && owner !== process.pid && pidAlive(owner)) return;
+  } catch {}
   try { fs.writeFileSync(PID_FILE, String(process.pid)); } catch {}
 }
 

@@ -338,6 +338,19 @@ function supervisorMatchesCheckout(pid, bridgeDir, alive = pidAlive, readers = n
   return false;
 }
 
+// A supervisor started by an older revision wrote no pid file; find it by scan.
+function scanSupervisorPids(bridgeDir = path.join(__dirname, '..', 'bridge'), alive = pidAlive, readers = null, procRoot = '/proc') {
+  let names = [];
+  try { names = fs.readdirSync(procRoot); } catch { return []; }
+  const pids = [];
+  for (const name of names) {
+    if (!/^\d+$/.test(name)) continue;
+    const pid = Number(name);
+    if (pid !== process.pid && supervisorMatchesCheckout(pid, bridgeDir, alive, readers)) pids.push(pid);
+  }
+  return pids;
+}
+
 function waitForSupervisorStop(pid, bridgeDir, alive = pidAlive, sleeper = spawnSync) {
   if (!pid) return;
   const deadline = Date.now() + 10000;
@@ -351,18 +364,19 @@ function defaultSupervisorIdentity(pid, bridgeDir, alive = pidAlive) {
   return supervisorMatchesCheckout(pid, bridgeDir, alive);
 }
 
-function readSupervisorPid(bridgeDir = path.join(__dirname, '..', 'bridge'), alive = pidAlive, identity = defaultSupervisorIdentity) {
+function readSupervisorPid(bridgeDir = path.join(__dirname, '..', 'bridge'), alive = pidAlive, identity = defaultSupervisorIdentity, scan = scanSupervisorPids) {
   const pid = readRawSupervisorPid(bridgeDir);
-  if (!pid) return 0;
-  if (!alive(pid)) {
-    clearSupervisorPidFile(bridgeDir);
-    return 0;
+  if (pid) {
+    if (!alive(pid)) {
+      clearSupervisorPidFile(bridgeDir);
+    } else if (!identity(pid, bridgeDir, alive)) {
+      clearSupervisorPidFile(bridgeDir);
+    } else {
+      return pid;
+    }
   }
-  if (!identity(pid, bridgeDir, alive)) {
-    clearSupervisorPidFile(bridgeDir);
-    return 0;
-  }
-  return pid;
+  const [found] = scan(bridgeDir, alive);
+  return found || 0;
 }
 
 function listSupervisorPids(bridgeDir = path.join(__dirname, '..', 'bridge'), alive = pidAlive, identity = defaultSupervisorIdentity) {
@@ -464,6 +478,7 @@ module.exports = {
   readProcCwd,
   readProcCmdline,
   supervisorMatchesCheckout,
+  scanSupervisorPids,
   waitForSupervisorStop,
   realPythonProbe,
 };
