@@ -50,6 +50,8 @@ const CATALOG = {
 // model); the other lists here name no cheaper model the bridge can rely on, so
 // those agents keep their normal model. agents.<id>.coachModel changes it.
 const CHEAP = { claude: 'haiku' };
+// The Quick answer tier for short questions (roles, not names, in the addon).
+const QUICK = { ...CHEAP };
 
 function validEffort(e) { return typeof e === 'string' && EFFORT_TOKEN.test(e); }
 
@@ -89,10 +91,21 @@ function coachModel(acfg, id) {
   return cheap && list.some(e => e.id === cheap) ? cheap : '';
 }
 
+// Quick answer tier: agents.<id>.quickModel when set, else the built-in QUICK row.
+function quickModel(acfg, id) {
+  const list = entries(acfg, id);
+  const own = acfg && typeof acfg.quickModel === 'string' ? acfg.quickModel : '';
+  if (own && list.some(e => e.id === own)) return own;
+  const quick = QUICK[id] || '';
+  return quick && list.some(e => e.id === quick) ? quick : '';
+}
+
 module.exports = {
   CATALOG,
   CHEAP,
+  QUICK,
   entries,
   coachModel,
+  quickModel,
   validEffort,
 };

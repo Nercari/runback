@@ -155,12 +155,12 @@ local function ChatAgentName(c)
 end
 
 -- A chat can also pick one of the models the bridge offers for its agent
--- ("Claude · sonnet"); empty = the agent's own default model.
+-- (shown as "Claude · <tier>"); empty = the agent's own default model.
 local function ChatModel(c)
 	return (c and c.model and c.model ~= "") and c.model or ""
 end
 
--- And an effort level of that model (backlog 45, "Claude · opus · high"); empty =
+-- And an effort level of that model (backlog 45, "Claude · deep · high"); empty =
 -- the model's own default. Only kept while the chat has a model.
 local function ChatEffort(c)
 	return (c and c.effort and c.effort ~= "" and ChatModel(c) ~= "") and c.effort or ""
@@ -176,7 +176,7 @@ local function ChatPoolName(c)
 	return PoolName(c.agent, ChatModel(c), ChatEffort(c))
 end
 
--- The flags that pick a chat's agent, model and effort ("agent=claude;model=opus;effort=high").
+-- The flags that pick a chat's agent, model and effort ("agent=claude;model=deep;effort=high").
 local function PoolFlags(c)
 	local t = {}
 	if c.agent and c.agent ~= "" then table.insert(t, "agent=" .. c.agent) end
@@ -886,7 +886,7 @@ ApplyReplies = function(replies)
 				Finish(c, "system", "Bridge error: " .. tostring(r.text), denied)
 			elseif r.status == "working" then
 				c.progress = r.text
-				-- The bridge marks a run quiet or long; the window then offers Stop and Ask Claude instead.
+				-- The bridge marks a run quiet or long; the window then offers Stop and another agent.
 				c.stall = (r.stall == "quiet" or r.stall == "long") and r.stall or nil
 				Runback.UpdateStatus()
 			end
@@ -975,6 +975,7 @@ local function TryLoadSlot(why)
 		if type(data.models) == "table" then run.bridgeModels = data.models end
 		if type(data.efforts) == "table" then run.bridgeEfforts = data.efforts end
 		if type(data.defaults) == "table" then run.bridgeDefaults = data.defaults end
+		if type(data.quick) == "table" then run.bridgeQuick = data.quick end
 	end
 	local matched = ApplyReplies(type(data) == "table" and data.replies or nil)
 	if type(data) == "table" and data.restore then ImportRestore(data.restore) end
@@ -1116,6 +1117,7 @@ local function ProcessInbox()
 	if type(inbox.models) == "table" then run.bridgeModels = inbox.models end
 	if type(inbox.efforts) == "table" then run.bridgeEfforts = inbox.efforts end
 	if type(inbox.defaults) == "table" then run.bridgeDefaults = inbox.defaults end
+	if type(inbox.quick) == "table" then run.bridgeQuick = inbox.quick end
 	ApplyReplies(inbox.replies)
 	if inbox.restore then ImportRestore(inbox.restore) end
 	if inbox.map and RunbackMap then RunbackMap.Sync(inbox.map) end
@@ -1134,7 +1136,7 @@ Finish = function(chat, role, text, denied, agent, summary, followUps, stall)
 	end
 	chat.pendingId = nil
 	chat.progress = nil
-	-- A run that ended with no reply keeps the Ask Claude instead offer.
+	-- A run that ended with no reply keeps the try-another-agent offer.
 	chat.stall = (role == "assistant" and stall == "noreply") and "noreply" or nil
 	if run.act then run.act[chat.id] = nil end
 	NotedBridge()
@@ -1752,23 +1754,38 @@ function Runback.StopRun(c)
 	Runback.Render()
 end
 
--- Whether "Ask Claude instead" makes sense: Claude is installed on the bridge PC,
--- this chat is not already on it, and there is a question to send again.
-function Runback.CanAskClaude(c)
-	return c ~= nil and c.stall ~= nil and run.bridgeAgents ~= nil and Contains(run.bridgeAgents, "claude")
-		and ChatAgent(c) ~= "claude" and LastUserText(c) ~= nil
+-- Another agent installed on the bridge PC that this stalled chat can try.
+local function StallAlternateAgent(c)
+	if not c or not run.bridgeAgents then return nil end
+	local cur = ChatAgent(c)
+	for _, id in ipairs(run.bridgeAgents) do
+		if id ~= "" and id ~= cur then return id end
+	end
 end
 
--- Ask Claude instead: stop the stalled run if there is one, switch this chat to
--- Claude and send the same question again. Only ever runs from the player's click.
-function Runback.AskClaude(c)
+-- Whether a stall offer to try another agent makes sense.
+function Runback.CanAskOtherAgent(c)
+	return c ~= nil and c.stall ~= nil and StallAlternateAgent(c) ~= nil and LastUserText(c) ~= nil
+end
+
+function Runback.CanAskClaude(c)
+	return Runback.CanAskOtherAgent(c) and StallAlternateAgent(c) == "claude"
+end
+
+-- Stop the stalled run, switch to another installed agent, resend the question.
+function Runback.AskOtherAgent(c)
 	c = c or ActiveChat()
-	if not Runback.CanAskClaude(c) then return end
+	local agent = StallAlternateAgent(c)
+	if not agent or not Runback.CanAskOtherAgent(c) then return end
 	local text = LastUserText(c)
 	if c.pendingId then Runback.StopRun(c) end
 	c.stall = nil
-	Runback.SetPool(c, "claude", "")
+	Runback.SetPool(c, agent, "")
 	Runback.Send(text)
+end
+
+function Runback.AskClaude(c)
+	Runback.AskOtherAgent(c)
 end
 
 -- Exactly these, any case, trailing . ! ? allowed; "look at the boss in Deadmines" stays a message.
@@ -2002,7 +2019,7 @@ function Runback.SetAgent(rest, c)
 	if not c then return end
 	local agent, model = Trim(rest or ""):match("^(%S*)%s*(.-)$")
 	agent, model = (agent or ""):lower(), Trim(model or "")
-	-- "opus high": a listed model, then one word for the effort level.
+	-- "<tier> high": a listed model, then one word for the effort level.
 	local m, effort = model:match("^(%S+)%s+(%a+)$")
 	if m and Contains(ModelsFor(agent) or {}, m) then model, effort = m, effort:lower() else effort = "" end
 	if agent == "-" or agent == "default" then agent, model, effort = "", "", "" end
@@ -2168,16 +2185,17 @@ end
 -- Rendering
 ---------------------------------------------------------------------------
 
--- Stop and Ask Claude instead sit at the right end of the status line, only while a
--- run is stalled (or ended with no reply). The status text gives way to them.
+-- Stop and "Ask <agent> instead" sit at the right end of the status line while stalled.
 function Runback.UpdateStallButtons(c)
 	if not ui.stopBtn then return end
 	local stop = c ~= nil and c.pendingId ~= nil and c.stall ~= nil
-	local ask = Runback.CanAskClaude(c)
+	local alt = StallAlternateAgent(c)
+	local ask = Runback.CanAskOtherAgent(c)
 	ui.stopBtn:SetShown(stop)
 	ui.askBtn:SetShown(ask)
+	if ask and ui.askBtn then ui.askBtn:SetText("Ask " .. AgentName(alt) .. " instead") end
 	local width = 0
-	if ask then width = width + 150 end
+	if ask then width = width + (ui.askBtn and ui.askBtn:GetWidth() or 144) end
 	if stop then width = width + 60 end
 	ui.status:SetPoint("RIGHT", ui.frame, "RIGHT", -(60 + width), 0)
 end
@@ -2379,23 +2397,20 @@ function Runback.StarterList(c)
 	local list = Runback.StarterQuestions()
 	local fast = Runback.FastModelOffer(c)
 	if fast then
-		fast.label = "Short questions? Use the fast model (" .. fast.model .. ")"
+		fast.label = "Short questions? Use the quick answer tier"
 		table.insert(list, fast)
 	end
 	return list
 end
 
--- A fast model of the chat's agent (haiku for Claude), offered on the starter card
--- for short questions. Nil when the chat already uses it or the agent has none.
+-- The bridge's Quick answer tier for this chat's agent, on the starter card.
 function Runback.FastModelOffer(c)
 	local agent = c and ((c.agent and c.agent ~= "") and c.agent or run.bridgeAgent) or nil
 	if not agent or agent == "" then return nil end
-	for _, m in ipairs(ModelsFor(agent) or {}) do
-		if m:lower():find("haiku", 1, true) then
-			if m == ChatModel(c) then return nil end
-			return { agent = agent, model = m }
-		end
-	end
+	local m = run.bridgeQuick and run.bridgeQuick[agent] or nil
+	if not m or m == "" or m == ChatModel(c) then return nil end
+	if not Contains(ModelsFor(agent) or {}, m) then return nil end
+	return { agent = agent, model = m }
 end
 
 -- One-click follow-ups under the newest finished reply: only the questions the
@@ -2922,7 +2937,7 @@ local function BuildUI()
 	ui.status = status
 
 	-- Stalled run (backlog 52): both are the player's own click.
-	local askBtn = MakeButton(f, "Ask Claude instead", 144, function() Runback.AskClaude() end)
+	local askBtn = MakeButton(f, "Ask another agent", 144, function() Runback.AskOtherAgent() end)
 	askBtn:SetPoint("TOPRIGHT", f, "TOPRIGHT", -34, -28)
 	askBtn:Hide()
 	ui.askBtn = askBtn
@@ -3751,7 +3766,7 @@ local function ChatArgument(rest)
 	return false
 end
 
--- "/ai agent codex", "/ai agent claude sonnet" or "/ai agent claude opus high"
+-- "/ai agent codex", "/ai agent claude quick" or "/ai agent claude deep high"
 -- (the third word only after a model the bridge lists); anything longer ("/ai
 -- agent tell me ...") is a message.
 local function AgentArgument(rest)

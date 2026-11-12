@@ -369,8 +369,8 @@ function takeGuides(job, text) {
 function slotFile(globalName, records, urgent = true) {
   const map = Date.now() < mapShareUntil && (urgent || mapLuaSize() <= MAP_PROGRESS_MAX) ? state.map : null;
   const guides = Date.now() < guideShareUntil && (urgent || guideLuaSize() <= MAP_PROGRESS_MAX) ? state.guides : null;
-  const { agents, models, efforts, defaults } = pools();
-  return P.luaTable(globalName, records, { cwd: DEFAULT_CWD, restore: pendingRestore, agent: DEFAULT_AGENT, agents, models, efforts, defaults, map, guides, card: state.forever.card });
+  const { agents, models, efforts, defaults, quick } = pools();
+  return P.luaTable(globalName, records, { cwd: DEFAULT_CWD, restore: pendingRestore, agent: DEFAULT_AGENT, agents, models, efforts, defaults, quick, map, guides, card: state.forever.card });
 }
 
 // What the in-game picker offers: the agents installed on this PC (all of them
@@ -385,14 +385,17 @@ function pools() {
   const models = {};
   const efforts = {};
   const defaults = {};
+  const quick = {};
   for (const id of agents) {
     const acfg = A.agentConfig(cfg, id);
     models[id] = A.modelChoices(acfg, id);
     const levels = A.modelLevels(acfg, id);
     if (Object.keys(levels.efforts).length) efforts[id] = levels.efforts;
     if (Object.keys(levels.defaults).length) defaults[id] = levels.defaults;
+    const q = A.quickModel(acfg, id);
+    if (q) quick[id] = q;
   }
-  poolsCache = { at: Date.now(), agents, models, efforts, defaults };
+  poolsCache = { at: Date.now(), agents, models, efforts, defaults, quick };
   return poolsCache;
 }
 

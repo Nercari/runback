@@ -182,6 +182,9 @@ test('splitSummary takes the last TL;DR block for the game chat and keeps the wh
   // No levels: both tables are empty, so an older addon reads the same slot as before.
   assert.ok(pools.includes('efforts = {  },'));
   assert.ok(pools.includes('defaults = {  },'));
+  const quick = P.luaTable('Runback_SlotData', [], { quick: { claude: 'haiku', codex: 'gpt-5.5' } });
+  assert.ok(quick.includes('quick = { claude = "haiku", codex = "gpt-5.5" },'));
+  assert.ok(!P.luaTable('Runback_SlotData', [], { quick: {} }).includes('quick ='));
   // With levels (backlog 44): per agent and model, bad names and levels dropped.
   const lv = P.luaTable('Runback_SlotData', [], {
     efforts: { claude: { opus: ['low', 'high', 'Bad!'], 'gpt-5.1': ['medium'], 'bad model;': ['low'] }, 'bad id': { x: ['low'] } },

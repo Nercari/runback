@@ -812,6 +812,7 @@ module.exports = {
   modelChoices,
   modelLevels,
   coachModel: M.coachModel,
+  quickModel: M.quickModel,
   modelEntries: M.entries,
   effortProblem,
   grokRules,

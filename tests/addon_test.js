@@ -552,10 +552,10 @@ test('the starter card offers the fast model for short questions, once; a click 
   const vm = newVM();
   login(vm);
   vm.run('STUB.RunTimers()');
-  nextSlot(vm, '{ now = time(), cwd = "", agent = "claude", agents = { "claude" }, models = { claude = { "opus", "sonnet", "haiku" } }, replies = {} }');
+  nextSlot(vm, '{ now = time(), cwd = "", agent = "claude", agents = { "claude" }, models = { claude = { "opus", "sonnet", "haiku" } }, quick = { claude = "haiku" }, replies = {} }');
   vm.run('STUB.now = STUB.now + 6; STUB.Tick()');
   vm.run('Runback.Toggle(true); Runback.Render()');
-  const hint = 'Short questions? Use the fast model (haiku)';
+  const hint = 'Short questions? Use the quick answer tier';
   const shown = () => vm.evaluate('table.concat(STUB.texts, "|")').includes(hint);
   assert.equal(vm.evaluate('Runback.FastModelOffer(RunbackDB.chats[1]) ~= nil'), 'true');
   assert.ok(shown(), 'the offer is drawn as a button');
@@ -571,6 +571,7 @@ test('the addon still loads an inbox that carries effort levels and defaults (ba
     agent: 'claude', agents: ['claude', 'codex'], models: { claude: ['opus', 'sonnet', 'haiku'], codex: [] },
     efforts: { claude: { opus: ['low', 'medium', 'high', 'xhigh', 'max'], sonnet: ['low', 'medium'] } },
     defaults: { claude: { opus: 'high', sonnet: 'medium' } },
+    quick: { claude: 'haiku' },
   }).split('\n').filter(l => !l.startsWith('--')).join('\n')
     .replace(/^Runback_SlotData = /, '').replace(/now = \d+,/, 'now = time(),');
   assert.ok(body.includes('efforts = { claude = {'), 'the fixture carries the new fields');
@@ -580,8 +581,8 @@ test('the addon still loads an inbox that carries effort levels and defaults (ba
   nextSlot(vm, body);
   vm.run('STUB.now = STUB.now + 6; STUB.Tick()');
   vm.run('Runback.Toggle(true); Runback.Render()');
-  // The model list still arrives: the fast-model offer needs haiku in it.
-  assert.equal(vm.evaluate('Runback.FastModelOffer(RunbackDB.chats[1]) ~= nil'), 'true', 'models still read');
+  assert.ok(body.includes('quick = { claude = "haiku" }'), 'the fixture carries quick answer tier');
+  assert.equal(vm.evaluate('Runback.FastModelOffer(RunbackDB.chats[1]) ~= nil'), 'true', 'quick tier still read');
 });
 
 test('each slash command in a reply gets a copy button that opens the copy box with only that line', () => {
