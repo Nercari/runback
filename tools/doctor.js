@@ -9,7 +9,12 @@ const LOGIN_PROBES = [
   ['claude', ['auth', 'status']],
   ['codex', ['login', 'status']],
   ['grok', ['auth', 'status']],
+  ['agy', ['auth', 'status']],
+  ['hermes', ['auth', 'status']],
+  ['opencode', ['auth', 'status']],
 ];
+
+const CHECK_ORDER = ['node', 'python3', 'login', 'x11', 'client', 'slots', 'bridge', 'combatlog'];
 
 function nodeNewer(version) {
   const match = /^v?(\d+)\.(\d+)(?:\.|$)/.exec(String(version).trim());
@@ -30,6 +35,20 @@ function nodeCheck(version) {
   };
 }
 
+function pythonCheck(platform, pythonProbe) {
+  if (platform !== 'linux') {
+    return { name: 'python3', status: 'PASS', detail: 'Linux capture only; python3 is not checked here' };
+  }
+  const r = pythonProbe();
+  if (r.ok) return { name: 'python3', status: 'PASS', detail: r.version };
+  return {
+    name: 'python3',
+    status: 'FAIL',
+    detail: 'python3 is missing or too old for bridge/capture_x11.py.',
+    fix: 'Install python3 (on Arch: sudo pacman -S python).',
+  };
+}
+
 function isLoggedIn(result) {
   if (!result || result.error || result.status !== 0) return false;
   const text = `${result.stdout || ''}\n${result.stderr || ''}`;
@@ -38,12 +57,20 @@ function isLoggedIn(result) {
 }
 
 function loginCheck(probe) {
-  if (probe().some(isLoggedIn)) return { name: 'login', status: 'PASS', detail: 'an agent CLI is logged in' };
+  const results = probe();
+  const logged = LOGIN_PROBES.filter((_, i) => isLoggedIn(results[i])).map(([id]) => id);
+  if (logged.length) {
+    return {
+      name: 'login',
+      status: 'PASS',
+      detail: `${logged.length} of ${LOGIN_PROBES.length} agent CLIs logged in (${logged.join(', ')})`,
+    };
+  }
   return {
     name: 'login',
     status: 'FAIL',
     detail: 'no agent CLI is logged in.',
-    fix: 'Log in once in a terminal with claude, codex, or grok login.',
+    fix: 'Log in once in a terminal (see docs/AGENTS.md: claude, codex, grok login, agy, hermes setup, opencode auth login).',
   };
 }
 
@@ -93,22 +120,97 @@ function clientCheck(client) {
   return { name: 'client', status: 'PASS', detail: `${client.dir} (Interface ${client.interface})` };
 }
 
+function slotsCheck(client) {
+  if (client && client.slots === true) {
+    return { name: 'slots', status: 'PASS', detail: 'reply slots are installed' };
+  }
+  if (!client || !client.dir) {
+    return {
+      name: 'slots',
+      status: 'FAIL',
+      detail: 'no client folder to check slots in.',
+      fix: 'Run node setup.js first.',
+    };
+  }
+  const toc = path.join(client.dir, 'Interface', 'AddOns', 'Runback_S001', 'Runback_S001.toc');
+  if (fs.existsSync(toc)) return { name: 'slots', status: 'PASS', detail: 'reply slots are installed' };
+  return {
+    name: 'slots',
+    status: 'FAIL',
+    detail: 'Runback_S001 is missing under the client folder.',
+    fix: 'Run node setup.js or npm run slots, then fully restart the game.',
+  };
+}
+
+function bridgeCheck(platform, bridgeRunning) {
+  if (platform !== 'linux') {
+    return { name: 'bridge', status: 'PASS', detail: 'bridge process check is for Linux sessions' };
+  }
+  if (bridgeRunning()) {
+    return { name: 'bridge', status: 'PASS', detail: 'supervisor is running' };
+  }
+  return {
+    name: 'bridge',
+    status: 'FAIL',
+    detail: 'the bridge supervisor is not running.',
+    fix: 'Start it with npm run go or npm start in this repo.',
+  };
+}
+
+// Combat logging is read-only from the host: a log file means the player turned it on.
+function combatlogCheck(client, combatLogState) {
+  const state = typeof combatLogState === 'function' ? combatLogState(client) : combatLogState;
+  if (state === 'on') return { name: 'combatlog', status: 'PASS', detail: 'a WoW combat log file is present' };
+  if (state === 'off') {
+    return {
+      name: 'combatlog',
+      status: 'FAIL',
+      detail: 'no combat log file was found under the client.',
+      fix: 'Turn on combat logging in game (INSTALL-LINUX.md step 5), fight once, then run doctor again.',
+    };
+  }
+  return {
+    name: 'combatlog',
+    status: 'PASS',
+    detail: 'enable combat logging in game before reviews (INSTALL-LINUX.md step 5)',
+  };
+}
+
 function formatCheck(check) {
   if (check.status === 'PASS') return `PASS ${check.name}: ${check.detail}`;
   return `FAIL ${check.name}: ${check.detail} ${check.fix}`;
 }
 
-function run(opts) {
-  const env = opts.env || {};
-  const checks = [
+function buildChecks(opts) {
+  return [
     nodeCheck(opts.nodeVersion),
+    pythonCheck(opts.platform, opts.pythonProbe),
     loginCheck(opts.probe),
-    x11Check(env, opts.platform),
+    x11Check(opts.env || {}, opts.platform),
     clientCheck(opts.client),
+    slotsCheck(opts.client),
+    bridgeCheck(opts.platform, opts.bridgeRunning),
+    combatlogCheck(opts.client, opts.combatLogState),
   ];
-  const lines = checks.map(formatCheck);
-  const code = checks.every((check) => check.status === 'PASS') ? 0 : 1;
-  return { code, text: `${lines.join('\n')}\n` };
+}
+
+function checkCount() {
+  return CHECK_ORDER.length;
+}
+
+function run(opts) {
+  const checks = buildChecks(opts);
+  const byName = Object.fromEntries(checks.map((c) => [c.name, c]));
+  const ordered = CHECK_ORDER.map((n) => byName[n]);
+  const lines = ordered.map(formatCheck);
+  const code = ordered.every((check) => check.status === 'PASS') ? 0 : 1;
+  return { code, text: `${lines.join('\n')}\n`, checks: ordered };
+}
+
+function realPythonProbe() {
+  const r = spawnSync('python3', ['--version'], { encoding: 'utf8', timeout: 5000 });
+  const text = `${r.stdout || ''}${r.stderr || ''}`.trim();
+  return { ok: !r.error && r.status === 0 && /^Python 3\./.test(text), version: text || 'python3' };
 }
 
 function realProbe(env) {
@@ -128,6 +230,25 @@ function realProbe(env) {
       error: result.error ? (result.error.code || 'error') : '',
     };
   });
+}
+
+function combatLogOnDisk(client) {
+  if (!client || !client.dir) return 'unknown';
+  const logs = path.join(client.dir, 'Logs');
+  try {
+    const names = fs.readdirSync(logs);
+    if (names.some((n) => /^WoWCombatLog/i.test(n))) return 'on';
+    if (fs.existsSync(logs)) return 'off';
+  } catch {
+    return 'unknown';
+  }
+  return 'unknown';
+}
+
+function linuxBridgeRunning(bridgeDir = path.join(__dirname, '..', 'bridge')) {
+  const sup = path.join(bridgeDir, 'supervisor.js');
+  const r = spawnSync('pgrep', ['-f', sup], { encoding: 'utf8' });
+  return !r.error && r.status === 0 && r.stdout.trim().length > 0;
 }
 
 function tocNumber(clientDir) {
@@ -164,12 +285,26 @@ function main() {
     platform: process.platform,
     env: process.env,
     probe: () => realProbe(process.env),
+    pythonProbe: realPythonProbe,
+    bridgeRunning: () => linuxBridgeRunning(),
+    combatLogState: combatLogOnDisk,
     client: findClientInfo(),
   });
   process.stdout.write(out.text);
   process.exit(out.code);
 }
 
-module.exports = { run, findClientInfo, tocNumber };
+module.exports = {
+  run,
+  findClientInfo,
+  tocNumber,
+  LOGIN_PROBES,
+  CHECK_ORDER,
+  checkCount,
+  buildChecks,
+  combatLogOnDisk,
+  linuxBridgeRunning,
+  realPythonProbe,
+};
 
 if (require.main === module) main();
