@@ -55,7 +55,7 @@ One coach note per pull has to cost about nothing, so a fight review and the bet
 Short questions on the starter card can switch the chat to the quick answer tier so a one-line answer costs about nothing. Claude uses the same cheap default as fight reviews (`haiku`, set in `bridge/models.js`); other agents offer a quick tier only when their built-in row or your `quickModel` names one on their model list.
 
 - Change it per agent: `"quickModel": "sonnet"` under `agents.claude`. Give a model that agent offers.
-- Turn the built-in quick tier off: set `quickModel` to a model not on the list, or remove the cheap model from `models`, and the starter card stops offering a quick tier for that agent.
+- Turn the built-in quick tier off: remove the cheap model from `models`, and the starter card stops offering a quick tier for that agent. A `quickModel` value the agent does not offer is ignored and the built-in quick tier still applies.
 
 ## Permissions
 

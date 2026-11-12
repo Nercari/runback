@@ -21,6 +21,16 @@ test('user-visible quick tier and stall recovery are documented with a release f
   const configDoc = fs.readFileSync(path.join(root, 'docs/CONFIGURATION.md'), 'utf8');
   assert.match(configDoc, /`quickModel`/, 'configuration reference names the quickModel key');
   assert.match(configDoc, /quick answer tier/i);
+  assert.doesNotMatch(
+    configDoc,
+    /set `quickModel` to a model not on the list/i,
+    'configuration must not claim an invalid quickModel disables the built-in tier',
+  );
+  assert.match(
+    configDoc,
+    /remove the cheap model from `models`/i,
+    'configuration names the working way to turn off the built-in quick tier',
+  );
   const spec = fs.readFileSync(path.join(root, 'docs/spec.md'), 'utf8');
   assert.match(spec, /another agent installed on the bridge PC/);
   assert.ok(fs.existsSync(path.join(root, 'changes/quick-answer-tier.md')), 'release-note fragment for the quick tier');
