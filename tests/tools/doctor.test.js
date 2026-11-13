@@ -186,7 +186,7 @@ test('supervisorMatchesCheckout accepts npm start (repo root cwd, relative super
   const bridgeDir = path.join(ROOT, 'bridge');
   const repoRoot = repoRootFromBridge(bridgeDir);
   const readers = {
-    cmdline: () => `${process.execPath} bridge/supervisor.js`,
+    argv: () => [process.execPath, 'bridge/supervisor.js'],
     cwd: () => repoRoot,
   };
   assert.equal(supervisorMatchesCheckout(9001, bridgeDir, () => true, readers), true);
@@ -195,10 +195,42 @@ test('supervisorMatchesCheckout accepts npm start (repo root cwd, relative super
 test('supervisorMatchesCheckout accepts npm start with either path separator', () => {
   const bridgeDir = path.join(ROOT, 'bridge');
   const repoRoot = repoRootFromBridge(bridgeDir);
-  for (const cmdline of ['node bridge/supervisor.js', 'node bridge\\supervisor.js']) {
-    const readers = { cmdline: () => cmdline, cwd: () => repoRoot };
-    assert.equal(supervisorMatchesCheckout(9001, bridgeDir, () => true, readers), true, cmdline);
+  for (const argv of [['node', 'bridge/supervisor.js'], ['node', 'bridge\\supervisor.js']]) {
+    const readers = { argv: () => argv, cwd: () => repoRoot };
+    assert.equal(supervisorMatchesCheckout(9001, bridgeDir, () => true, readers), true, argv.join(' '));
   }
+});
+
+test('supervisorMatchesCheckout rejects anything but a node running this checkout supervisor', () => {
+  const bridgeDir = path.join(ROOT, 'bridge');
+  const repoRoot = repoRootFromBridge(bridgeDir);
+  const supPath = path.join(bridgeDir, 'supervisor.js');
+  const reject = [
+    ['vim', ['vim', 'bridge/supervisor.js']],
+    ['less', ['less', 'bridge/supervisor.js']],
+    ['tail', ['tail', '-f', 'bridge/supervisor.js']],
+    ['bash -c', ['bash', '-c', 'node bridge/supervisor.js']],
+    ['cat absolute', ['cat', supPath]],
+    ['other dir', ['node', 'other/supervisor.js']],
+    ['other checkout', ['node', 'bridge/supervisor.js']],
+  ];
+  for (const [name, argv] of reject) {
+    const cwd = name === 'other checkout' ? path.join(os.tmpdir(), 'other-checkout') : repoRoot;
+    const readers = { argv: () => argv, cwd: () => cwd, exe: () => `/usr/bin/${argv[0]}` };
+    assert.equal(supervisorMatchesCheckout(9001, bridgeDir, () => true, readers), false, name);
+  }
+  const accept = [
+    ['repo root', ['node', 'bridge/supervisor.js'], repoRoot],
+    ['backslash', ['node', 'bridge\\supervisor.js'], repoRoot],
+    ['bridge cwd', ['node', 'supervisor.js'], path.join(ROOT, 'bridge')],
+    ['absolute', ['node', supPath], os.tmpdir()],
+  ];
+  for (const [name, argv, cwd] of accept) {
+    const readers = { argv: () => argv, cwd: () => cwd, exe: () => '' };
+    assert.equal(supervisorMatchesCheckout(9001, bridgeDir, () => true, readers), true, name);
+  }
+  const exeOnly = { argv: () => ['/custom/node-v20', 'bridge/supervisor.js'], cwd: () => repoRoot, exe: () => '/usr/local/bin/node' };
+  assert.equal(supervisorMatchesCheckout(9001, bridgeDir, () => true, exeOnly), true, 'node exe');
 });
 
 test('readSupervisorPid keeps npm-start supervisor identity without clearing pid file', (t) => {
@@ -206,7 +238,7 @@ test('readSupervisorPid keeps npm-start supervisor identity without clearing pid
   const repoRoot = repoRootFromBridge(bridgeDir);
   writeSupervisorPidFile(bridgeDir, 9001);
   const npmStart = (pid, dir) => supervisorMatchesCheckout(pid, dir, () => true, {
-    cmdline: () => 'node bridge/supervisor.js',
+    argv: () => ['node', 'bridge/supervisor.js'],
     cwd: () => repoRoot,
   });
   assert.equal(readSupervisorPid(bridgeDir, (pid) => pid === 9001, npmStart), 9001);
@@ -236,12 +268,18 @@ test('readSupervisorPid finds a supervisor started without a pid file', (t) => {
 test('scanSupervisorPids finds this checkout supervisor by process scan', (t) => {
   const procRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'runback-proc-'));
   t.after(() => fs.rmSync(procRoot, { recursive: true, force: true }));
-  for (const name of ['1', '9001', '9002', 'self']) fs.writeFileSync(path.join(procRoot, name), '');
+  for (const name of ['1', '9001', '9002', '9003', 'self']) fs.writeFileSync(path.join(procRoot, name), '');
   const bridgeDir = path.join(ROOT, 'bridge');
   const repoRoot = repoRootFromBridge(bridgeDir);
+  const argvOf = {
+    9001: ['vim', 'bridge/supervisor.js'],
+    9002: ['node', 'bridge/supervisor.js'],
+    9003: ['tail', '-f', 'bridge/supervisor.js'],
+  };
   const readers = {
-    cmdline: (pid) => (pid === 9002 ? 'node bridge/supervisor.js' : 'node other.js'),
+    argv: (pid) => argvOf[pid] || ['node', 'other.js'],
     cwd: () => repoRoot,
+    exe: (pid) => (argvOf[pid] ? argvOf[pid][0] : 'node'),
   };
   assert.deepEqual(scanSupervisorPids(bridgeDir, () => true, readers, procRoot), [9002]);
 });
@@ -262,7 +300,7 @@ test('supervisor pid file works when go starts with cwd bridge (not repo root)',
   const bridgeDir = tempBridgeDir(t);
   writeSupervisorPidFile(bridgeDir, 5150);
   const fromBridgeCwd = (pid, dir) => supervisorMatchesCheckout(pid, dir, () => true, {
-    cmdline: () => 'node supervisor.js',
+    argv: () => ['node', 'supervisor.js'],
     cwd: () => bridgeDir,
   });
   assert.equal(readSupervisorPid(bridgeDir, (pid) => pid === 5150, fromBridgeCwd), 5150);
@@ -299,7 +337,7 @@ test('readSupervisorPid drops a reused pid that is not this checkout supervisor'
   const pidFile = supervisorPidFile(bridgeDir);
   writeSupervisorPidFile(bridgeDir, 4242);
   const alien = (pid, dir) => supervisorMatchesCheckout(pid, dir, () => true, {
-    cmdline: () => 'sleep 999',
+    argv: () => ['sleep', '999'],
     cwd: () => '/tmp',
   });
   assert.equal(readSupervisorPid(bridgeDir, () => true, alien), 0);

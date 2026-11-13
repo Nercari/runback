@@ -312,30 +312,54 @@ function readRawSupervisorPid(bridgeDir = path.join(__dirname, '..', 'bridge')) 
   }
 }
 
-function readProcCmdline(pid) {
+function readProcArgv(pid) {
   try {
-    return fs.readFileSync(path.join('/proc', String(pid), 'cmdline'), 'utf8').replace(/\0/g, ' ');
+    const text = fs.readFileSync(path.join('/proc', String(pid), 'cmdline'), 'utf8');
+    return text.split('\0').filter((arg) => arg !== '');
+  } catch {
+    return [];
+  }
+}
+
+function readProcExe(pid) {
+  try {
+    return fs.readlinkSync(path.join('/proc', String(pid), 'exe'));
   } catch {
     return '';
   }
 }
 
+const NODE_BINARIES = ['node', 'nodejs', 'node.exe', 'nodejs.exe'];
+
+function isNodeProcess(pid, argv, exeOf = readProcExe) {
+  const base = (p) => String(p || '').split(/[/\\]/).pop().toLowerCase();
+  return NODE_BINARIES.includes(base(argv[0])) || NODE_BINARIES.includes(base(exeOf(pid)));
+}
+
+// Compare slash styles and Windows case, so a backslash argument still matches.
+function samePath(a, b) {
+  const norm = (p) => path.resolve(p).replace(/\\/g, '/');
+  const [x, y] = [norm(a), norm(b)];
+  return process.platform === 'win32' ? x.toLowerCase() === y.toLowerCase() : x === y;
+}
+
+function supervisorArgMatches(arg, cwdResolved, supPath) {
+  if (String(arg).split(/[/\\]/).pop() !== 'supervisor.js') return false;
+  if (!cwdResolved && !path.isAbsolute(String(arg))) return false;
+  return samePath(path.resolve(cwdResolved || '/', String(arg)), supPath);
+}
+
+// A supervisor is a node process whose argv names this checkout's supervisor.js.
 function supervisorMatchesCheckout(pid, bridgeDir, alive = pidAlive, readers = null) {
   if (!pid || !alive(pid)) return false;
-  const bridgeReal = path.resolve(bridgeDir);
-  const repoRoot = path.resolve(repoRootFromBridge(bridgeDir));
-  const cmd = readers && readers.cmdline ? readers.cmdline(pid) : readProcCmdline(pid);
-  if (!/supervisor\.js/.test(cmd)) return false;
-  const supPath = path.join(bridgeReal, 'supervisor.js');
-  if (cmd.includes(supPath)) return true;
+  const argv = readers && readers.argv ? readers.argv(pid) : readProcArgv(pid);
+  if (!argv || argv.length < 2) return false;
+  const exeOf = readers && readers.exe ? readers.exe : readProcExe;
+  if (!isNodeProcess(pid, argv, exeOf)) return false;
+  const supPath = path.join(path.resolve(bridgeDir), 'supervisor.js');
   const cwd = readers && readers.cwd ? readers.cwd(pid) : readProcCwd(pid);
   const cwdResolved = cwd !== '' ? path.resolve(cwd) : '';
-  if (cwdResolved === bridgeReal) return true;
-  const relSup = path.join('bridge', 'supervisor.js');
-  // npm start runs `node bridge/supervisor.js` on every OS, so accept both separators.
-  const relSupAlt = relSup.includes('\\') ? relSup.replace(/\\/g, '/') : relSup.replace(/\//g, '\\');
-  if (cwdResolved === repoRoot && (cmd.includes(relSup) || cmd.includes(relSupAlt) || cmd.includes(supPath))) return true;
-  return false;
+  return argv.slice(1).some((arg) => supervisorArgMatches(arg, cwdResolved, supPath));
 }
 
 // A supervisor started by an older revision wrote no pid file; find it by scan.
@@ -476,7 +500,7 @@ module.exports = {
   listSupervisorPids,
   repoRootFromBridge,
   readProcCwd,
-  readProcCmdline,
+  readProcArgv,
   supervisorMatchesCheckout,
   scanSupervisorPids,
   waitForSupervisorStop,
