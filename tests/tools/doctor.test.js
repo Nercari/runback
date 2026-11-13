@@ -302,6 +302,59 @@ test('scanSupervisorPids matches a real supervisor and not a node process with t
   assert.deepEqual(scanSupervisorPids(bridgeDir), [supervisor.pid]);
 });
 
+test('readSupervisorPid keeps the pid of a supervisor started through a runback symlink', (t) => {
+  if (process.platform !== 'linux') return t.skip('reads /proc');
+  const bridgeDir = tempBridgeDir(t);
+  const root = path.dirname(bridgeDir);
+  const sup = path.join(bridgeDir, 'supervisor.js');
+  fs.copyFileSync(path.join(ROOT, 'bridge', 'supervisor.js'), sup);
+  fs.chmodSync(sup, 0o755);
+  fs.writeFileSync(path.join(bridgeDir, 'bridge.js'), 'setInterval(() => {}, 1000);\n');
+  const bin = path.join(root, 'bin');
+  fs.mkdirSync(bin);
+  fs.symlinkSync(path.relative(bin, sup), path.join(bin, 'runback'));
+  const launcher = spawn(path.join(bin, 'runback'), [], { stdio: 'ignore' });
+  t.after(() => launcher.kill());
+  const other = path.join(root, 'other.js');
+  fs.writeFileSync(other, 'setInterval(() => {}, 1000);\n');
+  const noisy = spawn(process.execPath, [other, '--x', sup], { stdio: 'ignore' });
+  t.after(() => noisy.kill());
+  const pidFile = supervisorPidFile(bridgeDir);
+  const ready = () => fs.existsSync(pidFile) && fs.existsSync(`/proc/${launcher.pid}/cmdline`) && fs.existsSync(`/proc/${noisy.pid}/cmdline`);
+  const deadline = Date.now() + 5000;
+  while (!ready() && Date.now() < deadline) spawnSync('sleep', ['0.05']);
+  assert.equal(readSupervisorPid(bridgeDir), launcher.pid);
+  assert.equal(fs.existsSync(pidFile), true);
+  assert.deepEqual(scanSupervisorPids(bridgeDir), [launcher.pid]);
+});
+
+test('go keeps the pending bridge restart when setup fails after a bridge update', (t) => {
+  const bridgeDir = tempBridgeDir(t);
+  const root = path.dirname(bridgeDir);
+  const flag = path.join(bridgeDir, '.restart-pending');
+  const calls = [];
+  const run = (updater, setupOk) => go({
+    platform: 'linux',
+    root,
+    argv: [],
+    updater,
+    runner: (script) => (script.endsWith('setup.js')
+      ? { ok: setupOk, code: setupOk ? 0 : 1, out: setupOk ? '' : 'setup: EACCES copying addon' }
+      : { ok: true, code: 0, out: '' }),
+    bridgeRunning: () => true,
+    stopSupervisor: () => calls.push('stop'),
+    start: () => calls.push('start'),
+  });
+  const first = run(() => ({ changed: true, note: 'updated', files: ['bridge/bridge.js'] }), false);
+  assert.equal(first.ok, false);
+  assert.deepEqual(calls, []);
+  assert.equal(fs.existsSync(flag), true);
+  const second = run(() => ({ changed: false, note: 'up to date', files: [] }), true);
+  assert.equal(second.ok, true);
+  assert.deepEqual(calls, ['stop', 'start']);
+  assert.equal(fs.existsSync(flag), false);
+});
+
 test('go keeps the pending bridge restart when doctor fails after a bridge update', (t) => {
   const bridgeDir = tempBridgeDir(t);
   const root = path.dirname(bridgeDir);
@@ -406,11 +459,12 @@ test('stopLinuxSupervisor waits for the process to exit before clearing the pid 
   assert.equal(fs.existsSync(pidFile), false);
 });
 
-test('go waits for stopSupervisor before start when restarting after an update', () => {
+test('go waits for stopSupervisor before start when restarting after an update', (t) => {
+  const bridgeDir = tempBridgeDir(t);
   const order = [];
   const r = go({
     platform: 'linux',
-    root: ROOT,
+    root: path.dirname(bridgeDir),
     argv: [],
     updater: () => ({ changed: true, files: ['bridge/bridge.js'], note: 'updated' }),
     runner: (script) => {

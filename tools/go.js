@@ -71,6 +71,10 @@ function go({ root = ROOT, argv = [], platform = process.platform, updater = upd
   const up = skipUpdate ? { changed: false, note: 'skipped (--no-update)' } : updater(root);
   lines.push(`update : ${up.note}`);
 
+  // Record the restart before setup or doctor can fail, so the next run keeps it.
+  const bridgeDir = path.join(root, 'bridge');
+  if (bridgeCodeChanged(up.files || []) && bridgeRunning()) markRestartPending(bridgeDir);
+
   const setup = runner(path.join(root, 'setup.js'), setupArgsFor(root));
   if (!setup.ok) {
     lines.push(setup.out.trim() || 'setup failed');
@@ -80,13 +84,11 @@ function go({ root = ROOT, argv = [], platform = process.platform, updater = upd
   const doc = runner(path.join(root, 'tools', 'doctor.js'), ['--pre-start']);
   if (doc.out.trim()) lines.push(doc.out.trimEnd());
   if (doc.code !== 0) {
-    if (bridgeRunning() && bridgeCodeChanged(up.files || [])) markRestartPending(path.join(root, 'bridge'));
     lines.push('');
     lines.push('Doctor reported failures; fix them, then run npm run go again.');
     return { ok: false, code: doc.code || 1, lines };
   }
 
-  const bridgeDir = path.join(root, 'bridge');
   if (bridgeRunning()) {
     if (bridgeCodeChanged(up.files || []) || restartPending(bridgeDir)) {
       stopSupervisor(bridgeDir);

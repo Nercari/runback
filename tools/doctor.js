@@ -343,10 +343,14 @@ function samePath(a, b) {
   return process.platform === 'win32' ? x.toLowerCase() === y.toLowerCase() : x === y;
 }
 
+function realPath(p) {
+  try { return fs.realpathSync(p); } catch { return p; }
+}
+
+// A launcher symlink (`npm link` -> runback) resolves to the supervisor script.
 function supervisorArgMatches(arg, cwdResolved, supPath) {
-  if (String(arg).split(/[/\\]/).pop() !== 'supervisor.js') return false;
   if (!cwdResolved && !path.isAbsolute(String(arg))) return false;
-  return samePath(path.resolve(cwdResolved || '/', String(arg)), supPath);
+  return samePath(realPath(path.resolve(cwdResolved || '/', String(arg))), realPath(supPath));
 }
 
 // The script node runs is its first argument that is not an option.
