@@ -1,0 +1,11 @@
+{
+  "installDoc": "docs/INSTALL-LINUX.md",
+  "quickStartHeading": "## Quick start",
+  "maxSteps": 6,
+  "baselineSteps": 12,
+  "doctorChecks": 8,
+  "baselineDoctorChecks": 4,
+  "agentProbes": 6,
+  "baselineAgentProbes": 3,
+  "combatLogPhrase": "combat log"
+}
