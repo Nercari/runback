@@ -5,7 +5,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
-const { spawnSync } = require('node:child_process');
+const { spawn, spawnSync } = require('node:child_process');
 const {
   run,
   findClientInfo,
@@ -282,6 +282,52 @@ test('scanSupervisorPids finds this checkout supervisor by process scan', (t) =>
     exe: (pid) => (argvOf[pid] ? argvOf[pid][0] : 'node'),
   };
   assert.deepEqual(scanSupervisorPids(bridgeDir, () => true, readers, procRoot), [9002]);
+});
+
+test('scanSupervisorPids matches a real supervisor and not a node process with the same later argument', (t) => {
+  if (process.platform !== 'linux') return t.skip('reads /proc');
+  const bridgeDir = tempBridgeDir(t);
+  const root = path.dirname(bridgeDir);
+  fs.copyFileSync(path.join(ROOT, 'bridge', 'supervisor.js'), path.join(bridgeDir, 'supervisor.js'));
+  fs.writeFileSync(path.join(bridgeDir, 'bridge.js'), 'setInterval(() => {}, 1000);\n');
+  const supervisor = spawn(process.execPath, [path.join(bridgeDir, 'supervisor.js')], { cwd: root, stdio: 'ignore' });
+  t.after(() => supervisor.kill());
+  const other = path.join(root, 'other.js');
+  fs.writeFileSync(other, 'setInterval(() => {}, 1000);\n');
+  const noisy = spawn(process.execPath, [other, '--x', path.join(bridgeDir, 'supervisor.js')], { cwd: root, stdio: 'ignore' });
+  t.after(() => noisy.kill());
+  const seen = () => fs.existsSync(`/proc/${supervisor.pid}/cmdline`) && fs.existsSync(`/proc/${noisy.pid}/cmdline`);
+  const deadline = Date.now() + 5000;
+  while (!seen() && Date.now() < deadline) spawnSync('sleep', ['0.05']);
+  assert.deepEqual(scanSupervisorPids(bridgeDir), [supervisor.pid]);
+});
+
+test('go keeps the pending bridge restart when doctor fails after a bridge update', (t) => {
+  const bridgeDir = tempBridgeDir(t);
+  const root = path.dirname(bridgeDir);
+  const flag = path.join(bridgeDir, '.restart-pending');
+  const calls = [];
+  const run = (updater, docCode) => go({
+    platform: 'linux',
+    root,
+    argv: [],
+    updater,
+    runner: (script) => (script.endsWith('doctor.js')
+      ? { ok: docCode === 0, code: docCode, out: '' }
+      : { ok: true, code: 0, out: '' }),
+    bridgeRunning: () => true,
+    stopSupervisor: () => calls.push('stop'),
+    start: () => calls.push('start'),
+  });
+  const first = run(() => ({ changed: true, note: 'updated', files: ['bridge/bridge.js'] }), 1);
+  assert.equal(first.ok, false);
+  assert.deepEqual(calls, []);
+  assert.equal(fs.existsSync(flag), true);
+  const second = run(() => ({ changed: false, note: 'up to date', files: [] }), 0);
+  assert.equal(second.ok, true);
+  assert.deepEqual(calls, ['stop', 'start']);
+  assert.equal(second.lines.some((l) => l.startsWith('bridge : restarted supervisor')), true);
+  assert.equal(fs.existsSync(flag), false);
 });
 
 test('linuxBridgeRunning trusts only this checkout supervisor.pid record', (t) => {

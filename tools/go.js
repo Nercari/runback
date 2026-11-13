@@ -5,6 +5,7 @@
 //   node tools/go.js [--no-update]
 
 const path = require('node:path');
+const fs = require('node:fs');
 const { spawn, spawnSync } = require('node:child_process');
 const { update } = require('./launch');
 const {
@@ -13,6 +14,22 @@ const {
 
 const ROOT = path.join(__dirname, '..');
 const BRIDGE = path.join(ROOT, 'bridge');
+
+// A bridge update found while doctor fails would be lost when the next run
+// reports no changed files, so the restart waits here until it happens.
+const RESTART_PENDING = '.restart-pending';
+
+function restartPending(bridgeDir = BRIDGE) {
+  return fs.existsSync(path.join(bridgeDir, RESTART_PENDING));
+}
+
+function markRestartPending(bridgeDir = BRIDGE) {
+  try { fs.writeFileSync(path.join(bridgeDir, RESTART_PENDING), '1'); } catch {}
+}
+
+function clearRestartPending(bridgeDir = BRIDGE) {
+  try { fs.unlinkSync(path.join(bridgeDir, RESTART_PENDING)); } catch {}
+}
 
 function runNode(script, args = [], opts = {}) {
   const r = spawnSync(process.execPath, [script, ...args], {
@@ -63,6 +80,7 @@ function go({ root = ROOT, argv = [], platform = process.platform, updater = upd
   const doc = runner(path.join(root, 'tools', 'doctor.js'), ['--pre-start']);
   if (doc.out.trim()) lines.push(doc.out.trimEnd());
   if (doc.code !== 0) {
+    if (bridgeRunning() && bridgeCodeChanged(up.files || [])) markRestartPending(path.join(root, 'bridge'));
     lines.push('');
     lines.push('Doctor reported failures; fix them, then run npm run go again.');
     return { ok: false, code: doc.code || 1, lines };
@@ -70,13 +88,15 @@ function go({ root = ROOT, argv = [], platform = process.platform, updater = upd
 
   const bridgeDir = path.join(root, 'bridge');
   if (bridgeRunning()) {
-    if (bridgeCodeChanged(up.files || [])) {
+    if (bridgeCodeChanged(up.files || []) || restartPending(bridgeDir)) {
       stopSupervisor(bridgeDir);
       start(bridgeDir);
+      clearRestartPending(bridgeDir);
       lines.push('bridge : restarted supervisor after a bridge update');
     } else lines.push('bridge : already running');
   } else {
     start(bridgeDir);
+    clearRestartPending(bridgeDir);
     lines.push('bridge : started supervisor in the background; stop it with npm run stop');
   }
   return { ok: true, code: 0, lines };

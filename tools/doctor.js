@@ -349,7 +349,12 @@ function supervisorArgMatches(arg, cwdResolved, supPath) {
   return samePath(path.resolve(cwdResolved || '/', String(arg)), supPath);
 }
 
-// A supervisor is a node process whose argv names this checkout's supervisor.js.
+// The script node runs is its first argument that is not an option.
+function supervisorScriptArg(argv) {
+  return String(argv.slice(1).find((arg) => !String(arg).startsWith('-')) || '');
+}
+
+// A supervisor is a node process whose script argument is this checkout's supervisor.js.
 function supervisorMatchesCheckout(pid, bridgeDir, alive = pidAlive, readers = null) {
   if (!pid || !alive(pid)) return false;
   const argv = readers && readers.argv ? readers.argv(pid) : readProcArgv(pid);
@@ -359,7 +364,8 @@ function supervisorMatchesCheckout(pid, bridgeDir, alive = pidAlive, readers = n
   const supPath = path.join(path.resolve(bridgeDir), 'supervisor.js');
   const cwd = readers && readers.cwd ? readers.cwd(pid) : readProcCwd(pid);
   const cwdResolved = cwd !== '' ? path.resolve(cwd) : '';
-  return argv.slice(1).some((arg) => supervisorArgMatches(arg, cwdResolved, supPath));
+  const script = supervisorScriptArg(argv);
+  return script !== '' && supervisorArgMatches(script, cwdResolved, supPath);
 }
 
 // A supervisor started by an older revision wrote no pid file; find it by scan.
