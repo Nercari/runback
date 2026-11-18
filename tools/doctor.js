@@ -8,8 +8,13 @@ const { spawnSync } = require('node:child_process');
 const LOGIN_PROBES = [
   ['claude', ['auth', 'status']],
   ['codex', ['login', 'status']],
-  ['grok', ['auth', 'status']],
+  ['grok', ['-p', '0', '--print-timeout', '2s', '--output-format', 'text'], 'grok-headless'],
+  ['agy', ['-p=0', '--print-timeout', '2s', '--output-format', 'text'], 'agy-headless'],
+  ['hermes', ['auth', 'list'], 'hermes-list'],
+  ['opencode', ['auth', 'list'], 'opencode-list'],
 ];
+
+const CHECK_ORDER = ['node', 'python3', 'login', 'x11', 'client', 'slots', 'bridge', 'combatlog'];
 
 function nodeNewer(version) {
   const match = /^v?(\d+)\.(\d+)(?:\.|$)/.exec(String(version).trim());
@@ -30,20 +35,68 @@ function nodeCheck(version) {
   };
 }
 
-function isLoggedIn(result) {
-  if (!result || result.error || result.status !== 0) return false;
-  const text = `${result.stdout || ''}\n${result.stderr || ''}`;
-  if (/not logged in|login required|please log in|not authenticated|"loggedIn"\s*:\s*false/i.test(text)) return false;
+function pythonCheck(platform, pythonProbe) {
+  if (platform !== 'linux') {
+    return { name: 'python3', status: 'PASS', detail: 'Linux capture only; python3 is not checked here' };
+  }
+  const r = pythonProbe();
+  if (r.ok) return { name: 'python3', status: 'PASS', detail: r.version };
+  return {
+    name: 'python3',
+    status: 'FAIL',
+    detail: 'python3 is missing or too old for bridge/capture_x11.py.',
+    fix: 'Install python3 (on Arch: sudo pacman -S python).',
+  };
+}
+
+function loginProbeText(result) {
+  return `${result.stdout || ''}\n${result.stderr || ''}`;
+}
+
+function hermesListLoggedIn(text) {
+  return [...text.matchAll(/\((\d+)\s+credentials?\)/gi)].some((m) => Number(m[1]) > 0);
+}
+
+function isLoggedIn(entry, result) {
+  if (!result || result.error) return false;
+  const kind = Array.isArray(entry) ? (entry[2] || 'default') : 'default';
+  const text = loginProbeText(result);
+
+  if (kind === 'hermes-list') {
+    if (result.status !== 0) return false;
+    return hermesListLoggedIn(text);
+  }
+  if (kind === 'opencode-list') {
+    if (result.status !== 0) return false;
+    if (/no authenticated integrations/i.test(text)) return false;
+    if (text.trim() === '[]') return false;
+    return true;
+  }
+  if (kind === 'agy-headless' || kind === 'grok-headless') {
+    if (/authentication required|not signed in|not logged in/i.test(text)) return false;
+    if (result.status === 0) return true;
+    return false;
+  }
+  if (result.status !== 0) return false;
+  if (/not logged in|login required|please log in|not authenticated|not signed in|"loggedIn"\s*:\s*false/i.test(text)) return false;
   return true;
 }
 
 function loginCheck(probe) {
-  if (probe().some(isLoggedIn)) return { name: 'login', status: 'PASS', detail: 'an agent CLI is logged in' };
+  const results = probe();
+  const logged = LOGIN_PROBES.filter((entry, i) => isLoggedIn(entry, results[i])).map(([id]) => id);
+  if (logged.length) {
+    return {
+      name: 'login',
+      status: 'PASS',
+      detail: `${logged.length} of ${LOGIN_PROBES.length} agent CLIs logged in (${logged.join(', ')})`,
+    };
+  }
   return {
     name: 'login',
     status: 'FAIL',
     detail: 'no agent CLI is logged in.',
-    fix: 'Log in once in a terminal with claude, codex, or grok login.',
+    fix: 'Log in once in a terminal (see docs/AGENTS.md: claude, codex, grok login, agy, hermes setup, opencode auth login).',
   };
 }
 
@@ -93,22 +146,102 @@ function clientCheck(client) {
   return { name: 'client', status: 'PASS', detail: `${client.dir} (Interface ${client.interface})` };
 }
 
+function slotsCheck(client) {
+  if (client && client.slots === true) {
+    return { name: 'slots', status: 'PASS', detail: 'reply slots are installed' };
+  }
+  if (!client || !client.dir) {
+    return {
+      name: 'slots',
+      status: 'FAIL',
+      detail: 'no client folder to check slots in.',
+      fix: 'Run node setup.js first.',
+    };
+  }
+  const toc = path.join(client.dir, 'Interface', 'AddOns', 'Runback_S001', 'Runback_S001.toc');
+  if (fs.existsSync(toc)) return { name: 'slots', status: 'PASS', detail: 'reply slots are installed' };
+  return {
+    name: 'slots',
+    status: 'FAIL',
+    detail: 'Runback_S001 is missing under the client folder.',
+    fix: 'Run node setup.js or npm run slots, then fully restart the game.',
+  };
+}
+
+function bridgeCheck(platform, bridgeRunning, preStart) {
+  if (platform !== 'linux') {
+    return { name: 'bridge', status: 'PASS', detail: 'bridge process check is for Linux sessions' };
+  }
+  if (bridgeRunning()) {
+    return { name: 'bridge', status: 'PASS', detail: 'supervisor is running' };
+  }
+  if (preStart) {
+    return { name: 'bridge', status: 'PASS', detail: 'supervisor not running yet; npm run go will start it' };
+  }
+  return {
+    name: 'bridge',
+    status: 'FAIL',
+    detail: 'the bridge supervisor is not running.',
+    fix: 'Start it with npm run go or npm start in this repo.',
+  };
+}
+
+// Combat logging is read-only from the host: a log file means the player turned it on.
+function combatlogCheck(client, combatLogState, preStart) {
+  const state = typeof combatLogState === 'function' ? combatLogState(client) : combatLogState;
+  if (state === 'on') return { name: 'combatlog', status: 'PASS', detail: 'a WoW combat log file is present' };
+  const advisory = {
+    name: 'combatlog',
+    status: 'PASS',
+    detail: 'enable combat logging in game before reviews (INSTALL-LINUX.md step 5)',
+  };
+  if (preStart) return advisory;
+  if (state === 'off') {
+    return {
+      name: 'combatlog',
+      status: 'FAIL',
+      detail: 'no combat log file was found under the client.',
+      fix: 'Turn on combat logging in game (INSTALL-LINUX.md step 5), fight once, then run doctor again.',
+    };
+  }
+  return advisory;
+}
+
 function formatCheck(check) {
   if (check.status === 'PASS') return `PASS ${check.name}: ${check.detail}`;
   return `FAIL ${check.name}: ${check.detail} ${check.fix}`;
 }
 
-function run(opts) {
-  const env = opts.env || {};
-  const checks = [
+function buildChecks(opts) {
+  return [
     nodeCheck(opts.nodeVersion),
+    pythonCheck(opts.platform, opts.pythonProbe),
     loginCheck(opts.probe),
-    x11Check(env, opts.platform),
+    x11Check(opts.env || {}, opts.platform),
     clientCheck(opts.client),
+    slotsCheck(opts.client),
+    bridgeCheck(opts.platform, opts.bridgeRunning, opts.preStart),
+    combatlogCheck(opts.client, opts.combatLogState, opts.preStart),
   ];
-  const lines = checks.map(formatCheck);
-  const code = checks.every((check) => check.status === 'PASS') ? 0 : 1;
-  return { code, text: `${lines.join('\n')}\n` };
+}
+
+function checkCount() {
+  return CHECK_ORDER.length;
+}
+
+function run(opts) {
+  const checks = buildChecks(opts);
+  const byName = Object.fromEntries(checks.map((c) => [c.name, c]));
+  const ordered = CHECK_ORDER.map((n) => byName[n]);
+  const lines = ordered.map(formatCheck);
+  const code = ordered.every((check) => check.status === 'PASS') ? 0 : 1;
+  return { code, text: `${lines.join('\n')}\n`, checks: ordered };
+}
+
+function realPythonProbe() {
+  const r = spawnSync('python3', ['--version'], { encoding: 'utf8', timeout: 5000 });
+  const text = `${r.stdout || ''}${r.stderr || ''}`.trim();
+  return { ok: !r.error && r.status === 0 && /^Python 3\./.test(text), version: text || 'python3' };
 }
 
 function realProbe(env) {
@@ -128,6 +261,185 @@ function realProbe(env) {
       error: result.error ? (result.error.code || 'error') : '',
     };
   });
+}
+
+function combatLogOnDisk(client) {
+  if (!client || !client.dir) return 'unknown';
+  const logs = path.join(client.dir, 'Logs');
+  try {
+    const names = fs.readdirSync(logs);
+    if (names.some((n) => /^WoWCombatLog/i.test(n))) return 'on';
+    if (fs.existsSync(logs)) return 'off';
+  } catch {
+    return 'unknown';
+  }
+  return 'unknown';
+}
+
+function supervisorPidFile(bridgeDir = path.join(__dirname, '..', 'bridge')) {
+  return path.join(bridgeDir, 'supervisor.pid');
+}
+
+function repoRootFromBridge(bridgeDir) {
+  return path.resolve(path.join(bridgeDir, '..'));
+}
+
+function pidAlive(pid, killer = process.kill) {
+  if (!pid) return false;
+  try {
+    killer(pid, 0);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function clearSupervisorPidFile(bridgeDir = path.join(__dirname, '..', 'bridge')) {
+  try { fs.unlinkSync(supervisorPidFile(bridgeDir)); } catch {}
+}
+
+function writeSupervisorPidFile(bridgeDir, pid) {
+  if (!pid) return;
+  fs.writeFileSync(supervisorPidFile(bridgeDir), `${pid}\n`);
+}
+
+function readRawSupervisorPid(bridgeDir = path.join(__dirname, '..', 'bridge')) {
+  try {
+    const pid = Number(String(fs.readFileSync(supervisorPidFile(bridgeDir), 'utf8')).trim());
+    return pid || 0;
+  } catch {
+    return 0;
+  }
+}
+
+function readProcArgv(pid) {
+  try {
+    const text = fs.readFileSync(path.join('/proc', String(pid), 'cmdline'), 'utf8');
+    return text.split('\0').filter((arg) => arg !== '');
+  } catch {
+    return [];
+  }
+}
+
+function readProcExe(pid) {
+  try {
+    return fs.readlinkSync(path.join('/proc', String(pid), 'exe'));
+  } catch {
+    return '';
+  }
+}
+
+const NODE_BINARIES = ['node', 'nodejs', 'node.exe', 'nodejs.exe'];
+
+function isNodeProcess(pid, argv, exeOf = readProcExe) {
+  const base = (p) => String(p || '').split(/[/\\]/).pop().toLowerCase();
+  return NODE_BINARIES.includes(base(argv[0])) || NODE_BINARIES.includes(base(exeOf(pid)));
+}
+
+// Compare slash styles and Windows case, so a backslash argument still matches.
+function samePath(a, b) {
+  const norm = (p) => path.resolve(p).replace(/\\/g, '/');
+  const [x, y] = [norm(a), norm(b)];
+  return process.platform === 'win32' ? x.toLowerCase() === y.toLowerCase() : x === y;
+}
+
+function realPath(p) {
+  try { return fs.realpathSync(p); } catch { return p; }
+}
+
+// A launcher symlink (`npm link` -> runback) resolves to the supervisor script.
+function supervisorArgMatches(arg, cwdResolved, supPath) {
+  if (!cwdResolved && !path.isAbsolute(String(arg))) return false;
+  return samePath(realPath(path.resolve(cwdResolved || '/', String(arg))), realPath(supPath));
+}
+
+// The script node runs is its first argument that is not an option.
+function supervisorScriptArg(argv) {
+  return String(argv.slice(1).find((arg) => !String(arg).startsWith('-')) || '');
+}
+
+// A supervisor is a node process whose script argument is this checkout's supervisor.js.
+function supervisorMatchesCheckout(pid, bridgeDir, alive = pidAlive, readers = null) {
+  if (!pid || !alive(pid)) return false;
+  const argv = readers && readers.argv ? readers.argv(pid) : readProcArgv(pid);
+  if (!argv || argv.length < 2) return false;
+  const exeOf = readers && readers.exe ? readers.exe : readProcExe;
+  if (!isNodeProcess(pid, argv, exeOf)) return false;
+  const supPath = path.join(path.resolve(bridgeDir), 'supervisor.js');
+  const cwd = readers && readers.cwd ? readers.cwd(pid) : readProcCwd(pid);
+  const cwdResolved = cwd !== '' ? path.resolve(cwd) : '';
+  const script = supervisorScriptArg(argv);
+  return script !== '' && supervisorArgMatches(script, cwdResolved, supPath);
+}
+
+// A supervisor started by an older revision wrote no pid file; find it by scan.
+function scanSupervisorPids(bridgeDir = path.join(__dirname, '..', 'bridge'), alive = pidAlive, readers = null, procRoot = '/proc') {
+  let names = [];
+  try { names = fs.readdirSync(procRoot); } catch { return []; }
+  const pids = [];
+  for (const name of names) {
+    if (!/^\d+$/.test(name)) continue;
+    const pid = Number(name);
+    if (pid !== process.pid && supervisorMatchesCheckout(pid, bridgeDir, alive, readers)) pids.push(pid);
+  }
+  return pids;
+}
+
+function waitForSupervisorStop(pid, bridgeDir, alive = pidAlive, sleeper = spawnSync) {
+  if (!pid) return;
+  const deadline = Date.now() + 10000;
+  while (alive(pid) && Date.now() < deadline) {
+    sleeper('sleep', ['0.05'], { encoding: 'utf8' });
+  }
+  if (!alive(pid) && readRawSupervisorPid(bridgeDir) === pid) clearSupervisorPidFile(bridgeDir);
+}
+
+function defaultSupervisorIdentity(pid, bridgeDir, alive = pidAlive) {
+  return supervisorMatchesCheckout(pid, bridgeDir, alive);
+}
+
+function readSupervisorPid(bridgeDir = path.join(__dirname, '..', 'bridge'), alive = pidAlive, identity = defaultSupervisorIdentity, scan = scanSupervisorPids) {
+  const pid = readRawSupervisorPid(bridgeDir);
+  if (pid) {
+    if (!alive(pid)) {
+      clearSupervisorPidFile(bridgeDir);
+    } else if (!identity(pid, bridgeDir, alive)) {
+      clearSupervisorPidFile(bridgeDir);
+    } else {
+      return pid;
+    }
+  }
+  const [found] = scan(bridgeDir, alive);
+  return found || 0;
+}
+
+function listSupervisorPids(bridgeDir = path.join(__dirname, '..', 'bridge'), alive = pidAlive, identity = defaultSupervisorIdentity) {
+  const pid = readSupervisorPid(bridgeDir, alive, identity);
+  return pid ? [pid] : [];
+}
+
+function linuxBridgeRunning(bridgeDir = path.join(__dirname, '..', 'bridge'), alive = pidAlive, identity = defaultSupervisorIdentity) {
+  return listSupervisorPids(bridgeDir, alive, identity).length > 0;
+}
+
+function stopLinuxSupervisor(bridgeDir = path.join(__dirname, '..', 'bridge'), killer = spawnSync, alive = pidAlive, identity = defaultSupervisorIdentity) {
+  const pid = readSupervisorPid(bridgeDir, alive, identity);
+  if (!pid) return;
+  killer('kill', ['-TERM', `-${pid}`], { encoding: 'utf8' });
+  if (alive(pid)) killer('kill', ['-TERM', String(pid)], { encoding: 'utf8' });
+  waitForSupervisorStop(pid, bridgeDir, alive, killer);
+}
+
+function readProcCwd(pid) {
+  try {
+    return fs.realpathSync(path.join('/proc', String(pid), 'cwd'));
+  } catch {
+    return '';
+  }
+}
+
+function bridgeCodeChanged(files = []) {
+  return files.some((f) => f.startsWith('bridge/') || f.startsWith('mentor/') || f === 'package.json');
 }
 
 function tocNumber(clientDir) {
@@ -158,18 +470,51 @@ function findClientInfo(configFile = path.join(__dirname, '..', 'bridge', 'confi
   return { dir, interface: tocNumber(dir) };
 }
 
-function main() {
+function main(argv = process.argv.slice(2)) {
+  const preStart = argv.includes('--pre-start');
   const out = run({
     nodeVersion: process.versions.node,
     platform: process.platform,
     env: process.env,
     probe: () => realProbe(process.env),
+    pythonProbe: realPythonProbe,
+    bridgeRunning: () => linuxBridgeRunning(),
+    combatLogState: combatLogOnDisk,
     client: findClientInfo(),
+    preStart,
   });
   process.stdout.write(out.text);
   process.exit(out.code);
 }
 
-module.exports = { run, findClientInfo, tocNumber };
+module.exports = {
+  run,
+  findClientInfo,
+  tocNumber,
+  LOGIN_PROBES,
+  CHECK_ORDER,
+  checkCount,
+  buildChecks,
+  isLoggedIn,
+  hermesListLoggedIn,
+  combatLogOnDisk,
+  linuxBridgeRunning,
+  stopLinuxSupervisor,
+  bridgeCodeChanged,
+  supervisorPidFile,
+  writeSupervisorPidFile,
+  readSupervisorPid,
+  readRawSupervisorPid,
+  pidAlive,
+  clearSupervisorPidFile,
+  listSupervisorPids,
+  repoRootFromBridge,
+  readProcCwd,
+  readProcArgv,
+  supervisorMatchesCheckout,
+  scanSupervisorPids,
+  waitForSupervisorStop,
+  realPythonProbe,
+};
 
 if (require.main === module) main();

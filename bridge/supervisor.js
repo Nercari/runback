@@ -5,25 +5,60 @@
 // current folder pass straight through to bridge.js, so `cd proj && runback`
 // makes proj the default folder for chats.
 const { spawn } = require('child_process');
+const fs = require('fs');
 const path = require('path');
+
+const PID_FILE = path.join(__dirname, 'supervisor.pid');
 
 let child = null;
 let stopping = false;
+
+function pidAlive(pid) {
+  try { process.kill(pid, 0); return true; } catch (err) { return err.code === 'EPERM'; }
+}
+
+function writePidFile() {
+  // --help and --once are not a supervisor; a live supervisor keeps its record.
+  if (process.argv.slice(2).some((a) => a === '--help' || a === '-h' || a === '--once')) return;
+  try {
+    const owner = Number(fs.readFileSync(PID_FILE, 'utf8').trim());
+    if (owner && owner !== process.pid && pidAlive(owner)) return;
+  } catch {}
+  try { fs.writeFileSync(PID_FILE, String(process.pid)); } catch {}
+}
+
+function clearPidFile() {
+  try {
+    const text = fs.readFileSync(PID_FILE, 'utf8').trim();
+    if (Number(text) === process.pid) fs.unlinkSync(PID_FILE);
+  } catch {}
+}
+
+writePidFile();
 
 function start() {
   child = spawn(process.execPath, [path.join(__dirname, 'bridge.js'), ...process.argv.slice(2)], { stdio: 'inherit' });
   child.on('exit', (code) => {
     child = null;
     if (stopping) return;
-    if (code === 2 || code === 0) process.exit(code); // config problem or --help/--once: don't loop
+    if (code === 2 || code === 0) { clearPidFile(); process.exit(code); } // config problem or --help/--once: don't loop
     console.log(`\nbridge exited (${code}); restarting in 3 s`);
     setTimeout(start, 3000);
   });
 }
 
+function killBridge() {
+  if (!child) return;
+  if (process.platform === 'linux') {
+    try { process.kill(-child.pid, 'SIGTERM'); return; } catch {}
+  }
+  try { child.kill('SIGTERM'); } catch {}
+}
+
 function stop() {
   stopping = true;
-  if (child) child.kill();
+  killBridge();
+  clearPidFile();
   process.exit(0);
 }
 

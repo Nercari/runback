@@ -8,16 +8,18 @@ The addon is the same; only the bridge's screen capture differs. On Linux the br
 - The game under Wine (Lutris, Bottles, a hand-made prefix...), **windowed or borderless**.
 - Node.js 22.2+, python3, and at least one agent CLI logged in (see [AGENTS.md](AGENTS.md)).
 
-## Install
+## Quick start
 
-```bash
-git clone https://github.com/Nercari/runback
-cd runback
-npm ci                      # only needed to run the tests
-node setup.js --wow "$HOME/.wine/drive_c/Program Files (x86)/World of Warcraft/_forever_" --project ~/path/to/the/project
-```
+1. `git clone https://github.com/Nercari/runback && cd runback` (or `git pull` in an existing clone).
+2. **Log in once** per agent CLI you plan to use: `claude`, `codex`, `grok login`, `agy`, `hermes setup`, or `opencode auth login` — see [AGENTS.md](AGENTS.md).
+3. `npm run go` — updates the checkout, runs setup, runs doctor, and starts the bridge supervisor in the background. Stop it with `npm run stop`.
+4. Fully quit and restart WoW; enable **Runback** on the AddOns screen (leave the slot addons enabled).
+5. Turn on **combat logging** in game (Settings → Network → Advanced → Combat Log, or click `[turn on combat log]` when Runback prints it at login).
+6. While the colored strip is in the top-left corner, run `npm run probe` once; it saves `bridge/probe.png` and says whether capture decoded the strip.
 
-Without `--wow`, `setup.js` looks in `$WINEPREFIX`, `~/.wine` and `~/Games/battlenet`. Then fully restart the game, enable *Runback* on the AddOns screen, and start the bridge with `npm start`.
+Without `--wow`, `setup.js` (inside `npm run go`) looks in `$WINEPREFIX`, `~/.wine` and `~/Games/battlenet`. Pass `node setup.js --wow "<client folder>"` when it cannot find yours.
+
+`npm run doctor` any time. It only reads. It prints PASS or FAIL for Node.js, python3, agent login, X11, the client folder, installed slots, the bridge supervisor, and combat-log files. A FAIL line includes a one-line fix. The login check uses each CLI's own read-only command (`claude auth status`, `codex login status`, a short headless prompt for `agy` and `grok`, `hermes auth list`, `opencode auth list`); it judges yes or no from exit codes and safe output shapes only, never tokens or account names.
 
 ## No X11 session yet
 
@@ -64,7 +66,7 @@ cd ~/runback                                      # the clone from above
 npm run doctor                                    # PASS x11, no Wayland line
 ```
 
-Then install Wine and the game and run `node setup.js --wow <client folder>` as above, start the bridge with `npm start`, and run the capture check below.
+Then run `npm run go` again from the repo.
 
 To undo it, drop the extra theme file, then get out of openbox (right-click the desktop, *Exit*, or `loginctl terminate-user "$USER"`) and log in to Hyprland again:
 
@@ -75,15 +77,9 @@ sudo rm /usr/share/xsessions/runback-x11.desktop /usr/local/bin/runback-x11-sess
 
 The next login is the Omarchy theme and Hyprland as before: both session directories (`/usr/local/share/wayland-sessions` and `/usr/share/wayland-sessions`) and the other `/etc/sddm.conf.d` files were never touched, so only the empty `/usr/share/xsessions`, the three packages and the game remain installed. If the greeter ever fails to draw, press `Ctrl+Alt+F2`, log in, run those two `rm` lines, and `sudo systemctl restart sddm`.
 
-## Check the capture (do this once)
+## Check the capture (troubleshooting)
 
-Log in, open the Runback window and send any message, then while the strip of colored squares is in the top-left corner run:
-
-```bash
-npm run probe
-```
-
-It finds the game window, saves what the capture sees to `bridge/probe.png`, and prints whether it could decode a strip, with the session type (`"session":"x11"`) on the same line, so that one line proves both. If the picture is black or stale while the game shows the strip, the compositor is letting the game flip its own buffers. Try, in order:
+If the picture from `npm run probe` is black or stale while the game shows the strip, the compositor is letting the game flip its own buffers. Try, in order:
 
 1. `"keepComposited": true` under `capture` in `bridge/config.json` (asks mutter/KWin to keep compositing the game window), then restart the bridge.
 2. Plain windowed mode in the game settings.
