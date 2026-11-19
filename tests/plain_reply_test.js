@@ -186,3 +186,37 @@ test('a translate job on an agent without a tool-off switch, and a mentor job on
     assert.match(hermes.text, /Hermes has no tool limit in the mentor folder/);
   } finally { fs.rmSync(S, { recursive: true, force: true }); }
 });
+
+// A window opened before the agent's first tool event shows the opening state: it must be a plain phrase too.
+test('the first working record, before any tool event, is a plain phrase', () => {
+  const S = fs.mkdtempSync(path.join(os.tmpdir(), 'runback-early-'));
+  try {
+    const repo = path.join(S, 'repo');
+    fs.cpSync(path.join(__dirname, '..', 'bridge'), path.join(repo, 'bridge'), { recursive: true, filter: f => !/[/\\]bridge[/\\]tmp/.test(f) });
+    fs.mkdirSync(path.join(S, 'addons', 'Runback'), { recursive: true });
+    fs.mkdirSync(path.join(S, 'proj'), { recursive: true });
+    fs.writeFileSync(path.join(S, 'addons', 'Runback', 'Runback.toc'), '## Interface: 16001\n');
+    // No tool events: copy the inbox 400 ms after boot, the state a slow window sees.
+    fs.writeFileSync(path.join(S, 'fake-claude.js'), `
+const fs = require('fs');
+process.stdin.resume(); process.stdin.on('data', () => {});
+setTimeout(() => { try { fs.copyFileSync(process.env.FAKE_INBOX, process.env.FAKE_SNAPSHOT); } catch (e) {} setTimeout(() => process.exit(0), 1200); }, 400);
+`);
+    const cfg = JSON.parse(fs.readFileSync(path.join(repo, 'bridge', 'config.example.json'), 'utf8'));
+    Object.assign(cfg, { addonDir: path.join(S, 'addons'), inboxFile: path.join(S, 'addons', 'Runback', 'Inbox.lua'), savedVariablesFile: path.join(S, 'nope.lua'), defaultCwd: path.join(S, 'proj'), slots: 5, progressWriteMs: 1 });
+    cfg.agent = 'claude';
+    cfg.agents = { ...(cfg.agents || {}), claude: { ...((cfg.agents || {}).claude || {}), path: path.join(S, 'fake-claude.js') } };
+    cfg.forever = { ...(cfg.forever || {}), mentorDir: path.join(S, 'mentor-workspace') };
+    fs.writeFileSync(path.join(repo, 'bridge', 'config.json'), JSON.stringify(cfg, null, 2));
+    const env = { ...process.env, FAKE_INBOX: cfg.inboxFile, FAKE_SNAPSHOT: path.join(S, 'snapshot.lua') };
+    delete env.CLAUDECODE;
+    const run = (args) => spawnSync(process.execPath, args, { cwd: path.join(repo, 'bridge'), encoding: 'utf8', env, timeout: 60000 });
+    assert.equal(run(['install-slots.js']).status, 0);
+    run(['bridge.js', '--inject', 'review my last fight', '--agent', 'claude']); // the fake never replies, so the bridge exits non-zero
+    const working = readReply(path.join(S, 'snapshot.lua'), 'Runback_Inbox');
+    assert.equal(working.status, 'working');
+    for (const l of working.text.split('\n')) assert.ok(P.PROGRESS_PHRASES.includes(l), `raw progress line: ${l}`);
+  } finally {
+    fs.rmSync(S, { recursive: true, force: true });
+  }
+});

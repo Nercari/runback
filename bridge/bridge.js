@@ -869,11 +869,13 @@ function runJob(job) {
   const child = spawn(cmd.file, args, { cwd, env, windowsHide: true, stdio: [input.stdin !== undefined ? 'pipe' : 'ignore', 'pipe', 'pipe'] });
   Forever.onRun({ job, agentId, cwd, args, prompt: String(input.stdin || job.text || ''), promptBytes: Buffer.byteLength(String(input.stdin || '')) });
   running.set(key, { job, child });
-  publish(key, { chat: job.chat, id: job.id, status: 'working', text: resume ? 'thinking...' : 'starting a new session...', cwd, session: resume, agent: agentId }, true);
+  // The opening state is a plain phrase like every later one (PROGRESS_PHRASES); the first real action replaces it.
+  const progress = [resume ? 'Thinking it through' : 'Getting ready'];
+  let seeded = true;
+  publish(key, { chat: job.chat, id: job.id, status: 'working', text: progress.join('\n'), cwd, session: resume, agent: agentId }, true);
   if (input.stdin !== undefined) { child.stdin.on('error', () => {}); child.stdin.end(input.stdin); }
 
   const parser = agent.parser();
-  const progress = [];
   let sessionId = resume || '';
   let result = null;       // { text, error } once the agent has produced its reply
   const denied = new Set(); // allowlist rules the run was refused (Claude syntax)
@@ -893,6 +895,7 @@ function runJob(job) {
   };
   // The window lists at most three plain phrases; the heartbeat still counts every action.
   const pushProgress = (line, plain = false) => {
+    if (seeded) { progress.length = 0; seeded = false; }
     P.addProgress(progress, line, plain);
     actionCount++;
     lastActionAt = Date.now();
