@@ -22,12 +22,26 @@ function rowsOf(cards) {
   return [...byKey.values()];
 }
 
+// The text inside the card table of SavedVariables, cut at its own closing brace
+// (Lua writes a table's fields in any order, so no fixed window works). Null when
+// the file has no card table.
+function cardBlock(text) {
+  const src = String(text || "");
+  const m = /\["card"\]\s*=\s*\{/.exec(src);
+  if (!m) return null;
+  let depth = 0;
+  for (let i = m.index + m[0].length - 1; i < src.length; i++) {
+    if (src[i] === "{") depth++;
+    else if (src[i] === "}" && --depth === 0) return src.slice(m.index + m[0].length, i);
+  }
+  return null;
+}
+
 // The three counts from the card table in SavedVariables. Null when the file
 // has no card table, so the caller prints nothing instead of three zeros.
 function savedCounts(text) {
-  const at = String(text || "").search(/\["card"\]/);
-  if (at < 0) return null;
-  const block = String(text).slice(at, at + 4000);
+  const block = cardBlock(text);
+  if (block === null) return null;
   const table = /\["counts"\]\s*=\s*\{([\s\S]*?)\}/.exec(block);
   if (!table) return null;
   const n = (k) => {
@@ -41,22 +55,19 @@ function savedCounts(text) {
 // Rows hold flat fields only, so each row is the text between one brace pair.
 // Null when the file has no card log (an older addon), so the caller can say so.
 function savedLog(text) {
-  const src = String(text || "");
-  const card = src.search(/\["card"\]/);
-  if (card < 0) return null;
-  const at = src.slice(card).search(/\["log"\]\s*=\s*\{/);
+  const block = cardBlock(text);
+  if (block === null) return null;
+  const at = block.search(/\["log"\]\s*=\s*\{/);
   if (at < 0) return null;
-  let i = src.indexOf("{", card + at);
+  const rows = [];
   let depth = 0;
   let start = -1;
-  const rows = [];
-  for (; i < src.length; i++) {
-    const ch = src[i];
+  for (let i = block.indexOf("{", at); i < block.length; i++) {
+    const ch = block[i];
     if (ch === "{") {
-      depth++;
-      if (depth === 2) start = i;
+      if (++depth === 2) start = i;
     } else if (ch === "}") {
-      if (depth === 2) rows.push(rowOfLua(src.slice(start + 1, i)));
+      if (depth === 2) rows.push(rowOfLua(block.slice(start + 1, i)));
       if (--depth === 0) break;
     }
   }

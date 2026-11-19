@@ -144,9 +144,17 @@ function M.Sync(card)
 	local db = DB()
 	if db.seen == card.key then return false end
 	db.seen = card.key
-	-- A note that was shown and has no answer yet is asked about before this one.
-	local last = db.log[#db.log]
-	if not asking and type(last) == "table" and last.shown and last.used == nil then asking = last end
+	-- The newest note that was shown and has no answer yet is asked about before this
+	-- one. Rows come from SavedVariables, so this also finds it after a reload.
+	if not asking then
+		for i = #db.log, 1, -1 do
+			local r = db.log[i]
+			if type(r) == "table" and r.shown then
+				if r.used == nil then asking = r end
+				break
+			end
+		end
+	end
 	AddRow(card.key:sub(1, 40))
 	pending = {
 		key = card.key:sub(1, 40),

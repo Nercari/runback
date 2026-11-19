@@ -485,6 +485,28 @@ test('the addon counts come from the card table in SavedVariables', () => {
   assert.equal(R.savedCounts('RunbackForeverDB = {}'), null, 'no card table');
 });
 
+test('the counts and the log are read when 60 rows come before the counts', () => {
+  const rowLua = (i) => `\t\t\t{\n\t\t\t\t["key"] = "2026-10-01T20:${String(i).padStart(2, '0')}:00/2026-10-01T20:${String(i).padStart(2, '0')}:30",\n\t\t\t\t["shown"] = true,\n\t\t\t\t["answer"] = "got",\n\t\t\t\t["used"] = true,\n\t\t\t}, -- [${i + 1}]`;
+  const lua = [
+    'RunbackForeverDB = {',
+    '\t["card"] = {',
+    '\t\t["log"] = {',
+    ...Array.from({ length: 60 }, (_, i) => rowLua(i)),
+    '\t\t},',
+    '\t\t["counts"] = {',
+    '\t\t\t["got"] = 7,',
+    '\t\t\t["why"] = 2,',
+    '\t\t\t["no"] = 1,',
+    '\t\t},',
+    '\t},',
+    '\t["other"] = { ["counts"] = { ["got"] = 99 } },',
+    '}',
+  ].join('\n');
+  assert.ok(lua.indexOf('["counts"]') > 4000, 'the counts sit past the old 4000-character window');
+  assert.deepEqual(R.savedCounts(lua), { got: 7, why: 2, no: 1 });
+  assert.equal(R.savedLog(lua).length, 60);
+});
+
 test('two rows for one fight count once, the last one wins', () => {
   const rows = R.rowsOf([row(0), row(1, { key: row(0).key, source: 'code' })]);
   assert.equal(rows.length, 1);

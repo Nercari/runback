@@ -359,6 +359,15 @@ test('the question shows only out of combat and sends nothing to the chat or the
   assert.doesNotMatch(cardPrints(v), /Used the last note/, 'no chat line');
 });
 
+test('after a reload the newest shown, unanswered note is still asked about', () => {
+  const v = cardVm(); // a fresh addon: no question is open in memory
+  v.run('RunbackForeverDB = RunbackForeverDB or {}; RunbackForeverDB.card = { log = { { key = "k/0", shown = true, used = true }, { key = "k/1", shown = true }, { key = "k/2" } } }');
+  v.run(note(3));
+  assert.match(cardTextOf(v), /Used the last note\?/);
+  cardClick(v, 'No');
+  assert.equal(cardLog(v), 'k/0:true:nil:true,k/1:true:nil:false,k/2:nil:nil:nil,k/3:true:nil:nil');
+});
+
 test('the log keeps the last 60 fights', () => {
   const v = cardVm();
   for (let n = 1; n <= 65; n++) v.run(note(n));
