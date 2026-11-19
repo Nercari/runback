@@ -772,7 +772,7 @@ test('the AI picker lists roles first, a model submenu from bridge labels, and g
   }
   assert.ok(opts.cannotRun.hermes && opts.cannotRun.opencode, 'the bridge says why both cannot run a mentor job');
   assert.ok(opts.cannotRunOutside.hermes && !opts.cannotRunOutside.opencode, 'only hermes also fails outside the mentor folder');
-  const open = cwd => {
+  const open = (cwd, folder) => {
     const body = P.luaTable('Runback_SlotData', [], { ...opts, cwd }).split('\n').filter(l => !l.startsWith('--')).join('\n')
       .replace(/^Runback_SlotData = /, '').replace(/now = \d+,/, 'now = time(),');
     const vm = newVM();
@@ -781,6 +781,7 @@ test('the AI picker lists roles first, a model submenu from bridge labels, and g
     nextSlot(vm, body);
     vm.run('STUB.now = STUB.now + 6; STUB.Tick()');
     assert.equal(vm.evaluate('Runback.IsConnected()'), 'true');
+    if (folder !== undefined) vm.run(`Runback.SetFolder(${JSON.stringify(folder)})`);
     vm.run('RunbackPoolButton.scripts.OnClick(RunbackPoolButton)');
     return vm;
   };
@@ -812,6 +813,15 @@ test('the AI picker lists roles first, a model submenu from bridge labels, and g
   pickAgent(vm, 'opencode');
   assert.equal(vm.evaluate('RunbackDB.chats[1].agent'), '');
   assert.ok(lastLine(vm).startsWith(`OpenCode can't be picked: ${opts.cannotRun.opencode.slice(0, 200)}`), 'the slot cuts the reason at a word, never rewrites it');
+
+  // A typed folder is resolved against the bridge's default like the bridge does: "." and "chat" stay inside the mentor folder, "../x" leaves it.
+  const opencodeGrey = (cwd, folder) => rowsOf(open(cwd, folder)).find(r => r.includes('OpenCode')).includes("(can't run)");
+  assert.equal(opencodeGrey(mentor, '.'), true, 'a relative "." in the mentor folder is the mentor folder');
+  assert.equal(opencodeGrey(mentor, 'chat'), true, 'a relative subfolder of the mentor folder');
+  assert.equal(opencodeGrey(mentor, '../project'), false, 'a relative path that leaves the mentor folder');
+  assert.equal(opencodeGrey('/home/x/project', mentor + '/../project'), false, 'an absolute path with .. that leaves it');
+  assert.equal(opencodeGrey('/home/x/project', mentor + '/a/../chat'), true, 'an absolute path with .. that stays in it');
+  assert.equal(opencodeGrey(mentor, '~/proj'), true, 'a path the addon cannot resolve is greyed, not guessed');
 
   // A role click sets the exact model the bridge resolved for that role on this agent.
   vm = open('/home/x/project');

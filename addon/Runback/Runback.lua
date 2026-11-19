@@ -2093,17 +2093,34 @@ local ROLE_ORDER = {
 	"translate",
 }
 
--- Is folder `dir` the mentor folder or inside it? Same test as the bridge's, on
--- text only (shortcut: no ".." resolving, symlinks or junctions; upgrade if a chat
--- folder can hold them). A Windows path (drive letter or \\) compares in lower case.
-local function InsideFolder(dir, root)
-	local function norm(p)
-		p = tostring(p or ""):gsub("\\", "/"):gsub("/+$", "")
-		if p:match("^%a:") or p:match("^//") then p = p:lower() end
-		return p
+-- A folder path as text, normalized like the bridge's resolveCwd: relative to
+-- `base` unless absolute, "." and ".." folded, "/" separators, lower case for a
+-- Windows path. Nil when it cannot be told ("~" needs the bridge's home folder, or
+-- a relative path with no base). Shortcut: no symlinks or junctions; upgrade if a
+-- chat folder can hold them.
+local function ResolveFolder(raw, base)
+	local p = tostring(raw or ""):gsub("\\", "/")
+	if p:sub(1, 1) == "~" then return nil end
+	if p == "" or not (p:match("^%a:/") or p:sub(1, 1) == "/") then
+		if not base or base == "" then return nil end
+		p = tostring(base):gsub("\\", "/") .. "/" .. p
 	end
-	dir, root = norm(dir), norm(root)
-	return root ~= "" and (dir == root or dir:sub(1, #root + 1) == root .. "/")
+	local prefix = p:match("^%a:") or p:match("^//") or ""
+	local segs = {}
+	for seg in p:sub(#prefix + 1):gmatch("[^/]+") do
+		if seg == ".." then segs[#segs] = nil elseif seg ~= "." then segs[#segs + 1] = seg end
+	end
+	local out = prefix .. "/" .. table.concat(segs, "/")
+	if prefix ~= "" then out = out:lower() end
+	return out
+end
+
+-- Is `dir` (already resolved) the folder `root` or inside it?
+local function InsideFolder(dir, root)
+	root = ResolveFolder(root, nil)
+	if not dir or not root then return false end
+	root = root:gsub("/+$", "")
+	return dir == root or dir:sub(1, #root + 1) == root .. "/"
 end
 
 -- Why the bridge says agent `id` cannot run this chat, or nil. The bridge's
@@ -2114,7 +2131,9 @@ local function AgentBlock(c, id)
 	local outside = run.bridgeCannotRunOutside and run.bridgeCannotRunOutside[id]
 	local root = run.bridgeMentorDir
 	if not root or root == "" then return mentor or outside end
-	if InsideFolder(ChatFolder(c), root) then return mentor end
+	local dir = ResolveFolder(c and c.cwd or "", run.bridgeCwd)
+	if not dir then return mentor or outside end -- cannot tell where the chat works: grey it
+	if InsideFolder(dir, root) then return mentor end
 	return outside
 end
 
