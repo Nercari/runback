@@ -772,8 +772,8 @@ test('the AI picker lists roles first, a model submenu from bridge labels, and g
   }
   assert.ok(opts.cannotRun.hermes && opts.cannotRun.opencode, 'the bridge says why both cannot run a mentor job');
   assert.ok(opts.cannotRunOutside.hermes && !opts.cannotRunOutside.opencode, 'only hermes also fails outside the mentor folder');
-  const open = (cwd, folder) => {
-    const body = P.luaTable('Runback_SlotData', [], { ...opts, cwd }).split('\n').filter(l => !l.startsWith('--')).join('\n')
+  const open = (cwd, folder, agent = 'claude') => {
+    const body = P.luaTable('Runback_SlotData', [], { ...opts, cwd, agent }).split('\n').filter(l => !l.startsWith('--')).join('\n')
       .replace(/^Runback_SlotData = /, '').replace(/now = \d+,/, 'now = time(),');
     const vm = newVM();
     login(vm);
@@ -822,6 +822,12 @@ test('the AI picker lists roles first, a model submenu from bridge labels, and g
   assert.equal(opencodeGrey('/home/x/project', mentor + '/../project'), false, 'an absolute path with .. that leaves it');
   assert.equal(opencodeGrey('/home/x/project', mentor + '/a/../chat'), true, 'an absolute path with .. that stays in it');
   assert.equal(opencodeGrey(mentor, '~/proj'), true, 'a path the addon cannot resolve is greyed, not guessed');
+
+  // The "Bridge default" row follows the default agent: greyed when that agent cannot run this chat.
+  const defaultRow = vm2 => rowsOf(vm2).find(r => r.includes('Bridge default'));
+  assert.ok(defaultRow(open(mentor, undefined, 'opencode')).includes("(can't run)"), 'default OpenCode in the mentor folder');
+  assert.ok(!defaultRow(open('/home/x/project', undefined, 'opencode')).includes("(can't run)"), 'default OpenCode elsewhere');
+  assert.ok(!defaultRow(open(mentor)).includes("(can't run)"), 'default Claude');
 
   // A role click sets the exact model the bridge resolved for that role on this agent.
   vm = open('/home/x/project');

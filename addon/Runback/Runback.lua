@@ -2164,7 +2164,7 @@ function Runback.PoolChoices(c, exactOpen)
 		end
 		table.insert(list, { kind = "head", label = "AI" })
 	end
-	table.insert(list, { kind = "agent", agent = "", model = "", label = "Bridge default (" .. DefaultPoolText() .. ")" })
+	table.insert(list, { kind = "agent", agent = "", model = "", label = "Bridge default (" .. DefaultPoolText() .. ")", blocked = run.bridgeAgent and AgentBlock(c, run.bridgeAgent) or nil })
 	for _, id in ipairs(run.bridgeAgents or { "claude", "codex", "grok", "agy", "hermes", "opencode" }) do
 		table.insert(list, { kind = "agent", agent = id, model = "", label = AgentName(id), blocked = AgentBlock(c, id) })
 	end
