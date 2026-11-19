@@ -980,6 +980,8 @@ local function TryLoadSlot(why)
 		if type(data.roleNames) == "table" then run.bridgeRoleNames = data.roleNames end
 		if type(data.roleBlocked) == "table" then run.bridgeRoleBlocked = data.roleBlocked end
 		if type(data.cannotRun) == "table" then run.bridgeCannotRun = data.cannotRun end
+		if type(data.cannotRunOutside) == "table" then run.bridgeCannotRunOutside = data.cannotRunOutside end
+		if type(data.mentorDir) == "string" then run.bridgeMentorDir = data.mentorDir end
 	end
 	local matched = ApplyReplies(type(data) == "table" and data.replies or nil)
 	if type(data) == "table" and data.restore then ImportRestore(data.restore) end
@@ -1126,6 +1128,8 @@ local function ProcessInbox()
 	if type(inbox.roleNames) == "table" then run.bridgeRoleNames = inbox.roleNames end
 	if type(inbox.roleBlocked) == "table" then run.bridgeRoleBlocked = inbox.roleBlocked end
 	if type(inbox.cannotRun) == "table" then run.bridgeCannotRun = inbox.cannotRun end
+	if type(inbox.cannotRunOutside) == "table" then run.bridgeCannotRunOutside = inbox.cannotRunOutside end
+	if type(inbox.mentorDir) == "string" then run.bridgeMentorDir = inbox.mentorDir end
 	ApplyReplies(inbox.replies)
 	if inbox.restore then ImportRestore(inbox.restore) end
 	if inbox.map and RunbackMap then RunbackMap.Sync(inbox.map) end
@@ -2081,7 +2085,38 @@ end
 
 -- The picker's role ids, in the order it lists them. Their labels, the model each
 -- resolves to per agent and why one cannot run all come from the bridge.
-local ROLE_ORDER = { "chat", "quick", "coach", "deep", "translate" }
+local ROLE_ORDER = {
+	"chat",
+	"quick",
+	"coach",
+	"deep",
+	"translate",
+}
+
+-- Is folder `dir` the mentor folder or inside it? Same test as the bridge's, on
+-- text only (shortcut: no ".." resolving, symlinks or junctions; upgrade if a chat
+-- folder can hold them). A Windows path (drive letter or \\) compares in lower case.
+local function InsideFolder(dir, root)
+	local function norm(p)
+		p = tostring(p or ""):gsub("\\", "/"):gsub("/+$", "")
+		if p:match("^%a:") or p:match("^//") then p = p:lower() end
+		return p
+	end
+	dir, root = norm(dir), norm(root)
+	return root ~= "" and (dir == root or dir:sub(1, #root + 1) == root .. "/")
+end
+
+-- Why the bridge says agent `id` cannot run this chat, or nil. The bridge's
+-- mentor refusal applies only inside the mentor folder; its read-only refusal only
+-- outside it. Without the mentor folder in the slot, the mentor reason stands.
+local function AgentBlock(c, id)
+	local mentor = run.bridgeCannotRun and run.bridgeCannotRun[id]
+	local outside = run.bridgeCannotRunOutside and run.bridgeCannotRunOutside[id]
+	local root = run.bridgeMentorDir
+	if not root or root == "" then return mentor or outside end
+	if InsideFolder(ChatFolder(c), root) then return mentor end
+	return outside
+end
 
 -- The choices the AI picker lists, as rows { kind, agent, model, label, blocked }:
 -- the chat's agent's roles first, then the bridge's default and every agent on the
@@ -2094,7 +2129,7 @@ function Runback.PoolChoices(c, exactOpen)
 	local roles = cur ~= "" and run.bridgeRoles and run.bridgeRoles[cur] or nil
 	if type(roles) == "table" then
 		table.insert(list, { kind = "head", label = "Roles for " .. AgentName(cur) })
-		local why = run.bridgeCannotRun and run.bridgeCannotRun[cur]
+		local why = AgentBlock(c, cur)
 		local names = run.bridgeRoleNames or {}
 		for _, role in ipairs(ROLE_ORDER) do
 			local model = type(roles[role]) == "string" and roles[role] or ""
@@ -2112,13 +2147,13 @@ function Runback.PoolChoices(c, exactOpen)
 	end
 	table.insert(list, { kind = "agent", agent = "", model = "", label = "Bridge default (" .. DefaultPoolText() .. ")" })
 	for _, id in ipairs(run.bridgeAgents or { "claude", "codex", "grok", "agy", "hermes", "opencode" }) do
-		table.insert(list, { kind = "agent", agent = id, model = "", label = AgentName(id), blocked = run.bridgeCannotRun and run.bridgeCannotRun[id] or nil })
+		table.insert(list, { kind = "agent", agent = id, model = "", label = AgentName(id), blocked = AgentBlock(c, id) })
 	end
 	local models = cur ~= "" and ModelsFor(cur) or nil
 	if models and #models > 0 then
 		table.insert(list, { kind = "toggle", label = "Exact model " .. (exactOpen and "-" or "+") })
 		if exactOpen then
-			local why = run.bridgeCannotRun and run.bridgeCannotRun[cur]
+			local why = AgentBlock(c, cur)
 			for _, m in ipairs(models) do
 				table.insert(list, { kind = "exact", agent = cur, model = m, label = "    " .. PoolName(cur, m), blocked = why })
 			end
@@ -3145,7 +3180,7 @@ local function BuildUI()
 			if self.blocked then
 				-- Greyed: say the bridge's own reason, change nothing.
 				if c then
-					AddHistory(c, "system", Display(self.label):gsub("^%s+", "") .. " can't be picked: " .. Display(self.blocked))
+					AddHistory(c, "system", Display(self.name):gsub("^%s+", "") .. " can't be picked: " .. Display(self.blocked))
 					Runback.Render()
 				end
 				return
@@ -3192,7 +3227,7 @@ local function BuildUI()
 			local ch, it = choices[i], PickerRow(i)
 			local current = not ch.blocked and ((ch.kind == "agent" and ch.agent == (c.agent or "") and ch.model == ChatModel(c))
 				or ((ch.kind == "role" or ch.kind == "exact") and ch.model ~= "" and ch.agent == ChatAgent(c) and ch.model == ChatModel(c)))
-			it.kind, it.agent, it.model, it.blocked = ch.kind, ch.agent, ch.model, ch.blocked
+			it.kind, it.agent, it.model, it.blocked, it.name = ch.kind, ch.agent, ch.model, ch.blocked, ch.label
 			local color = current and "|cff55ff55> " or (ch.kind == "head" and "|cffaaaaaa" or (ch.blocked and "|cff808080  " or "|cffffffff  "))
 			local why = ch.blocked and (ch.kind == "role" and " (not offered)" or " (can't run)") or ""
 			it.label:SetText(color .. Display(ch.label) .. why .. "|r")

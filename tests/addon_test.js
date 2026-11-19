@@ -758,48 +758,70 @@ test('the AI picker switches between the agents installed on the PC and their mo
 test('the AI picker lists roles first, a model submenu from bridge labels, and greys agents that cannot run with the bridge reason', () => {
   const P = require('../bridge/protocol');
   const A = require('../bridge/agents');
-  const ids = ['claude', 'codex', 'hermes'];
+  const ids = ['claude', 'codex', 'hermes', 'opencode'];
   const acfg = {};
-  const opts = { agent: 'claude', agents: ids, models: {}, roles: {}, roleBlocked: {}, cannotRun: {}, roleNames: A.roleLabels() };
+  const mentor = '/srv/wow-mentor';
+  const opts = { agent: 'claude', agents: ids, models: {}, roles: {}, roleBlocked: {}, cannotRun: {}, cannotRunOutside: {}, mentorDir: mentor, roleNames: A.roleLabels() };
   for (const id of ids) {
     opts.models[id] = A.modelChoices(acfg, id);
     opts.roles[id] = A.roleMap(acfg, id);
     const blocks = A.roleBlocks(acfg, id);
     if (Object.keys(blocks).length) opts.roleBlocked[id] = blocks;
+    if (A.agentCannotRun(id)) opts.cannotRun[id] = A.agentCannotRun(id);
+    if (A.agentCannotRunOutside(id)) opts.cannotRunOutside[id] = A.agentCannotRunOutside(id);
   }
-  opts.cannotRun.hermes = A.agentCannotRun('hermes');
-  assert.ok(opts.cannotRun.hermes, 'the bridge itself says why hermes cannot run');
-  const body = P.luaTable('Runback_SlotData', [], opts).split('\n').filter(l => !l.startsWith('--')).join('\n')
-    .replace(/^Runback_SlotData = /, '').replace(/now = \d+,/, 'now = time(),');
-  const vm = newVM();
-  login(vm);
-  vm.run('STUB.RunTimers()');
-  nextSlot(vm, body);
-  vm.run('STUB.now = STUB.now + 6; STUB.Tick()');
-  assert.equal(vm.evaluate('Runback.IsConnected()'), 'true');
-  vm.run('RunbackPoolButton.scripts.OnClick(RunbackPoolButton)');
-  const rowsOf = () => vm.evaluate('(function() local t = {} for _, r in ipairs(RunbackPoolPicker.rows) do if r.shown then t[#t + 1] = r.kind .. "=" .. r.label.text end end return table.concat(t, "\\n") end)()').split('\n');
-  let rows = rowsOf();
+  assert.ok(opts.cannotRun.hermes && opts.cannotRun.opencode, 'the bridge says why both cannot run a mentor job');
+  assert.ok(opts.cannotRunOutside.hermes && !opts.cannotRunOutside.opencode, 'only hermes also fails outside the mentor folder');
+  const open = cwd => {
+    const body = P.luaTable('Runback_SlotData', [], { ...opts, cwd }).split('\n').filter(l => !l.startsWith('--')).join('\n')
+      .replace(/^Runback_SlotData = /, '').replace(/now = \d+,/, 'now = time(),');
+    const vm = newVM();
+    login(vm);
+    vm.run('STUB.RunTimers()');
+    nextSlot(vm, body);
+    vm.run('STUB.now = STUB.now + 6; STUB.Tick()');
+    assert.equal(vm.evaluate('Runback.IsConnected()'), 'true');
+    vm.run('RunbackPoolButton.scripts.OnClick(RunbackPoolButton)');
+    return vm;
+  };
+  const rowsOf = vm => vm.evaluate('(function() local t = {} for _, r in ipairs(RunbackPoolPicker.rows) do if r.shown then t[#t + 1] = r.kind .. "=" .. r.label.text end end return table.concat(t, "\\n") end)()').split('\n');
+  const pickAgent = (vm, id) => vm.run(`for _, r in ipairs(RunbackPoolPicker.rows) do if r.shown and r.kind == "agent" and r.agent == "${id}" then r.scripts.OnClick(r) end end`);
+  const lastLine = vm => vm.evaluate('RunbackDB.chats[1].history[#RunbackDB.chats[1].history].text');
+
+  // Outside the mentor folder: OpenCode runs (plan mode); Hermes does not, and says the outside reason.
+  let vm = open('/home/x/project');
+  let rows = rowsOf(vm);
   assert.equal(rows[0], 'head=|cffaaaaaaRoles for Claude|r', 'roles come first');
   const roleLabels = A.roleIds().map(id => A.roleLabels()[id]);
   for (let i = 0; i < roleLabels.length; i++) assert.ok(rows[1 + i].startsWith('role=') && rows[1 + i].includes(roleLabels[i]), `row ${i + 1} is the ${roleLabels[i]} role`);
   assert.ok(!rows.some(r => r.startsWith('exact=')), 'exact models wait in the submenu');
-  // Hermes cannot run: greyed, tagged, never switched to; the click prints the bridge's own reason.
   const hermes = rows.find(r => r.includes('Hermes'));
   assert.ok(hermes.includes('|cff808080') && hermes.includes("(can't run)"), 'greyed and tagged');
-  vm.run('for _, r in ipairs(RunbackPoolPicker.rows) do if r.shown and r.agent == "hermes" then r.scripts.OnClick(r) end end');
+  assert.ok(!rows.find(r => r.includes('OpenCode')).includes("(can't run)"), 'OpenCode is pickable outside the mentor folder');
+  pickAgent(vm, 'hermes');
   assert.equal(vm.evaluate('RunbackDB.chats[1].agent'), '', 'a greyed agent is not picked');
-  const said = vm.evaluate('RunbackDB.chats[1].history[#RunbackDB.chats[1].history].text');
-  assert.ok(said.includes(opts.cannotRun.hermes.slice(0, 60)), 'the reason is the bridge text');
-  // A role click sets the exact model the bridge resolved for that role on this agent.
+  assert.equal(lastLine(vm), `Hermes can't be picked: ${opts.cannotRunOutside.hermes}`, 'the line names the choice and carries the bridge text');
   vm.run('Runback.AgentPrompt()');
+  pickAgent(vm, 'opencode');
+  assert.equal(vm.evaluate('RunbackDB.chats[1].agent'), 'opencode');
+
+  // Inside the mentor folder both are greyed with the mentor reason.
+  vm = open(mentor + '/chat');
+  rows = rowsOf(vm);
+  for (const name of ['Hermes', 'OpenCode']) assert.ok(rows.find(r => r.includes(name)).includes("(can't run)"), `${name} greyed in the mentor folder`);
+  pickAgent(vm, 'opencode');
+  assert.equal(vm.evaluate('RunbackDB.chats[1].agent'), '');
+  assert.ok(lastLine(vm).startsWith(`OpenCode can't be picked: ${opts.cannotRun.opencode.slice(0, 200)}`), 'the slot cuts the reason at a word, never rewrites it');
+
+  // A role click sets the exact model the bridge resolved for that role on this agent.
+  vm = open('/home/x/project');
   vm.run('for _, r in ipairs(RunbackPoolPicker.rows) do if r.shown and r.kind == "role" and r.label.text:find("Quick answer") then r.scripts.OnClick(r) end end');
   assert.equal(vm.evaluate('RunbackDB.chats[1].agent'), 'claude');
   assert.equal(vm.evaluate('RunbackDB.chats[1].model'), opts.roles.claude.quick);
   // A role the bridge has no model for is greyed and does nothing.
   vm.run('Runback.SetAgent("codex")');
   vm.run('Runback.AgentPrompt()');
-  rows = rowsOf();
+  rows = rowsOf(vm);
   const quick = rows.find(r => r.startsWith('role=') && r.includes('Quick answer'));
   assert.ok(quick.includes('|cff808080') && quick.includes('(not offered)'));
   const before = vm.evaluate('RunbackDB.chats[1].model');
@@ -808,7 +830,7 @@ test('the AI picker lists roles first, a model submenu from bridge labels, and g
   // The submenu lists the bridge's models for the chat's agent and picks one.
   vm.run('Runback.AgentPrompt()');
   vm.run('for _, r in ipairs(RunbackPoolPicker.rows) do if r.shown and r.kind == "toggle" then r.scripts.OnClick(r) end end');
-  rows = rowsOf();
+  rows = rowsOf(vm);
   assert.equal(rows.filter(r => r.startsWith('exact=')).length, opts.models.codex.length);
   const pick = opts.models.codex[1];
   vm.run(`for _, r in ipairs(RunbackPoolPicker.rows) do if r.shown and r.kind == "exact" and r.model == "${pick}" then r.scripts.OnClick(r) end end`);

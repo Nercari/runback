@@ -369,10 +369,10 @@ function takeGuides(job, text) {
 function slotFile(globalName, records, urgent = true) {
   const map = Date.now() < mapShareUntil && (urgent || mapLuaSize() <= MAP_PROGRESS_MAX) ? state.map : null;
   const guides = Date.now() < guideShareUntil && (urgent || guideLuaSize() <= MAP_PROGRESS_MAX) ? state.guides : null;
-  const { agents, models, efforts, defaults, quick, roleNames, roles, cannotRun, roleBlocked } = pools();
+  const { agents, models, efforts, defaults, quick, roleNames, roles, cannotRun, cannotRunOutside, roleBlocked } = pools();
   return P.luaTable(globalName, records, {
     cwd: DEFAULT_CWD, restore: pendingRestore, agent: DEFAULT_AGENT, agents, models, efforts, defaults, quick,
-    roleNames, roles, cannotRun, roleBlocked, map, guides, card: state.forever.card,
+    roleNames, roles, cannotRun, cannotRunOutside, roleBlocked, mentorDir: cfg.forever.mentorDir, map, guides, card: state.forever.card,
   });
 }
 
@@ -392,6 +392,7 @@ function pools() {
   const roles = {};
   const roleBlocked = {};
   const cannotRun = {};
+  const cannotRunOutside = {};
   const roleNames = A.roleLabels();
   const mentorDir = cfg.forever && cfg.forever.mentorDir;
   for (const id of agents) {
@@ -407,8 +408,10 @@ function pools() {
     if (Object.keys(blocks).length) roleBlocked[id] = blocks;
     const why = A.agentCannotRun(id, mentorDir);
     if (why) cannotRun[id] = why;
+    const outside = A.agentCannotRunOutside(id);
+    if (outside) cannotRunOutside[id] = outside;
   }
-  poolsCache = { at: Date.now(), agents, models, efforts, defaults, quick, roleNames, roles, cannotRun, roleBlocked };
+  poolsCache = { at: Date.now(), agents, models, efforts, defaults, quick, roleNames, roles, cannotRun, cannotRunOutside, roleBlocked };
   return poolsCache;
 }
 
@@ -792,8 +795,7 @@ function runJob(job) {
   // limit its tools does not run there at all.
   if (!P.folderInside(cwd, cfg.forever.mentorDir)) {
     if (agent.readOnly === false) {
-      finish(job, 'error', `${agent.name} cannot be limited to read-only tools outside the mentor workspace. ` +
-        `Use /runback agent to switch, or stay in the mentor workspace.`);
+      finish(job, 'error', A.agentCannotRunOutside(agentId));
       return;
     }
     acfg = A.readOnlyConfig(acfg);
