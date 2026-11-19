@@ -123,7 +123,7 @@ Items 47 to 63 come from the third video review (2026-10-11: recording A, 40 min
 
 48. **Mentor tools run without prompts.** (done, PR #65; live look pending) "Allow cd, node, echo, PowerShell & retry" still appears after a review, and "my automatic quote-checker could not run" twice (A 10:25, 15:00, 16:40). Inferred cause: `cd ... && node ...` does not match `Bash(node:*)`. The mentor calls `slice-fight.js` and `check-citations.js` as one plain `node <absolute path>` command; a bridge test checks those commands against the allowed rules. Reopens item 30. Metric: prompts per review 1 → 0.
 
-49. **Plain-word progress lines** (done, PR #67; live look pending). The working list shows raw greps, regexes, paths and tool ids (A 9:20 to 16:10). Show at most three short phrases ("Reading your combat log"). Metric: raw command lines per review, about 10 → 0.
+49. **Plain-word progress lines** (done, PR #67; live look pending). The working list shows raw greps, regexes, paths and tool ids (A 9:20 to 16:10). Show at most three short phrases ("Reading your combat log"). Before the agent's first step the list reads "Getting ready" (new session) or "Thinking it through" (resumed), never a raw line. Metric: raw command lines per review, about 10 → 0.
 
 50. **Readable review evidence** (done, PR #67; live look pending). Replies quote whole combat-log lines (A 15:00, 16:40). The saved review keeps the quotes for `check-citations.js`; the reply shows one plain evidence line per mistake. Metric: raw log lines in a reply, 2 to 4 → 0.
 

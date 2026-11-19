@@ -1006,7 +1006,7 @@ function runJob(job) {
       const silent = !text && !mapped.note && !guided.note;
       const altId = P.stallAlternateAgent(agentId, pools().agents);
       const body = silent
-        ? P.noReplyText(agent.name, agent.stream === 'text' ? [] : progress, actionCount, altId ? A.displayName(altId) : '')
+        ? P.noReplyText(agent.name, agent.stream === 'text' || seeded ? [] : progress, actionCount, altId ? A.displayName(altId) : '')
         : text;
       finish(job, 'done', (body + extra).trim(), sessionId, [...denied], silent ? 'noreply' : '');
     } else if (result) {

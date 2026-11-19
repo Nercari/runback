@@ -187,8 +187,9 @@ test('a translate job on an agent without a tool-off switch, and a mentor job on
   } finally { fs.rmSync(S, { recursive: true, force: true }); }
 });
 
-// A window opened before the agent's first tool event shows the opening state: it must be a plain phrase too.
-test('the first working record, before any tool event, is a plain phrase', () => {
+// Runs the real bridge against a fake Claude CLI that emits no tool events; `fake` is its body.
+// Returns the record a window opened 400 ms after boot saw, and the final one.
+function runEarly(fake) {
   const S = fs.mkdtempSync(path.join(os.tmpdir(), 'runback-early-'));
   try {
     const repo = path.join(S, 'repo');
@@ -196,12 +197,7 @@ test('the first working record, before any tool event, is a plain phrase', () =>
     fs.mkdirSync(path.join(S, 'addons', 'Runback'), { recursive: true });
     fs.mkdirSync(path.join(S, 'proj'), { recursive: true });
     fs.writeFileSync(path.join(S, 'addons', 'Runback', 'Runback.toc'), '## Interface: 16001\n');
-    // No tool events: copy the inbox 400 ms after boot, the state a slow window sees.
-    fs.writeFileSync(path.join(S, 'fake-claude.js'), `
-const fs = require('fs');
-process.stdin.resume(); process.stdin.on('data', () => {});
-setTimeout(() => { try { fs.copyFileSync(process.env.FAKE_INBOX, process.env.FAKE_SNAPSHOT); } catch (e) {} setTimeout(() => process.exit(0), 1200); }, 400);
-`);
+    fs.writeFileSync(path.join(S, 'fake-claude.js'), fake);
     const cfg = JSON.parse(fs.readFileSync(path.join(repo, 'bridge', 'config.example.json'), 'utf8'));
     Object.assign(cfg, { addonDir: path.join(S, 'addons'), inboxFile: path.join(S, 'addons', 'Runback', 'Inbox.lua'), savedVariablesFile: path.join(S, 'nope.lua'), defaultCwd: path.join(S, 'proj'), slots: 5, progressWriteMs: 1 });
     cfg.agent = 'claude';
@@ -212,11 +208,28 @@ setTimeout(() => { try { fs.copyFileSync(process.env.FAKE_INBOX, process.env.FAK
     delete env.CLAUDECODE;
     const run = (args) => spawnSync(process.execPath, args, { cwd: path.join(repo, 'bridge'), encoding: 'utf8', env, timeout: 60000 });
     assert.equal(run(['install-slots.js']).status, 0);
-    run(['bridge.js', '--inject', 'review my last fight', '--agent', 'claude']); // the fake never replies, so the bridge exits non-zero
-    const working = readReply(path.join(S, 'snapshot.lua'), 'Runback_Inbox');
-    assert.equal(working.status, 'working');
-    for (const l of working.text.split('\n')) assert.ok(P.PROGRESS_PHRASES.includes(l), `raw progress line: ${l}`);
+    run(['bridge.js', '--inject', 'review my last fight', '--agent', 'claude']);
+    return { working: readReply(path.join(S, 'snapshot.lua'), 'Runback_Inbox'), final: readReply(cfg.inboxFile, 'Runback_Inbox') };
   } finally {
     fs.rmSync(S, { recursive: true, force: true });
   }
+}
+
+const EARLY_COPY = `
+const fs = require('fs');
+process.stdin.resume(); process.stdin.on('data', () => {});
+setTimeout(() => { try { fs.copyFileSync(process.env.FAKE_INBOX, process.env.FAKE_SNAPSHOT); } catch (e) {} %TAIL% }, 400);
+`;
+
+// A window opened before the agent's first tool event shows the opening state: it must be a plain phrase too.
+test('the first working record, before any tool event, is a plain phrase', () => {
+  const { working } = runEarly(EARLY_COPY.replace('%TAIL%', 'setTimeout(() => process.exit(0), 1200);'));
+  assert.equal(working.status, 'working');
+  for (const l of working.text.split('\n')) assert.ok(P.PROGRESS_PHRASES.includes(l), `raw progress line: ${l}`);
+});
+
+test('a run that ends with no reply and no action does not count the opening phrase as an action', () => {
+  const { final } = runEarly(EARLY_COPY.replace('%TAIL%', "console.log(JSON.stringify({ type: 'result', session_id: 's1', is_error: false, result: '' }));"));
+  assert.match(final.text, /finished without doing anything and without a reply/);
+  assert.doesNotMatch(final.text, /It did 1 action/);
 });
