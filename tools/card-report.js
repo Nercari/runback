@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 "use strict";
-// The card's own numbers for #143: the addon's button counts and the 20-fight
+// The card's own numbers for #143: the addon's button counts, its per-fight log
+// with the "Used the last note?" answers, and the 20-fight
 // table of what each note said and what it cost. Rows come from state.json,
 // written by the bridge after every fight the card looks at; the counts come
 // from the addon's SavedVariables, which is where the buttons write. Nothing
@@ -36,6 +37,41 @@ function savedCounts(text) {
   return { got: n("got"), why: n("why"), no: n("no") };
 }
 
+// The per-fight log from the card table: rows { key, shown, answer, why, used }.
+// Rows hold flat fields only, so each row is the text between one brace pair.
+// Null when the file has no card log (an older addon), so the caller can say so.
+function savedLog(text) {
+  const src = String(text || "");
+  const card = src.search(/\["card"\]/);
+  if (card < 0) return null;
+  const at = src.slice(card).search(/\["log"\]\s*=\s*\{/);
+  if (at < 0) return null;
+  let i = src.indexOf("{", card + at);
+  let depth = 0;
+  let start = -1;
+  const rows = [];
+  for (; i < src.length; i++) {
+    const ch = src[i];
+    if (ch === "{") {
+      depth++;
+      if (depth === 2) start = i;
+    } else if (ch === "}") {
+      if (depth === 2) rows.push(rowOfLua(src.slice(start + 1, i)));
+      if (--depth === 0) break;
+    }
+  }
+  return rows.filter((r) => r.key);
+}
+
+function rowOfLua(body) {
+  const str = (k) => (new RegExp(`\\["${k}"\\]\\s*=\\s*"([^"]*)"`).exec(body) || [])[1];
+  const bool = (k) => {
+    const m = new RegExp(`\\["${k}"\\]\\s*=\\s*(true|false)`).exec(body);
+    return m ? m[1] === "true" : undefined;
+  };
+  return { key: str("key"), answer: str("answer"), shown: bool("shown"), why: bool("why"), used: bool("used") };
+}
+
 function money(n) {
   return "$" + n.toFixed(5);
 }
@@ -46,7 +82,7 @@ function state(ok) {
 
 // The two acceptance numbers (#143): notes that kept their counted facts and
 // the cost of one note, plus the pull counts the addon holds.
-function summarise(cards, saved) {
+function summarise(cards, saved, log) {
   const rows = rowsOf(cards);
   const noted = rows.filter((r) => r.check);
   const kept = noted.filter((r) => r.source === "model").length;
@@ -54,7 +90,6 @@ function summarise(cards, saved) {
   const spent = known.reduce((sum, r) => sum + r.cost, 0);
   const per = known.length ? spent / known.length : 0;
   const dearest = known.reduce((m, r) => Math.max(m, r.cost), 0);
-  const pulls = saved ? saved.got + saved.why + saved.no : 0;
 
   const keepState = rows.length < 20 || !noted.length
     ? "PENDING"
@@ -62,9 +97,12 @@ function summarise(cards, saved) {
   const costState = !noted.length || known.length < noted.length
     ? "PENDING"
     : state(dearest < MAX_COST); // "under $0.01 each": the dearest note decides, not the mean
-  const uses = saved
-    ? pulls < 5 ? "PENDING" : state(pulls >= 5 && saved.got >= 3)
-    : "PENDING";
+  // "Used the last note?" answers (Yes / No), one per note after the first; the
+  // verdict is the share of Yes, at 3 of 5 answers (#143).
+  const used = new Map((log || []).filter((r) => typeof r.used === "boolean").map((r) => [r.key, r.used]));
+  const asked = used.size;
+  const yes = [...used.values()].filter(Boolean).length;
+  const uses = asked < 5 ? "PENDING" : state(yes >= 3);
 
   const lines = [
     "CARD MEASURE",
@@ -77,14 +115,16 @@ function summarise(cards, saved) {
   ];
   if (saved) {
     lines.push(`Card counts: got ${saved.got}, why ${saved.why}, no ${saved.no}`);
-    // "Got it" is the addon's closest count to "used the note on the next pull"; Pedro's own call stays the final word.
-    lines.push(`Uses: ${saved.got} of ${pulls} ${uses} (at 3 of 5)`);
   } else {
-    lines.push(`Card counts: not read (give --saved <Runback.lua>) Uses: PENDING`);
+    lines.push("Card counts: not read (give --saved <Runback.lua>)");
   }
   lines.push(
-    "| # | fight | s | hits | casts | int | deaths | gap | burst | check | note | cost |",
-    "|---:|---|---:|---:|---:|---:|---:|---:|---:|---|---|---:|",
+    `Used the last note: yes ${yes} of ${asked} answers ${uses} (at 3 of 5)` +
+      (log ? "" : " (no per-fight log read: give --saved <Runback.lua> from an addon that keeps it)"),
+  );
+  lines.push(
+    "| # | fight | s | hits | casts | int | deaths | gap | burst | check | note | cost | used |",
+    "|---:|---|---:|---:|---:|---:|---:|---:|---:|---|---|---:|---|",
   );
   rows.forEach((r, i) => {
     const c = r.counts || {};
@@ -92,7 +132,7 @@ function summarise(cards, saved) {
       `| ${i + 1} | ${String(r.key).split("/")[0]} | ${c.duration_s ?? "-"} | ${c.hits ?? "-"} | ` +
         `${c.enemyCasts ?? "-"} | ${c.interrupts ?? "-"} | ${c.deaths ?? "-"} | ${c.idle_s ?? "-"} | ` +
         `${c.burst_hits ?? "-"} | ${r.check || "none"} | ${r.source || "-"} | ` +
-        `${typeof r.cost === "number" ? money(r.cost) : "-"} |`,
+        `${typeof r.cost === "number" ? money(r.cost) : "-"} | ${used.has(r.key) ? (used.get(r.key) ? "yes" : "no") : "-"} |`,
     );
   });
   const failed = [keepState, costState, uses].includes("FAIL");
@@ -121,16 +161,19 @@ function main(o) {
     return 2;
   }
   let saved = null;
+  let log = null;
   if (o.saved) {
     try {
-      saved = savedCounts(fs.readFileSync(o.saved, "utf8"));
+      const text = fs.readFileSync(o.saved, "utf8");
+      saved = savedCounts(text);
+      log = savedLog(text);
       if (!saved) console.error(`no card counts in ${o.saved}`);
     } catch (e) {
       console.error(`cannot read ${o.saved}: ${e.message}`);
       return 2;
     }
   }
-  const r = summarise(cards, saved);
+  const r = summarise(cards, saved, log);
   console.log(r.lines.join("\n"));
   return r.failed ? 1 : 0;
 }
@@ -152,5 +195,6 @@ if (require.main === module) {
 module.exports = {
   rowsOf,
   savedCounts,
+  savedLog,
   summarise,
 };

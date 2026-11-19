@@ -377,26 +377,30 @@ const row = (i, extra = {}) => ({
   ...extra,
 });
 
+// The addon's per-fight log: one { key, used } per answered note.
+const usedLog = (rows, answers) => answers.map((used, i) => ({ key: rows[i].key, shown: true, used }));
+
 test('the 20-fight table passes at 19 kept notes under a cent each', () => {
   const rows = Array.from({ length: 20 }, (_, i) => row(i, i === 0 ? { source: 'code' } : {}));
-  const r = R.summarise(rows, { got: 3, why: 1, no: 1 });
+  const r = R.summarise(rows, { got: 3, why: 1, no: 1 }, usedLog(rows, [true, true, true, false, false]));
   const text = r.lines.join('\n');
   assert.equal(r.failed, false);
   assert.match(text, /Fights: 20 \(notes 20, quiet 0\)/);
   assert.match(text, /Kept: 19 of 20 \(95%\) PASS/);
   assert.match(text, /Cost: \$0\.00400 over 20 of 20 notes, \$0\.00020 a note, dearest \$0\.00020 PASS/);
   assert.match(text, /Card counts: got 3, why 1, no 1/);
-  assert.match(text, /Uses: 3 of 5 PASS/);
-  assert.match(text, /\| 1 \| 2026-10-01T20:00:00 \| 30 \| 3 \| 2 \| 0 \| 0 \| 1 \| 1 \| interrupt \| code \| \$0\.00020 \|/);
+  assert.match(text, /Used the last note: yes 3 of 5 answers PASS/);
+  assert.match(text, /\| 1 \| 2026-10-01T20:00:00 \| 30 \| 3 \| 2 \| 0 \| 0 \| 1 \| 1 \| interrupt \| code \| \$0\.00020 \| yes \|/);
+  assert.match(text, /\| 6 \| .* \| - \|$/m, 'a fight with no answer shows a dash');
 });
 
 test('the table fails when the kept facts drop below 90% or a note passes a cent', () => {
   const missed = Array.from({ length: 20 }, (_, i) => row(i, i < 3 ? { source: 'code' } : {}));
-  const r = R.summarise(missed, { got: 2, why: 1, no: 2 });
+  const r = R.summarise(missed, { got: 2, why: 1, no: 2 }, usedLog(missed, [true, true, false, false, false]));
   const text = r.lines.join('\n');
   assert.equal(r.failed, true);
   assert.match(text, /Kept: 17 of 20 \(85%\) FAIL/);
-  assert.match(text, /Uses: 2 of 5 FAIL/);
+  assert.match(text, /Used the last note: yes 2 of 5 answers FAIL/);
 
   const dear = Array.from({ length: 20 }, (_, i) => row(i, { cost: 0.02 }));
   assert.match(R.summarise(dear, null).lines.join('\n'), /FAIL \(each under \$0\.01000\)/);
@@ -420,6 +424,48 @@ test('the table waits for 20 fights and for the addon counts', () => {
   assert.match(text, /Fights: 1 \(notes 1, quiet 0\)/);
   assert.match(text, /Kept: 1 of 1 \(100%\) PENDING/);
   assert.match(text, /Card counts: not read/);
+  assert.match(text, /Used the last note: yes 0 of 0 answers PENDING/);
+});
+
+test('"Got it" is no longer the stand-in: without Yes / No answers the use verdict stays pending', () => {
+  const rows = Array.from({ length: 20 }, (_, i) => row(i));
+  const text = R.summarise(rows, { got: 5, why: 0, no: 0 }, []).lines.join('\n');
+  assert.match(text, /Card counts: got 5, why 0, no 0/);
+  assert.match(text, /Used the last note: yes 0 of 0 answers PENDING/);
+});
+
+test('the per-fight log is read from the addon SavedVariables, Yes and No kept apart', () => {
+  const lua = [
+    'RunbackForeverDB = {',
+    '\t["card"] = {',
+    '\t\t["log"] = {',
+    '\t\t\t{',
+    '\t\t\t\t["key"] = "a/b",',
+    '\t\t\t\t["shown"] = true,',
+    '\t\t\t\t["answer"] = "got",',
+    '\t\t\t\t["used"] = true,',
+    '\t\t\t}, -- [1]',
+    '\t\t\t{',
+    '\t\t\t\t["key"] = "c/d",',
+    '\t\t\t\t["shown"] = true,',
+    '\t\t\t\t["why"] = true,',
+    '\t\t\t\t["used"] = false,',
+    '\t\t\t}, -- [2]',
+    '\t\t\t{',
+    '\t\t\t\t["key"] = "e/f",',
+    '\t\t\t}, -- [3]',
+    '\t\t},',
+    '\t\t["enabled"] = true,',
+    '\t},',
+    '}',
+  ].join('\n');
+  assert.deepEqual(R.savedLog(lua), [
+    { key: 'a/b', answer: 'got', shown: true, why: undefined, used: true },
+    { key: 'c/d', answer: undefined, shown: true, why: true, used: false },
+    { key: 'e/f', answer: undefined, shown: undefined, why: undefined, used: undefined },
+  ]);
+  assert.equal(R.savedLog('RunbackForeverDB = { ["card"] = { ["enabled"] = true } }'), null, 'an older addon: no log');
+  assert.equal(R.savedLog('RunbackForeverDB = {}'), null);
 });
 
 test('the addon counts come from the card table in SavedVariables', () => {

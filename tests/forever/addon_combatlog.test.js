@@ -292,17 +292,78 @@ test('Got it, Why? and Not useful each add to the local count that /ai card prin
 
   v.run('RunbackCard.Sync({ key = "next/2", text = "One change: second note.", why = "Why: 2 hits in 3 s.", counts = "33 s pull, 7 hits taken, 6 enemy casts." })');
   assert.equal(cardShown(v), 'true', 'a new card replaces the answered one');
+  cardClick(v, 'Yes'); // the new card first asks about the last note
   cardClick(v, 'Why?');
   assert.equal(v.get('RunbackForeverDB.card.counts.why'), '1');
   assert.equal(cardShown(v), 'true', 'Why? opens the numbers and keeps the card');
   assert.match(cardTextOf(v), /33 s pull, 7 hits taken, 6 enemy casts/);
+  cardClick(v, 'Why?');
+  assert.equal(v.get('RunbackForeverDB.card.counts.why'), '1', 'Why? counts once per note');
 
   cardClick(v, 'Not useful');
   assert.equal(v.get('RunbackForeverDB.card.counts.no'), '1');
   assert.equal(cardShown(v), 'false');
 
   v.run('SlashCmdList["RUNBACK"]("card")');
-  assert.ok(cardPrints(v).includes('Coach card: on. Got it 1, Why? 1, Not useful 1.'), cardPrints(v));
+  assert.ok(cardPrints(v).includes('Coach card: on. Got it 1, Why? 1, Not useful 1. Used the last note: yes 1, no 0.'), cardPrints(v));
+});
+
+const cardLog = v => v.get(`(function()
+  local out = {}
+  for _, r in ipairs(RunbackForeverDB.card.log) do
+    out[#out + 1] = r.key .. ":" .. tostring(r.shown) .. ":" .. tostring(r.answer) .. ":" .. tostring(r.used)
+  end
+  return table.concat(out, ",")
+end)()`);
+const note = (n) => `RunbackCard.Sync({ key = "k/${n}", text = "Note ${n}.", why = "Why ${n}.", counts = "c" })`;
+
+test('the card keeps one row per fight and asks "Used the last note?" before the next note', () => {
+  const v = cardVm();
+  v.run(note(1));
+  assert.equal(cardLog(v), 'k/1:true:nil:nil', 'the first note is logged as shown, with nothing to ask');
+  assert.doesNotMatch(cardTextOf(v), /Used the last note/);
+  cardClick(v, 'Got it');
+  assert.equal(cardLog(v), 'k/1:true:got:nil');
+
+  v.run(note(2));
+  assert.equal(cardShown(v), 'true');
+  assert.match(cardTextOf(v), /Used the last note\?/);
+  assert.doesNotMatch(cardTextOf(v), /Note 2/, 'the new note waits for the answer');
+  assert.equal(cardLog(v), 'k/1:true:got:nil,k/2:nil:nil:nil', 'the new note is not marked shown yet');
+  cardClick(v, 'No');
+  assert.match(cardTextOf(v), /Note 2/);
+  assert.equal(cardLog(v), 'k/1:true:got:false,k/2:true:nil:nil');
+
+  // An ignored note is asked about too, and its answer lands on its own row.
+  v.run(note(3));
+  assert.match(cardTextOf(v), /Used the last note\?/);
+  cardClick(v, 'Yes');
+  assert.equal(cardLog(v), 'k/1:true:got:false,k/2:true:nil:true,k/3:true:nil:nil');
+  v.run('SlashCmdList["RUNBACK"]("card")');
+  assert.ok(cardPrints(v).includes('Used the last note: yes 1, no 1.'), cardPrints(v));
+});
+
+test('the question shows only out of combat and sends nothing to the chat or the bridge', () => {
+  const v = cardVm();
+  v.run(note(1));
+  cardClick(v, 'Got it');
+  v.run('STUB.combat = true; STUB.FireEvent("PLAYER_REGEN_DISABLED")');
+  v.run(note(2));
+  assert.equal(cardShown(v), 'false', 'held in combat');
+  v.run('STUB.combat = false; STUB.FireEvent("PLAYER_REGEN_ENABLED"); STUB.RunTimers(); STUB.now = STUB.now + 6; STUB.Tick()');
+  assert.equal(cardShown(v), 'true');
+  assert.match(cardTextOf(v), /Used the last note\?/);
+  const before = v.get('tostring(RunbackDB.lastSeq)');
+  cardClick(v, 'Yes');
+  assert.equal(v.get('tostring(RunbackDB.lastSeq)'), before, 'the click queued no record');
+  assert.doesNotMatch(cardPrints(v), /Used the last note/, 'no chat line');
+});
+
+test('the log keeps the last 60 fights', () => {
+  const v = cardVm();
+  for (let n = 1; n <= 65; n++) v.run(note(n));
+  assert.equal(v.get('#RunbackForeverDB.card.log'), '60');
+  assert.equal(v.get('RunbackForeverDB.card.log[1].key'), 'k/6');
 });
 
 test('the setting turns the card off, and /ai card says so', () => {

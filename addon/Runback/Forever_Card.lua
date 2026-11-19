@@ -1,14 +1,17 @@
 -- The between-pull coach card (#140): after a fight, one short note whose numbers
 -- the bridge counted from the game's combat log file. The addon asks for it out of
 -- combat, shows it only when the lockout is over and the combat log is on, and
--- counts the three answers for `/ai card`. It reads no game state, takes no action
+-- counts the three answers for `/ai card`, keeps one row per fight (the last 60) and,
+-- with the next note, first asks "Used the last note?". It reads no game state, takes no action
 -- and prints nothing in the chat; the card sits clear of the quest tracker and the
 -- chat. With no usable log the bridge sends no card and nothing here shows.
 local M = {}
 RunbackCard = M
 
-local frame, body, whyText, countsText
+local frame, body, whyText, countsText, noteButtons, askButtons
 local pending, expanded, lastRequest
+local asking -- the log row of the last shown note, while the card asks if it was used
+local LOG_MAX = 60
 
 local function DB()
 	RunbackForeverDB = RunbackForeverDB or {}
@@ -17,7 +20,26 @@ local function DB()
 	if c.enabled == nil then c.enabled = true end
 	if type(c.counts) ~= "table" then c.counts = {} end
 	for _, k in ipairs({ "got", "why", "no" }) do c.counts[k] = tonumber(c.counts[k]) or 0 end
+	if type(c.log) ~= "table" then c.log = {} end
 	return c
+end
+
+-- The row for the note on screen, so an answer lands on its own fight.
+local function RowOf(key)
+	local log = DB().log
+	for i = #log, 1, -1 do
+		if type(log[i]) == "table" and log[i].key == key then return log[i] end
+	end
+end
+
+-- One row per fight, newest last: { key, shown, answer = got|why|no, why, used }.
+-- tools/card-report.js reads it from SavedVariables.
+local function AddRow(key)
+	local log = DB().log
+	local row = { key = key }
+	log[#log + 1] = row
+	while #log > LOG_MAX do table.remove(log, 1) end
+	return row
 end
 
 local function LogOn()
@@ -80,16 +102,34 @@ local function Ensure()
 		b:SetScript("OnClick", onClick)
 		return b
 	end
-	Button("Got it", 16, function() M.Answer("got") end)
-	Button("Why?", 116, function() M.Answer("why") end)
-	Button("Not useful", 216, function() M.Answer("no") end)
+	noteButtons = {
+		Button("Got it", 16, function() M.Answer("got") end),
+		Button("Why?", 116, function() M.Answer("why") end),
+		Button("Not useful", 216, function() M.Answer("no") end),
+	}
+	askButtons = {
+		Button("Yes", 16, function() M.Used(true) end),
+		Button("No", 116, function() M.Used(false) end),
+	}
 	frame:Hide()
 	return frame
 end
 
 local function Show()
-	if not pending or not CanShow() then return end
+	if not (asking or pending) or not CanShow() then return end
 	Ensure()
+	for _, b in ipairs(noteButtons) do b:SetShown(not asking) end
+	for _, b in ipairs(askButtons) do b:SetShown(asking and true or false) end
+	if asking then
+		body:SetText("Used the last note?")
+		whyText:SetText("")
+		countsText:SetText("")
+		frame:SetHeight(118)
+		frame:Show()
+		return
+	end
+	local row = RowOf(pending.key)
+	if row then row.shown = true end
 	body:SetText(pending.text)
 	whyText:SetText(pending.why)
 	countsText:SetText(expanded and pending.counts or "")
@@ -104,6 +144,10 @@ function M.Sync(card)
 	local db = DB()
 	if db.seen == card.key then return false end
 	db.seen = card.key
+	-- A note that was shown and has no answer yet is asked about before this one.
+	local last = db.log[#db.log]
+	if not asking and type(last) == "table" and last.shown and last.used == nil then asking = last end
+	AddRow(card.key:sub(1, 40))
 	pending = {
 		key = card.key:sub(1, 40),
 		text = card.text:sub(1, 200),
@@ -115,19 +159,36 @@ function M.Sync(card)
 	return true
 end
 
--- One answer: it adds to the local count /ai card prints. "Why?" also opens the
--- numbers behind the note; the other two close the card.
+-- One answer: it adds to the local count /ai card prints and to the note's row.
+-- "Why?" counts once per note and also opens the numbers behind it; the other two
+-- close the card.
 function M.Answer(kind)
+	if not pending then return end
 	local c = DB().counts
 	if type(c[kind]) ~= "number" then return end
-	c[kind] = c[kind] + 1
+	local row = RowOf(pending.key)
 	if kind == "why" then
 		expanded = true
+		if not pending.whyCounted then
+			pending.whyCounted = true
+			c.why = c.why + 1
+			if row then row.why = true end
+		end
 		Show()
 		return
 	end
+	c[kind] = c[kind] + 1
+	if row then row.answer = kind end
 	pending, expanded = nil, false
 	Hide()
+end
+
+-- "Used the last note?" Yes or No. It marks that note's row, then the new note shows.
+function M.Used(yes)
+	if not asking then return end
+	asking.used = yes and true or false
+	asking = nil
+	if pending then Show() else Hide() end
 end
 
 function M.Show()
@@ -140,8 +201,12 @@ end
 
 local function Line()
 	local c = DB().counts
-	return string.format("Coach card: %s. Got it %d, Why? %d, Not useful %d.",
-		DB().enabled and "on" or "off", c.got, c.why, c.no)
+	local yes, no = 0, 0
+	for _, r in ipairs(DB().log) do
+		if type(r) == "table" and r.used == true then yes = yes + 1 elseif type(r) == "table" and r.used == false then no = no + 1 end
+	end
+	return string.format("Coach card: %s. Got it %d, Why? %d, Not useful %d. Used the last note: yes %d, no %d.",
+		DB().enabled and "on" or "off", c.got, c.why, c.no, yes, no)
 end
 
 -- /ai card: the counts, or on/off. The card is off whenever the combat log is off.
