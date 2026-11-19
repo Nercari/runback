@@ -696,13 +696,17 @@ test('the AI picker switches between the agents installed on the PC and their mo
   vm.run('STUB.now = STUB.now + 6; STUB.Tick()');
   assert.equal(vm.evaluate('Runback.IsConnected()'), 'true');
   assert.equal(vm.evaluate('RunbackPoolButton.text'), 'AI: Claude');
-  // Rows: bridge default, Claude, Claude · opus/sonnet/haiku, Hermes.
+  // Rows: bridge default, Claude, Hermes, OpenCode, then "Exact model +" (this slot has no role table).
   vm.run('RunbackPoolButton.scripts.OnClick(RunbackPoolButton)');
   assert.equal(vm.evaluate('RunbackPoolPicker.shown'), 'true');
   const labels = () => vm.evaluate('(function() local t = {} for _, r in ipairs(RunbackPoolPicker.rows) do if r.shown then t[#t + 1] = r.label.text end end return table.concat(t, "\\n") end)()');
-  const rows = labels().split('\n');
-  assert.equal(rows.length, 7);
+  let rows = labels().split('\n');
+  assert.equal(rows.length, 5);
   assert.match(rows[0], /> Bridge default \(Claude\)/, 'the current choice is marked');
+  assert.ok(!rows.some(r => r.includes('Claude · sonnet')), 'exact models stay in the submenu until it is opened');
+  vm.run(`for _, r in ipairs(RunbackPoolPicker.rows) do if r.shown and r.kind == "toggle" then r.scripts.OnClick(r) end end`);
+  rows = labels().split('\n');
+  assert.equal(rows.length, 8, 'the submenu adds the three models');
   assert.ok(rows.some(r => r.includes('Claude · sonnet')));
   assert.ok(rows.some(r => r.includes('OpenCode')), 'an agent added to the bridge shows under its own name');
   assert.ok(!labels().includes('Codex'), 'agents the PC does not have are not offered');
@@ -720,6 +724,7 @@ test('the AI picker switches between the agents installed on the PC and their mo
   vm.run('SlashCmdList.RUNBACK("cancel")');
   // Reopened, the picker marks the new choice.
   vm.run('Runback.AgentPrompt()');
+  vm.run(`for _, r in ipairs(RunbackPoolPicker.rows) do if r.shown and r.kind == "toggle" then r.scripts.OnClick(r) end end`);
   assert.ok(labels().split('\n').find(r => r.includes('> ')).includes('Claude · sonnet'));
   vm.run('Runback.AgentPrompt()');
   assert.equal(vm.evaluate('RunbackPoolPicker.shown'), 'false', 'a second click closes it');
@@ -748,6 +753,111 @@ test('the AI picker switches between the agents installed on the PC and their mo
   vm.run('SlashCmdList.RUNBACK("agent claude opus")');
   vm.run('Runback.NewChat("Second")');
   assert.equal(vm.evaluate('RunbackDB.chats[2].model'), 'opus');
+});
+
+test('the AI picker lists roles first, a model submenu from bridge labels, and greys agents that cannot run with the bridge reason', () => {
+  const P = require('../bridge/protocol');
+  const A = require('../bridge/agents');
+  const ids = ['claude', 'codex', 'hermes', 'opencode'];
+  const acfg = {};
+  const mentor = '/srv/wow-mentor';
+  const opts = { agent: 'claude', agents: ids, models: {}, roles: {}, roleBlocked: {}, cannotRun: {}, cannotRunOutside: {}, mentorDir: mentor, roleNames: A.roleLabels() };
+  for (const id of ids) {
+    opts.models[id] = A.modelChoices(acfg, id);
+    opts.roles[id] = A.roleMap(acfg, id);
+    const blocks = A.roleBlocks(acfg, id);
+    if (Object.keys(blocks).length) opts.roleBlocked[id] = blocks;
+    if (A.agentCannotRun(id)) opts.cannotRun[id] = A.agentCannotRun(id);
+    if (A.agentCannotRunOutside(id)) opts.cannotRunOutside[id] = A.agentCannotRunOutside(id);
+  }
+  assert.ok(opts.cannotRun.hermes && opts.cannotRun.opencode, 'the bridge says why both cannot run a mentor job');
+  assert.ok(opts.cannotRunOutside.hermes && !opts.cannotRunOutside.opencode, 'only hermes also fails outside the mentor folder');
+  const open = (cwd, folder, agent = 'claude') => {
+    const body = P.luaTable('Runback_SlotData', [], { ...opts, cwd, agent }).split('\n').filter(l => !l.startsWith('--')).join('\n')
+      .replace(/^Runback_SlotData = /, '').replace(/now = \d+,/, 'now = time(),');
+    const vm = newVM();
+    login(vm);
+    vm.run('STUB.RunTimers()');
+    nextSlot(vm, body);
+    vm.run('STUB.now = STUB.now + 6; STUB.Tick()');
+    assert.equal(vm.evaluate('Runback.IsConnected()'), 'true');
+    if (folder !== undefined) vm.run(`Runback.SetFolder(${JSON.stringify(folder)})`);
+    vm.run('RunbackPoolButton.scripts.OnClick(RunbackPoolButton)');
+    return vm;
+  };
+  const rowsOf = vm => vm.evaluate('(function() local t = {} for _, r in ipairs(RunbackPoolPicker.rows) do if r.shown then t[#t + 1] = r.kind .. "=" .. r.label.text end end return table.concat(t, "\\n") end)()').split('\n');
+  const pickAgent = (vm, id) => vm.run(`for _, r in ipairs(RunbackPoolPicker.rows) do if r.shown and r.kind == "agent" and r.agent == "${id}" then r.scripts.OnClick(r) end end`);
+  const lastLine = vm => vm.evaluate('RunbackDB.chats[1].history[#RunbackDB.chats[1].history].text');
+
+  // Outside the mentor folder: OpenCode runs (plan mode); Hermes does not, and says the outside reason.
+  let vm = open('/home/x/project');
+  let rows = rowsOf(vm);
+  assert.equal(rows[0], 'head=|cffaaaaaaRoles for Claude|r', 'roles come first');
+  const roleLabels = A.roleIds().map(id => A.roleLabels()[id]);
+  for (let i = 0; i < roleLabels.length; i++) assert.ok(rows[1 + i].startsWith('role=') && rows[1 + i].includes(roleLabels[i]), `row ${i + 1} is the ${roleLabels[i]} role`);
+  assert.ok(!rows.some(r => r.startsWith('exact=')), 'exact models wait in the submenu');
+  const hermes = rows.find(r => r.includes('Hermes'));
+  assert.ok(hermes.includes('|cff808080') && hermes.includes("(can't run)"), 'greyed and tagged');
+  assert.ok(!rows.find(r => r.includes('OpenCode')).includes("(can't run)"), 'OpenCode is pickable outside the mentor folder');
+  pickAgent(vm, 'hermes');
+  assert.equal(vm.evaluate('RunbackDB.chats[1].agent'), '', 'a greyed agent is not picked');
+  assert.equal(lastLine(vm), `Hermes can't be picked: ${opts.cannotRunOutside.hermes}`, 'the line names the choice and carries the bridge text');
+  vm.run('Runback.AgentPrompt()');
+  pickAgent(vm, 'opencode');
+  assert.equal(vm.evaluate('RunbackDB.chats[1].agent'), 'opencode');
+
+  // Inside the mentor folder both are greyed with the mentor reason.
+  vm = open(mentor + '/chat');
+  rows = rowsOf(vm);
+  for (const name of ['Hermes', 'OpenCode']) assert.ok(rows.find(r => r.includes(name)).includes("(can't run)"), `${name} greyed in the mentor folder`);
+  pickAgent(vm, 'opencode');
+  assert.equal(vm.evaluate('RunbackDB.chats[1].agent'), '');
+  assert.ok(lastLine(vm).startsWith(`OpenCode can't be picked: ${opts.cannotRun.opencode.slice(0, 200)}`), 'the slot cuts the reason at a word, never rewrites it');
+
+  // A typed folder is resolved against the bridge's default like the bridge does: "." and "chat" stay inside the mentor folder, "../x" leaves it.
+  const opencodeGrey = (cwd, folder) => rowsOf(open(cwd, folder)).find(r => r.includes('OpenCode')).includes("(can't run)");
+  assert.equal(opencodeGrey(mentor, '.'), true, 'a relative "." in the mentor folder is the mentor folder');
+  assert.equal(opencodeGrey(mentor, 'chat'), true, 'a relative subfolder of the mentor folder');
+  assert.equal(opencodeGrey(mentor, '../project'), false, 'a relative path that leaves the mentor folder');
+  assert.equal(opencodeGrey('/home/x/project', mentor + '/../project'), false, 'an absolute path with .. that leaves it');
+  assert.equal(opencodeGrey('/home/x/project', mentor + '/a/../chat'), true, 'an absolute path with .. that stays in it');
+  assert.equal(opencodeGrey(mentor, '~/proj'), true, 'a path the addon cannot resolve is greyed, not guessed');
+
+  // The "Bridge default" row follows the default agent: greyed when that agent cannot run this chat.
+  const defaultRow = vm2 => rowsOf(vm2).find(r => r.includes('Bridge default'));
+  assert.ok(defaultRow(open(mentor, undefined, 'opencode')).includes("(can't run)"), 'default OpenCode in the mentor folder');
+  assert.ok(!defaultRow(open('/home/x/project', undefined, 'opencode')).includes("(can't run)"), 'default OpenCode elsewhere');
+  assert.ok(!defaultRow(open(mentor)).includes("(can't run)"), 'default Claude');
+
+  // A role click sets the exact model the bridge resolved for that role on this agent.
+  vm = open('/home/x/project');
+  vm.run('for _, r in ipairs(RunbackPoolPicker.rows) do if r.shown and r.kind == "role" and r.label.text:find("Quick answer") then r.scripts.OnClick(r) end end');
+  assert.equal(vm.evaluate('RunbackDB.chats[1].agent'), 'claude');
+  assert.equal(vm.evaluate('RunbackDB.chats[1].model'), opts.roles.claude.quick);
+  // A role the bridge has no model for is greyed and does nothing.
+  vm.run('Runback.SetAgent("codex")');
+  vm.run('Runback.AgentPrompt()');
+  rows = rowsOf(vm);
+  const quick = rows.find(r => r.startsWith('role=') && r.includes('Quick answer'));
+  assert.ok(quick.includes('|cff808080') && quick.includes('(not offered)'));
+  const before = vm.evaluate('RunbackDB.chats[1].model');
+  vm.run('for _, r in ipairs(RunbackPoolPicker.rows) do if r.shown and r.kind == "role" and r.label.text:find("Quick answer") then r.scripts.OnClick(r) end end');
+  assert.equal(vm.evaluate('RunbackDB.chats[1].model'), before);
+  // The submenu lists the bridge's models for the chat's agent and picks one.
+  vm.run('Runback.AgentPrompt()');
+  vm.run('for _, r in ipairs(RunbackPoolPicker.rows) do if r.shown and r.kind == "toggle" then r.scripts.OnClick(r) end end');
+  rows = rowsOf(vm);
+  assert.equal(rows.filter(r => r.startsWith('exact=')).length, opts.models.codex.length);
+  const pick = opts.models.codex[1];
+  vm.run(`for _, r in ipairs(RunbackPoolPicker.rows) do if r.shown and r.kind == "exact" and r.model == "${pick}" then r.scripts.OnClick(r) end end`);
+  assert.equal(vm.evaluate('RunbackDB.chats[1].model'), pick);
+});
+
+test('the fallback agent list names all six agents', () => {
+  const vm = newVM();
+  login(vm);
+  const ids = vm.evaluate('(function() local t = {} for _, c in ipairs(Runback.PoolChoices()) do if c.kind == "agent" and c.agent ~= "" then t[#t + 1] = c.agent end end return table.concat(t, ",") end)()');
+  assert.equal(ids, 'claude,codex,grok,agy,hermes,opencode');
 });
 
 test('the AI picker shows the chosen model\'s effort levels; the level is sent, labelled and checked (backlog 45)', () => {

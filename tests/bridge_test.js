@@ -189,10 +189,14 @@ test('splitSummary takes the last TL;DR block for the game chat and keeps the wh
     roleNames: { chat: 'Chat', coach: 'Coach note' },
     roles: { claude: { chat: 'opus', coach: 'haiku' } },
     cannotRun: { hermes: 'nope' },
+    cannotRunOutside: { hermes: 'nope outside' },
+    mentorDir: '/srv/wow-mentor',
   });
   assert.ok(roleLua.includes('roleNames = { chat = "Chat", coach = "Coach note" }'));
   assert.ok(roleLua.includes('roles = { claude = { chat = "opus", coach = "haiku" } }'));
   assert.ok(roleLua.includes('cannotRun = { hermes = "nope" }'));
+  assert.ok(roleLua.includes('cannotRunOutside = { hermes = "nope outside" }'));
+  assert.ok(roleLua.includes('mentorDir = "/srv/wow-mentor",'));
   // With levels (backlog 44): per agent and model, bad names and levels dropped.
   const lv = P.luaTable('Runback_SlotData', [], {
     efforts: { claude: { opus: ['low', 'high', 'Bad!'], 'gpt-5.1': ['medium'], 'bad model;': ['low'] }, 'bad id': { x: ['low'] } },

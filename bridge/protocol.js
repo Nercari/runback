@@ -820,6 +820,11 @@ function luaTable(globalName, records, opts = {}) {
   const blockRows = Object.entries(cannotRun).filter(([id, why]) => validModel(id) && typeof why === 'string' && why)
     .map(([id, why]) => `${luaKey(id)} = ${luaStr(truncateBlockReason(why))}`);
   lines.push(`\tcannotRun = { ${blockRows.join(', ')} },`);
+  const outsideRows = Object.entries((opts.cannotRunOutside && typeof opts.cannotRunOutside === 'object') ? opts.cannotRunOutside : {})
+    .filter(([id, why]) => validModel(id) && typeof why === 'string' && why)
+    .map(([id, why]) => `${luaKey(id)} = ${luaStr(truncateBlockReason(why))}`);
+  lines.push(`\tcannotRunOutside = { ${outsideRows.join(', ')} },`);
+  if (typeof opts.mentorDir === 'string' && opts.mentorDir) lines.push(`\tmentorDir = ${luaStr(opts.mentorDir)},`);
   const roleBlocked = (opts.roleBlocked && typeof opts.roleBlocked === 'object') ? opts.roleBlocked : {};
   const roleBlockRows = Object.entries(roleBlocked).filter(([, byRole]) => byRole && typeof byRole === 'object')
     .map(([agent, byRole]) => `${luaKey(agent)} = { ${Object.entries(byRole).filter(([r, why]) => validModel(r) && typeof why === 'string' && why)

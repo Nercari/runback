@@ -776,6 +776,15 @@ function agentCannotRun(id, mentorDir) {
   }
 }
 
+// Why an agent cannot run a chat outside the mentor workspace, or '': one with no
+// read-only tool limit is refused there (bridge.js runJob), so the picker must know.
+function agentCannotRunOutside(id) {
+  const a = AGENTS[id];
+  if (!a || a.readOnly !== false) return '';
+  return `${a.name} cannot be limited to read-only tools outside the mentor workspace. ` +
+    `Use /runback agent to switch, or stay in the mentor workspace.`;
+}
+
 function resolveCommand(id, cfg = {}) {
   const A = AGENTS[id];
   if (!A) return { file: id, args: [], found: false, note: `unknown agent "${id}"` };
@@ -831,6 +840,7 @@ module.exports = {
   roleBlocks: M.roleBlocks,
   roleRows: M.roleRows,
   agentCannotRun,
+  agentCannotRunOutside,
   effortProblem,
   grokRules,
   snippet,
