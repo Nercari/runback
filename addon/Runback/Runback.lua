@@ -976,6 +976,10 @@ local function TryLoadSlot(why)
 		if type(data.efforts) == "table" then run.bridgeEfforts = data.efforts end
 		if type(data.defaults) == "table" then run.bridgeDefaults = data.defaults end
 		if type(data.quick) == "table" then run.bridgeQuick = data.quick end
+		if type(data.roles) == "table" then run.bridgeRoles = data.roles end
+		if type(data.roleNames) == "table" then run.bridgeRoleNames = data.roleNames end
+		if type(data.roleBlocked) == "table" then run.bridgeRoleBlocked = data.roleBlocked end
+		if type(data.cannotRun) == "table" then run.bridgeCannotRun = data.cannotRun end
 	end
 	local matched = ApplyReplies(type(data) == "table" and data.replies or nil)
 	if type(data) == "table" and data.restore then ImportRestore(data.restore) end
@@ -1118,6 +1122,10 @@ local function ProcessInbox()
 	if type(inbox.efforts) == "table" then run.bridgeEfforts = inbox.efforts end
 	if type(inbox.defaults) == "table" then run.bridgeDefaults = inbox.defaults end
 	if type(inbox.quick) == "table" then run.bridgeQuick = inbox.quick end
+	if type(inbox.roles) == "table" then run.bridgeRoles = inbox.roles end
+	if type(inbox.roleNames) == "table" then run.bridgeRoleNames = inbox.roleNames end
+	if type(inbox.roleBlocked) == "table" then run.bridgeRoleBlocked = inbox.roleBlocked end
+	if type(inbox.cannotRun) == "table" then run.bridgeCannotRun = inbox.cannotRun end
 	ApplyReplies(inbox.replies)
 	if inbox.restore then ImportRestore(inbox.restore) end
 	if inbox.map and RunbackMap then RunbackMap.Sync(inbox.map) end
@@ -1965,7 +1973,7 @@ end
 -- bridge starts a fresh session when a chat changes agent, since a session
 -- belongs to the agent that made it; a model change keeps the conversation.
 local function AgentList()
-	return run.bridgeAgents and table.concat(run.bridgeAgents, ", ") or "claude, codex, grok, agy, hermes"
+	return run.bridgeAgents and table.concat(run.bridgeAgents, ", ") or "claude, codex, grok, agy, hermes, opencode"
 end
 
 -- The models the bridge offers for an agent, or nil before it has said.
@@ -2071,16 +2079,49 @@ function Runback.SetModel(rest, c)
 	end
 end
 
--- The choices the AI picker lists: the bridge's default, then every agent
--- installed on the bridge PC, once on its own default model and once per model
--- the bridge offers for it.
-function Runback.PoolChoices()
-	local list = { { agent = "", model = "", label = "Bridge default (" .. DefaultPoolText() .. ")" } }
-	local agents = run.bridgeAgents or { "claude", "codex", "grok", "agy", "hermes" }
-	for _, id in ipairs(agents) do
-		table.insert(list, { agent = id, model = "", label = AgentName(id) })
-		for _, m in ipairs(ModelsFor(id) or {}) do
-			table.insert(list, { agent = id, model = m, label = "    " .. PoolName(id, m) })
+-- The picker's role ids, in the order it lists them. Their labels, the model each
+-- resolves to per agent and why one cannot run all come from the bridge.
+local ROLE_ORDER = { "chat", "quick", "coach", "deep", "translate" }
+
+-- The choices the AI picker lists, as rows { kind, agent, model, label, blocked }:
+-- the chat's agent's roles first, then the bridge's default and every agent on the
+-- bridge PC (greyed with the bridge's own reason when it cannot run), then, once
+-- opened, the exact models the bridge offers for the chat's agent.
+-- `blocked` is the reason text; a greyed row prints it when clicked.
+function Runback.PoolChoices(c, exactOpen)
+	local list = {}
+	local cur = ChatAgent(c)
+	local roles = cur ~= "" and run.bridgeRoles and run.bridgeRoles[cur] or nil
+	if type(roles) == "table" then
+		table.insert(list, { kind = "head", label = "Roles for " .. AgentName(cur) })
+		local why = run.bridgeCannotRun and run.bridgeCannotRun[cur]
+		local names = run.bridgeRoleNames or {}
+		for _, role in ipairs(ROLE_ORDER) do
+			local model = type(roles[role]) == "string" and roles[role] or ""
+			local blocked = why
+			if not blocked then
+				local byRole = run.bridgeRoleBlocked and run.bridgeRoleBlocked[cur]
+				blocked = type(byRole) == "table" and byRole[role] or nil
+			end
+			if not blocked and model == "" then
+				blocked = "The bridge offers no model for this role on " .. AgentName(cur) .. "."
+			end
+			table.insert(list, { kind = "role", agent = cur, model = model, blocked = blocked, label = tostring(names[role] or role) })
+		end
+		table.insert(list, { kind = "head", label = "AI" })
+	end
+	table.insert(list, { kind = "agent", agent = "", model = "", label = "Bridge default (" .. DefaultPoolText() .. ")" })
+	for _, id in ipairs(run.bridgeAgents or { "claude", "codex", "grok", "agy", "hermes", "opencode" }) do
+		table.insert(list, { kind = "agent", agent = id, model = "", label = AgentName(id), blocked = run.bridgeCannotRun and run.bridgeCannotRun[id] or nil })
+	end
+	local models = cur ~= "" and ModelsFor(cur) or nil
+	if models and #models > 0 then
+		table.insert(list, { kind = "toggle", label = "Exact model " .. (exactOpen and "-" or "+") })
+		if exactOpen then
+			local why = run.bridgeCannotRun and run.bridgeCannotRun[cur]
+			for _, m in ipairs(models) do
+				table.insert(list, { kind = "exact", agent = cur, model = m, label = "    " .. PoolName(cur, m), blocked = why })
+			end
 		end
 	end
 	return list
@@ -3078,7 +3119,8 @@ local function BuildUI()
 	picker.title:SetPoint("TOPLEFT", picker, "TOPLEFT", 10, -8)
 	picker.title:SetJustifyH("LEFT")
 	picker.rows = {}
-	local PICK_W, PICK_ROW, PICK_MAX = 210, 18, 24
+	local PICK_W, PICK_ROW, PICK_MAX = 210, 18, 32
+	local FillPicker
 	local function PickerRow(i)
 		local it = picker.rows[i]
 		if it then return it end
@@ -3092,8 +3134,23 @@ local function BuildUI()
 		it.label:SetPoint("LEFT", it, "LEFT", 6, 0)
 		it.label:SetJustifyH("LEFT")
 		it:SetScript("OnClick", function(self)
+			local c = FindChat(picker.chatId)
+			if self.kind == "head" then return end
+			if self.kind == "toggle" then
+				picker.exact = not picker.exact
+				if c then FillPicker(c) end
+				return
+			end
 			picker:Hide()
-			Runback.SetPool(FindChat(picker.chatId), self.agent, self.model)
+			if self.blocked then
+				-- Greyed: say the bridge's own reason, change nothing.
+				if c then
+					AddHistory(c, "system", Display(self.label):gsub("^%s+", "") .. " can't be picked: " .. Display(self.blocked))
+					Runback.Render()
+				end
+				return
+			end
+			Runback.SetPool(c, self.agent, self.model)
 		end)
 		picker.rows[i] = it
 		return it
@@ -3127,26 +3184,18 @@ local function BuildUI()
 	picker:Hide()
 	ui.picker = picker
 
-	function Runback.ShowPicker(chatId, anchor)
-		local c = FindChat(chatId)
-		if not c then return end
-		if picker:IsShown() and picker.chatId == chatId then
-			picker:Hide()
-			return
-		end
-		-- Never in combat: it closes when a fight starts and waits for the end.
-		if InCombatLockdown() then
-			AddHistory(c, "system", "The AI picker opens after the fight.")
-			Runback.Render()
-			return
-		end
-		local choices = Runback.PoolChoices()
+	-- Draw the rows and the effort buttons for chat c; the picker size follows.
+	function FillPicker(c)
+		local choices = Runback.PoolChoices(c, picker.exact)
 		local n = math.min(#choices, PICK_MAX)
 		for i = 1, n do
 			local ch, it = choices[i], PickerRow(i)
-			local current = ch.agent == (c.agent or "") and ch.model == ChatModel(c)
-			it.agent, it.model = ch.agent, ch.model
-			it.label:SetText((current and "|cff55ff55> " or "|cffffffff  ") .. Display(ch.label) .. "|r")
+			local current = not ch.blocked and ((ch.kind == "agent" and ch.agent == (c.agent or "") and ch.model == ChatModel(c))
+				or ((ch.kind == "role" or ch.kind == "exact") and ch.model ~= "" and ch.agent == ChatAgent(c) and ch.model == ChatModel(c)))
+			it.kind, it.agent, it.model, it.blocked = ch.kind, ch.agent, ch.model, ch.blocked
+			local color = current and "|cff55ff55> " or (ch.kind == "head" and "|cffaaaaaa" or (ch.blocked and "|cff808080  " or "|cffffffff  "))
+			local why = ch.blocked and (ch.kind == "role" and " (not offered)" or " (can't run)") or ""
+			it.label:SetText(color .. Display(ch.label) .. why .. "|r")
 			it:Show()
 		end
 		for i = n + 1, #picker.rows do picker.rows[i]:Hide() end
@@ -3173,6 +3222,23 @@ local function BuildUI()
 		for i = shown + 1, #picker.levels do picker.levels[i]:Hide() end
 		picker.title:SetText(run.bridgeAgents and ("AI for " .. Display(c.name)) or "AI for this chat (connect to see what this PC has)")
 		picker:SetSize(PICK_W, 30 + n * PICK_ROW + (#levels > 0 and 2 * PICK_ROW or 0))
+	end
+
+	function Runback.ShowPicker(chatId, anchor)
+		local c = FindChat(chatId)
+		if not c then return end
+		if picker:IsShown() and picker.chatId == chatId then
+			picker:Hide()
+			return
+		end
+		-- Never in combat: it closes when a fight starts and waits for the end.
+		if InCombatLockdown() then
+			AddHistory(c, "system", "The AI picker opens after the fight.")
+			Runback.Render()
+			return
+		end
+		picker.exact = false
+		FillPicker(c)
 		picker.chatId = chatId
 		picker.owner = anchor
 		picker.away = 0
@@ -3772,7 +3838,7 @@ end
 local function AgentArgument(rest)
 	local name, model = rest:match("^(%S*)%s*(.-)$")
 	if model == "" then return true end
-	if not Contains(run.bridgeAgents or { "claude", "codex", "grok", "agy", "hermes" }, name:lower()) then return false end
+	if not Contains(run.bridgeAgents or { "claude", "codex", "grok", "agy", "hermes", "opencode" }, name:lower()) then return false end
 	if not model:find("%s") then return true end
 	local m, effort = model:match("^(%S+)%s+(%a+)$")
 	return m ~= nil and #effort <= 16 and Contains(ModelsFor(name:lower()) or {}, m)

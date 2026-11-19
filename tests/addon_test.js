@@ -696,13 +696,17 @@ test('the AI picker switches between the agents installed on the PC and their mo
   vm.run('STUB.now = STUB.now + 6; STUB.Tick()');
   assert.equal(vm.evaluate('Runback.IsConnected()'), 'true');
   assert.equal(vm.evaluate('RunbackPoolButton.text'), 'AI: Claude');
-  // Rows: bridge default, Claude, Claude · opus/sonnet/haiku, Hermes.
+  // Rows: bridge default, Claude, Hermes, OpenCode, then "Exact model +" (this slot has no role table).
   vm.run('RunbackPoolButton.scripts.OnClick(RunbackPoolButton)');
   assert.equal(vm.evaluate('RunbackPoolPicker.shown'), 'true');
   const labels = () => vm.evaluate('(function() local t = {} for _, r in ipairs(RunbackPoolPicker.rows) do if r.shown then t[#t + 1] = r.label.text end end return table.concat(t, "\\n") end)()');
-  const rows = labels().split('\n');
-  assert.equal(rows.length, 7);
+  let rows = labels().split('\n');
+  assert.equal(rows.length, 5);
   assert.match(rows[0], /> Bridge default \(Claude\)/, 'the current choice is marked');
+  assert.ok(!rows.some(r => r.includes('Claude · sonnet')), 'exact models stay in the submenu until it is opened');
+  vm.run(`for _, r in ipairs(RunbackPoolPicker.rows) do if r.shown and r.kind == "toggle" then r.scripts.OnClick(r) end end`);
+  rows = labels().split('\n');
+  assert.equal(rows.length, 8, 'the submenu adds the three models');
   assert.ok(rows.some(r => r.includes('Claude · sonnet')));
   assert.ok(rows.some(r => r.includes('OpenCode')), 'an agent added to the bridge shows under its own name');
   assert.ok(!labels().includes('Codex'), 'agents the PC does not have are not offered');
@@ -720,6 +724,7 @@ test('the AI picker switches between the agents installed on the PC and their mo
   vm.run('SlashCmdList.RUNBACK("cancel")');
   // Reopened, the picker marks the new choice.
   vm.run('Runback.AgentPrompt()');
+  vm.run(`for _, r in ipairs(RunbackPoolPicker.rows) do if r.shown and r.kind == "toggle" then r.scripts.OnClick(r) end end`);
   assert.ok(labels().split('\n').find(r => r.includes('> ')).includes('Claude · sonnet'));
   vm.run('Runback.AgentPrompt()');
   assert.equal(vm.evaluate('RunbackPoolPicker.shown'), 'false', 'a second click closes it');
@@ -748,6 +753,73 @@ test('the AI picker switches between the agents installed on the PC and their mo
   vm.run('SlashCmdList.RUNBACK("agent claude opus")');
   vm.run('Runback.NewChat("Second")');
   assert.equal(vm.evaluate('RunbackDB.chats[2].model'), 'opus');
+});
+
+test('the AI picker lists roles first, a model submenu from bridge labels, and greys agents that cannot run with the bridge reason', () => {
+  const P = require('../bridge/protocol');
+  const A = require('../bridge/agents');
+  const ids = ['claude', 'codex', 'hermes'];
+  const acfg = {};
+  const opts = { agent: 'claude', agents: ids, models: {}, roles: {}, roleBlocked: {}, cannotRun: {}, roleNames: A.roleLabels() };
+  for (const id of ids) {
+    opts.models[id] = A.modelChoices(acfg, id);
+    opts.roles[id] = A.roleMap(acfg, id);
+    const blocks = A.roleBlocks(acfg, id);
+    if (Object.keys(blocks).length) opts.roleBlocked[id] = blocks;
+  }
+  opts.cannotRun.hermes = A.agentCannotRun('hermes');
+  assert.ok(opts.cannotRun.hermes, 'the bridge itself says why hermes cannot run');
+  const body = P.luaTable('Runback_SlotData', [], opts).split('\n').filter(l => !l.startsWith('--')).join('\n')
+    .replace(/^Runback_SlotData = /, '').replace(/now = \d+,/, 'now = time(),');
+  const vm = newVM();
+  login(vm);
+  vm.run('STUB.RunTimers()');
+  nextSlot(vm, body);
+  vm.run('STUB.now = STUB.now + 6; STUB.Tick()');
+  assert.equal(vm.evaluate('Runback.IsConnected()'), 'true');
+  vm.run('RunbackPoolButton.scripts.OnClick(RunbackPoolButton)');
+  const rowsOf = () => vm.evaluate('(function() local t = {} for _, r in ipairs(RunbackPoolPicker.rows) do if r.shown then t[#t + 1] = r.kind .. "=" .. r.label.text end end return table.concat(t, "\\n") end)()').split('\n');
+  let rows = rowsOf();
+  assert.equal(rows[0], 'head=|cffaaaaaaRoles for Claude|r', 'roles come first');
+  const roleLabels = A.roleIds().map(id => A.roleLabels()[id]);
+  for (let i = 0; i < roleLabels.length; i++) assert.ok(rows[1 + i].startsWith('role=') && rows[1 + i].includes(roleLabels[i]), `row ${i + 1} is the ${roleLabels[i]} role`);
+  assert.ok(!rows.some(r => r.startsWith('exact=')), 'exact models wait in the submenu');
+  // Hermes cannot run: greyed, tagged, never switched to; the click prints the bridge's own reason.
+  const hermes = rows.find(r => r.includes('Hermes'));
+  assert.ok(hermes.includes('|cff808080') && hermes.includes("(can't run)"), 'greyed and tagged');
+  vm.run('for _, r in ipairs(RunbackPoolPicker.rows) do if r.shown and r.agent == "hermes" then r.scripts.OnClick(r) end end');
+  assert.equal(vm.evaluate('RunbackDB.chats[1].agent'), '', 'a greyed agent is not picked');
+  const said = vm.evaluate('RunbackDB.chats[1].history[#RunbackDB.chats[1].history].text');
+  assert.ok(said.includes(opts.cannotRun.hermes.slice(0, 60)), 'the reason is the bridge text');
+  // A role click sets the exact model the bridge resolved for that role on this agent.
+  vm.run('Runback.AgentPrompt()');
+  vm.run('for _, r in ipairs(RunbackPoolPicker.rows) do if r.shown and r.kind == "role" and r.label.text:find("Quick answer") then r.scripts.OnClick(r) end end');
+  assert.equal(vm.evaluate('RunbackDB.chats[1].agent'), 'claude');
+  assert.equal(vm.evaluate('RunbackDB.chats[1].model'), opts.roles.claude.quick);
+  // A role the bridge has no model for is greyed and does nothing.
+  vm.run('Runback.SetAgent("codex")');
+  vm.run('Runback.AgentPrompt()');
+  rows = rowsOf();
+  const quick = rows.find(r => r.startsWith('role=') && r.includes('Quick answer'));
+  assert.ok(quick.includes('|cff808080') && quick.includes('(not offered)'));
+  const before = vm.evaluate('RunbackDB.chats[1].model');
+  vm.run('for _, r in ipairs(RunbackPoolPicker.rows) do if r.shown and r.kind == "role" and r.label.text:find("Quick answer") then r.scripts.OnClick(r) end end');
+  assert.equal(vm.evaluate('RunbackDB.chats[1].model'), before);
+  // The submenu lists the bridge's models for the chat's agent and picks one.
+  vm.run('Runback.AgentPrompt()');
+  vm.run('for _, r in ipairs(RunbackPoolPicker.rows) do if r.shown and r.kind == "toggle" then r.scripts.OnClick(r) end end');
+  rows = rowsOf();
+  assert.equal(rows.filter(r => r.startsWith('exact=')).length, opts.models.codex.length);
+  const pick = opts.models.codex[1];
+  vm.run(`for _, r in ipairs(RunbackPoolPicker.rows) do if r.shown and r.kind == "exact" and r.model == "${pick}" then r.scripts.OnClick(r) end end`);
+  assert.equal(vm.evaluate('RunbackDB.chats[1].model'), pick);
+});
+
+test('the fallback agent list names all six agents', () => {
+  const vm = newVM();
+  login(vm);
+  const ids = vm.evaluate('(function() local t = {} for _, c in ipairs(Runback.PoolChoices()) do if c.kind == "agent" and c.agent ~= "" then t[#t + 1] = c.agent end end return table.concat(t, ",") end)()');
+  assert.equal(ids, 'claude,codex,grok,agy,hermes,opencode');
 });
 
 test('the AI picker shows the chosen model\'s effort levels; the level is sent, labelled and checked (backlog 45)', () => {
