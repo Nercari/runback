@@ -389,7 +389,7 @@ test('the 20-fight table passes at 19 kept notes under a cent each', () => {
   assert.match(text, /Kept: 19 of 20 \(95%\) PASS/);
   assert.match(text, /Cost: \$0\.00400 over 20 of 20 notes, \$0\.00020 a note, dearest \$0\.00020 PASS/);
   assert.match(text, /Card counts: got 3, why 1, no 1/);
-  assert.match(text, /Used the last note: yes 3 of 5 answers PASS/);
+  assert.match(text, /Used the last note: yes 3 of 5 in the last trial PASS \(at 3 of 5\)/);
   assert.match(text, /\| 1 \| 2026-10-01T20:00:00 \| 30 \| 3 \| 2 \| 0 \| 0 \| 1 \| 1 \| interrupt \| code \| \$0\.00020 \| yes \|/);
   assert.match(text, /\| 6 \| .* \| - \|$/m, 'a fight with no answer shows a dash');
 });
@@ -400,7 +400,7 @@ test('the table fails when the kept facts drop below 90% or a note passes a cent
   const text = r.lines.join('\n');
   assert.equal(r.failed, true);
   assert.match(text, /Kept: 17 of 20 \(85%\) FAIL/);
-  assert.match(text, /Used the last note: yes 2 of 5 answers FAIL/);
+  assert.match(text, /Used the last note: yes 2 of 5 in the last trial FAIL \(at 3 of 5\)/);
 
   const dear = Array.from({ length: 20 }, (_, i) => row(i, { cost: 0.02 }));
   assert.match(R.summarise(dear, null).lines.join('\n'), /FAIL \(each under \$0\.01000\)/);
@@ -424,14 +424,54 @@ test('the table waits for 20 fights and for the addon counts', () => {
   assert.match(text, /Fights: 1 \(notes 1, quiet 0\)/);
   assert.match(text, /Kept: 1 of 1 \(100%\) PENDING/);
   assert.match(text, /Card counts: not read/);
-  assert.match(text, /Used the last note: yes 0 of 0 answers PENDING/);
+  assert.match(text, /Used the last note: yes 0 of 0 in the last trial PENDING \(at 3 of 5\)/);
 });
 
 test('"Got it" is no longer the stand-in: without Yes / No answers the use verdict stays pending', () => {
   const rows = Array.from({ length: 20 }, (_, i) => row(i));
   const text = R.summarise(rows, { got: 5, why: 0, no: 0 }, []).lines.join('\n');
   assert.match(text, /Card counts: got 5, why 0, no 0/);
-  assert.match(text, /Used the last note: yes 0 of 0 answers PENDING/);
+  assert.match(text, /Used the last note: yes 0 of 0 in the last trial PENDING \(at 3 of 5\)/);
+});
+
+// The trial is the last five answered notes in log order (#143: 3 of 5 pulls). Older answers never count.
+const usesLine = (answers, extra = []) => {
+  const rows = Array.from({ length: 20 }, (_, i) => row(i));
+  const log = [...answers.map((used, i) => ({ key: rows[i].key, shown: true, used })), ...extra];
+  return R.summarise(rows, null, log).lines.find((l) => l.startsWith('Used the last note'));
+};
+
+test('three old Yes answers cannot pass a later trial of five No answers', () => {
+  assert.equal(usesLine([true, true, true, false, false, false, false, false]),
+    'Used the last note: yes 0 of 5 in the last trial FAIL (at 3 of 5; 3 older answers not counted)');
+});
+
+test('old No answers cannot sink a trial with 3 Yes in 5', () => {
+  assert.equal(usesLine([false, false, false, true, false, true, false, true]),
+    'Used the last note: yes 3 of 5 in the last trial PASS (at 3 of 5; 3 older answers not counted)');
+});
+
+test('fewer than five answers in the trail is pending, even with a longer log', () => {
+  const rows = Array.from({ length: 20 }, (_, i) => row(i));
+  // eight rows in the log, only four answered
+  const log = rows.slice(0, 8).map((r, i) => ({ key: r.key, shown: true, used: i % 2 === 0 ? true : undefined }));
+  const line = R.summarise(rows, null, log).lines.find((l) => l.startsWith('Used the last note'));
+  assert.equal(line, 'Used the last note: yes 4 of 4 in the last trial PENDING (at 3 of 5)');
+  assert.equal(usesLine([true, true, true, true, false, false, false, false, false].slice(0, 4)),
+    'Used the last note: yes 4 of 4 in the last trial PENDING (at 3 of 5)');
+});
+
+test('a key the card asked about twice keeps its first place, with the last answer', () => {
+  const rows = Array.from({ length: 20 }, (_, i) => row(i));
+  const k = (i) => rows[i].key;
+  const log = [
+    { key: k(0), used: true }, { key: k(1), used: false }, { key: k(2), used: false },
+    { key: k(3), used: false }, { key: k(4), used: false }, { key: k(5), used: false },
+    { key: k(2), used: true }, // asked twice: still one answer, in third place
+  ];
+  // answered rows in first-position order: 0 1 2 3 4 5; the window is 1..5 = F, T, F, F, F
+  const line = R.summarise(rows, null, log).lines.find((l) => l.startsWith('Used the last note'));
+  assert.equal(line, 'Used the last note: yes 1 of 5 in the last trial FAIL (at 3 of 5; 1 older answer not counted)');
 });
 
 test('the per-fight log is read from the addon SavedVariables, Yes and No kept apart', () => {

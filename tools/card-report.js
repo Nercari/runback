@@ -11,6 +11,8 @@ const path = require("node:path");
 
 const MAX_COST = 0.01;
 const KEEP_SHARE = 0.9;
+const TRIAL = 5; // pulls in the #143 trial
+const KEEP_YES = 3; // Yes answers it needs
 
 // One saved row per fight: the addon can ask twice, so the last row wins.
 function rowsOf(cards) {
@@ -108,12 +110,16 @@ function summarise(cards, saved, log) {
   const costState = !noted.length || known.length < noted.length
     ? "PENDING"
     : state(dearest < MAX_COST); // "under $0.01 each": the dearest note decides, not the mean
-  // "Used the last note?" answers (Yes / No), one per note after the first; the
-  // verdict is the share of Yes, at 3 of 5 answers (#143).
-  const used = new Map((log || []).filter((r) => typeof r.used === "boolean").map((r) => [r.key, r.used]));
-  const asked = used.size;
-  const yes = [...used.values()].filter(Boolean).length;
-  const uses = asked < 5 ? "PENDING" : state(yes >= 3);
+  // "Used the last note?" answers (Yes / No) in log order, one per note (a key the
+  // card asked twice keeps its first place and its last answer). The trial is the
+  // last five answers (#143: 3 of 5 pulls); older answers never count.
+  const answers = new Map();
+  for (const r of log || []) if (r && typeof r.used === "boolean") answers.set(r.key, r.used);
+  const trial = new Map([...answers].slice(-TRIAL));
+  const older = answers.size - trial.size;
+  const asked = trial.size;
+  const yes = [...trial.values()].filter(Boolean).length;
+  const uses = asked < TRIAL ? "PENDING" : state(yes >= KEEP_YES);
 
   const lines = [
     "CARD MEASURE",
@@ -130,7 +136,8 @@ function summarise(cards, saved, log) {
     lines.push("Card counts: not read (give --saved <Runback.lua>)");
   }
   lines.push(
-    `Used the last note: yes ${yes} of ${asked} answers ${uses} (at 3 of 5)` +
+    `Used the last note: yes ${yes} of ${asked} in the last trial ${uses} (at ${KEEP_YES} of ${TRIAL}` +
+      (older ? `; ${older} older ${older === 1 ? "answer" : "answers"} not counted` : "") + ")" +
       (log ? "" : " (no per-fight log read: give --saved <Runback.lua> from an addon that keeps it)"),
   );
   lines.push(
@@ -143,7 +150,7 @@ function summarise(cards, saved, log) {
       `| ${i + 1} | ${String(r.key).split("/")[0]} | ${c.duration_s ?? "-"} | ${c.hits ?? "-"} | ` +
         `${c.enemyCasts ?? "-"} | ${c.interrupts ?? "-"} | ${c.deaths ?? "-"} | ${c.idle_s ?? "-"} | ` +
         `${c.burst_hits ?? "-"} | ${r.check || "none"} | ${r.source || "-"} | ` +
-        `${typeof r.cost === "number" ? money(r.cost) : "-"} | ${used.has(r.key) ? (used.get(r.key) ? "yes" : "no") : "-"} |`,
+        `${typeof r.cost === "number" ? money(r.cost) : "-"} | ${answers.has(r.key) ? (answers.get(r.key) ? "yes" : "no") : "-"} |`,
     );
   });
   const failed = [keepState, costState, uses].includes("FAIL");
