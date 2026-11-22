@@ -107,7 +107,7 @@ Items 41 to 46 make the AI picker match each CLI's own models and effort levels 
 
 41. **Confirm the CLIs on Nercari's PC.** (done, results in `docs/model-picker-spec.md`; Grok not installed, Codex sign-in expired) Record each CLI's real model list and effort flag on his PC, through Remote Control; no game.
 
-42. **Built-in model catalog.** `bridge/models.js` with every CLI's models and effort levels. Metric: models offered with no config, Claude 3 / others 0 → the CLIs' own counts.
+42. **Built-in model catalog.** (done, `bridge/models.js`; its Codex table still has two errors item 41 found in `docs/model-picker-spec.md` (gpt-6-astra defaults to low, not medium; `gpt-daybreak-blue-latest` is missing), to fix after `codex login` on Nercari's PC) `bridge/models.js` with every CLI's models and effort levels. Metric: models offered with no config, Claude 3 / others 0 → the CLIs' own counts.
 
 43. **Effort on the command line** (done for Claude `--effort` and Hermes `--reasoning`, this PR; Codex waits for `codex login` and one rerun, Grok for an install on Nercari's PC, agy keeps the level in the model id). `effort=` flag, checked per model, passed as each CLI's own flag.
 
@@ -115,7 +115,7 @@ Items 41 to 46 make the AI picker match each CLI's own models and effort levels 
 
 45. **Effort row in the AI picker** (done; tests in `tests/addon_test.js`; live look pending). Pick a level after the model; chat label "Agent · model · effort"; closed in combat. Live look by Nercari.
 
-46. **Read the CLI's own model list.** Codex cache, `agy models`, `grok models`, behind an off → shadow → on switch.
+46. **Read the CLI's own model list.** Codex cache, `agy models`, `grok models`, behind an off → shadow → on switch. Blocked: the tests need one raw recorded sample of each list. Item 41 confirmed the shapes of the Codex cache (JSON) and of `agy models` (plain `id<TAB>label` lines, no flags) but saved no raw sample, and Grok was not installed. Save `~/.codex/models_cache.json`, the output of `agy models` and of `grok models` from Nercari's PC as test fixtures first.
 
 Items 47 to 63 come from the third video review (2026-10-11: recording A, 40 min, on Nercari's PC; recording B, 7:41, uploaded). Findings, timestamps and evidence: `runback-video-review-2026-10-11.md` in the project files. Live looks passed: combat fold (item 31), combat log button (item 33), status line (item 32), copy icon (item 35), and a useful review once the log had the fight (A 15:00 to 16:40).
 
