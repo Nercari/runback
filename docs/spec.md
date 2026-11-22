@@ -107,7 +107,7 @@ Items 41 to 46 make the AI picker match each CLI's own models and effort levels 
 
 41. **Confirm the CLIs on Nercari's PC.** (done, results in `docs/model-picker-spec.md`; Grok not installed, Codex sign-in expired) Record each CLI's real model list and effort flag on his PC, through Remote Control; no game.
 
-42. **Built-in model catalog.** (done, `bridge/models.js`; its Codex table still has the three errors item 41 found in `docs/model-picker-spec.md`, to fix after `codex login` on Nercari's PC) `bridge/models.js` with every CLI's models and effort levels. Metric: models offered with no config, Claude 3 / others 0 → the CLIs' own counts.
+42. **Built-in model catalog.** (done, `bridge/models.js`; its Codex table still has two errors item 41 found in `docs/model-picker-spec.md` (gpt-6-astra defaults to low, not medium; `gpt-daybreak-blue-latest` is missing), to fix after `codex login` on Nercari's PC) `bridge/models.js` with every CLI's models and effort levels. Metric: models offered with no config, Claude 3 / others 0 → the CLIs' own counts.
 
 43. **Effort on the command line** (done for Claude `--effort` and Hermes `--reasoning`, this PR; Codex waits for `codex login` and one rerun, Grok for an install on Nercari's PC, agy keeps the level in the model id). `effort=` flag, checked per model, passed as each CLI's own flag.
 
