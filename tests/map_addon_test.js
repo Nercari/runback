@@ -43,7 +43,7 @@ function Methods.SetFrameLevel(self, l) self.level = l end
 function newVM(saved = '') {
   return createAddonVM({
     strictLoad: true,
-    only: onlyFiles(['Codec.lua', 'Inbox.lua', 'Runback.lua', 'Map.lua']),
+    only: onlyFiles(['Codec.lua', 'Inbox.lua', 'Runback.lua', 'Map.lua', 'Forever_UI.lua']),
     chunkName: 'Runback',
     stubPatch: s => s.replace('local function NewObject(', 'function NewObjectPublic(').replace(/NewObject\(/g, 'NewObjectPublic('),
     stubExtra: MAP_STUB_EXTRA,

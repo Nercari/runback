@@ -7,7 +7,7 @@ const { createAddonVM, onlyFiles } = require('../toc_load');
 function vm(setup = '') {
   return createAddonVM({
     strictLoad: true,
-    only: onlyFiles(['Codec.lua', 'Inbox.lua', 'Runback.lua', 'Forever.lua', 'Forever_Lockout.lua', 'Forever_Context.lua', 'Forever_Commands.lua', 'Forever_Known.lua']),
+    only: onlyFiles(['Codec.lua', 'Inbox.lua', 'Runback.lua', 'Forever.lua', 'Forever_UI.lua', 'Forever_Lockout.lua', 'Forever_Context.lua', 'Forever_Commands.lua', 'Forever_Known.lua']),
     beforeLoad: `unpack = table.unpack
 C_Map.GetMapInfo = function(id) if id == 1420 then return { name = "Tirisfal Glades", mapID = id } end end
 ${setup}`,

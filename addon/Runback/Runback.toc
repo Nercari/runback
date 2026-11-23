@@ -12,6 +12,7 @@ Runback.lua
 Map.lua
 Guide.lua
 Forever.lua
+Forever_UI.lua
 Forever_Lockout.lua
 Forever_Calm.lua
 Forever_Context.lua

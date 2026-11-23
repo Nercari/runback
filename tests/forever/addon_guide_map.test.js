@@ -42,7 +42,7 @@ function WorldMapFrame:OnMapChanged() end
 function vm(saved, inbox) {
   return createAddonVM({
     strictLoad: true,
-    only: onlyFiles(['Codec.lua', 'Inbox.lua', 'Runback.lua', 'Map.lua', 'Guide.lua', 'Forever.lua', 'Forever_Lockout.lua', 'Forever_Guide.lua']),
+    only: onlyFiles(['Codec.lua', 'Inbox.lua', 'Runback.lua', 'Map.lua', 'Guide.lua', 'Forever.lua', 'Forever_UI.lua', 'Forever_Lockout.lua', 'Forever_Guide.lua']),
     stubPatch: s => s.replace('local function NewObject(', 'function NewObjectPublic(').replace(/NewObject\(/g, 'NewObjectPublic('),
     stubExtra: MAP_STUB_EXTRA,
     beforeLoad: `unpack = table.unpack\n${MAP_STUB}`,

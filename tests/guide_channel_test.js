@@ -153,7 +153,7 @@ test('one guide round-trips: bridge Lua -> slot data -> Guide.lua -> saved varia
 test('slot data carrying guides reaches the guide store through the real Runback.lua', () => {
   const vm = createAddonVM({
     strictLoad: true,
-    only: onlyFiles(['Codec.lua', 'Inbox.lua', 'Runback.lua', 'Guide.lua']),
+    only: onlyFiles(['Codec.lua', 'Inbox.lua', 'Runback.lua', 'Guide.lua', 'Forever_UI.lua']),
   });
   const store = G.newGuides('ep0ch');
   G.applyGuides(store, [FULL]);

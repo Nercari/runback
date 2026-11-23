@@ -8,7 +8,7 @@ const { createAddonVM, onlyFiles } = require('../toc_load');
 function vm(saved) {
   return createAddonVM({
     strictLoad: true,
-    only: onlyFiles(['Codec.lua', 'Inbox.lua', 'Runback.lua', 'Forever.lua', 'Forever_Lockout.lua', 'Forever_Context.lua', 'Forever_Commands.lua']),
+    only: onlyFiles(['Codec.lua', 'Inbox.lua', 'Runback.lua', 'Forever.lua', 'Forever_UI.lua', 'Forever_Lockout.lua', 'Forever_Context.lua', 'Forever_Commands.lua']),
     beforeLoad: `unpack = table.unpack
 DAY = "2026-10-12"; local plain = date; date = function(fmt, t) if fmt == "%Y-%m-%d" then return DAY end return plain(fmt, t) end
 HP, HPMAX = 1000, 1000; UnitHealth = function() return HP end; UnitHealthMax = function() return HPMAX end`,

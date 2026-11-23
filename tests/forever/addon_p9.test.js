@@ -14,7 +14,7 @@ function vm(skinOn = true, missingTexture = '', startCombat = false) {
     files: orderedOnly(
       'Codec.lua', 'Inbox.lua', 'Forever.lua', 'Forever_Lockout.lua',
       'Forever_Context.lua', 'Forever_Switch.lua', 'Forever_Commands.lua',
-      'Runback.lua', 'Forever_Skin.lua', 'Forever_Keys.lua',
+      'Runback.lua', 'Forever_UI.lua', 'Forever_Skin.lua', 'Forever_Keys.lua',
     ),
     beforeLoad: 'unpack = table.unpack; STUB.gear = {}; GetInventoryItemLink = function(_, slot) return STUB.gear[slot] end',
     afterLoad: `

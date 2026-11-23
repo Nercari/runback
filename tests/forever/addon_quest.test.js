@@ -6,7 +6,7 @@ const { createAddonVM, onlyFiles } = require('../toc_load');
 function vm() {
   return createAddonVM({
     strictLoad: true,
-    only: onlyFiles(['Codec.lua', 'Inbox.lua', 'Runback.lua', 'Forever.lua', 'Forever_Lockout.lua', 'Forever_Quest.lua']),
+    only: onlyFiles(['Codec.lua', 'Inbox.lua', 'Runback.lua', 'Forever.lua', 'Forever_UI.lua', 'Forever_Lockout.lua', 'Forever_Quest.lua']),
     beforeLoad: `unpack = table.unpack
 QUEST = { "Executor Staff", "Forsaken Dagger" }
 function GetNumQuestChoices() return #QUEST end

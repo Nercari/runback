@@ -31,7 +31,7 @@ const AFTER_LOAD = `-- Buttons are created once with their first label; Reload k
 function vm() {
   return createAddonVM({
     strictLoad: true,
-    only: onlyFiles(['Codec.lua', 'Inbox.lua', 'Forever.lua', 'Runback.lua']),
+    only: onlyFiles(['Codec.lua', 'Inbox.lua', 'Forever.lua', 'Runback.lua', 'Forever_UI.lua']),
     afterLoad: AFTER_LOAD,
   });
 }

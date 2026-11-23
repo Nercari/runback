@@ -8,7 +8,7 @@ const { createAddonVM, orderedOnly } = require('../toc_load');
 function vm() {
   return createAddonVM({
     strictLoad: true,
-    files: orderedOnly('Codec.lua', 'Inbox.lua', 'Forever.lua', 'Forever_Lockout.lua', 'Forever_Context.lua', 'Forever_Commands.lua', 'Runback.lua', 'Forever_Keys.lua'),
+    files: orderedOnly('Codec.lua', 'Inbox.lua', 'Forever.lua', 'Forever_Lockout.lua', 'Forever_Context.lua', 'Forever_Commands.lua', 'Runback.lua', 'Forever_UI.lua', 'Forever_Keys.lua'),
     beforeLoad: 'unpack = table.unpack',
     afterLoad: 'STUB.FireEvent("ADDON_LOADED", "Runback"); STUB.FireEvent("PLAYER_LOGIN"); STUB.RunTimers(); Runback.IsConnected = function() return true end',
   });
