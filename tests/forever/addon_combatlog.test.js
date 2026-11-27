@@ -12,7 +12,7 @@ const read = file => fs.readFileSync(path.join(addon, file), 'utf8');
 function vm(logging) {
   return createAddonVM({
     strictLoad: true,
-    only: onlyFiles(['Codec.lua', 'Inbox.lua', 'Runback.lua', 'Forever.lua', 'Forever_Lockout.lua', 'Forever_CombatLog.lua']),
+    only: onlyFiles(['Codec.lua', 'Inbox.lua', 'Runback.lua', 'Forever.lua', 'Forever_UI.lua', 'Forever_Lockout.lua', 'Forever_CombatLog.lua']),
     beforeLoad: `unpack = table.unpack
 STUB.logging = ${logging}; LOG_SETS = {}
 function LoggingCombat(on)
@@ -180,7 +180,7 @@ test('only the player-click switch calls LoggingCombat with an argument', () => 
 function cardVm(logging = true) {
   return createAddonVM({
     strictLoad: true,
-    only: onlyFiles(['Codec.lua', 'Inbox.lua', 'Runback.lua', 'Forever.lua', 'Forever_Lockout.lua', 'Forever_Context.lua', 'Forever_Card.lua']),
+    only: onlyFiles(['Codec.lua', 'Inbox.lua', 'Runback.lua', 'Forever.lua', 'Forever_UI.lua', 'Forever_Lockout.lua', 'Forever_Context.lua', 'Forever_Card.lua']),
     beforeLoad: `unpack = table.unpack
 STUB.logging = ${logging}
 LOG_SETS = {}

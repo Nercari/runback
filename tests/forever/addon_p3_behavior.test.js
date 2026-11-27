@@ -3,8 +3,8 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const { createAddonVM, orderedOnly } = require('../toc_load');
 
-const FOREVER_STACK = orderedOnly('Codec.lua', 'Inbox.lua', 'Forever.lua', 'Forever_Lockout.lua', 'Forever_Context.lua', 'Forever_Switch.lua', 'Forever_Commands.lua', 'Runback.lua');
-const RUNBACK_ONLY = orderedOnly('Codec.lua', 'Inbox.lua', 'Runback.lua');
+const FOREVER_STACK = orderedOnly('Codec.lua', 'Inbox.lua', 'Forever.lua', 'Forever_Lockout.lua', 'Forever_Context.lua', 'Forever_Switch.lua', 'Forever_Commands.lua', 'Runback.lua', 'Forever_UI.lua');
+const RUNBACK_ONLY = orderedOnly('Codec.lua', 'Inbox.lua', 'Runback.lua', 'Forever_UI.lua');
 
 function vm(withForever = true) {
   const v = createAddonVM({

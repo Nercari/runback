@@ -7,7 +7,7 @@ const { createAddonVM, onlyFiles } = require('../toc_load');
 function vm() {
   return createAddonVM({
     strictLoad: true,
-    only: onlyFiles(['Codec.lua', 'Inbox.lua', 'Runback.lua', 'Forever.lua']),
+    only: onlyFiles(['Codec.lua', 'Inbox.lua', 'Runback.lua', 'Forever.lua', 'Forever_UI.lua']),
     afterLoad: `function BUTTON(label)
     for _, f in ipairs(STUB.frames) do
       if f.kind == "Button" and f.text == label and f.shown then return f end

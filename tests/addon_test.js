@@ -16,7 +16,7 @@ const CELLS_PER_ROW = 200;
 function newVM() {
   return createAddonVM({
     strictLoad: true,
-    only: onlyFiles(['Codec.lua', 'Inbox.lua', 'Runback.lua', 'Forever.lua']),
+    only: onlyFiles(['Codec.lua', 'Inbox.lua', 'Runback.lua', 'Forever.lua', 'Forever_UI.lua']),
     chunkName: 'Runback',
   });
 }

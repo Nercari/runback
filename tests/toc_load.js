@@ -24,8 +24,8 @@ function orderedOnly(...names) {
   return names;
 }
 
-const MIGRATION_LOAD = orderedOnly('Codec.lua', 'Inbox.lua', 'Forever.lua', 'Runback.lua');
-const SLOT_BUDGET_LOAD = orderedOnly('Codec.lua', 'Inbox.lua', 'Forever.lua', 'Runback.lua');
+const MIGRATION_LOAD = orderedOnly('Codec.lua', 'Inbox.lua', 'Forever.lua', 'Runback.lua', 'Forever_UI.lua');
+const SLOT_BUDGET_LOAD = orderedOnly('Codec.lua', 'Inbox.lua', 'Forever.lua', 'Runback.lua', 'Forever_UI.lua');
 
 function selectTocFiles(toc, options = {}) {
   let files = toc;
